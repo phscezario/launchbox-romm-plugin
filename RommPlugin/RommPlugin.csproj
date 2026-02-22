@@ -94,7 +94,7 @@
       <HintPath>..\packages\Testably.Abstractions.FileSystem.Interface.10.0.0\lib\netstandard2.0\Testably.Abstractions.FileSystem.Interface.dll</HintPath>
     </Reference>
     <Reference Include="Unbroken.LaunchBox.Plugins">
-      <HintPath>D:\Jogos\LaunchBox\Core\Unbroken.LaunchBox.Plugins.dll</HintPath>
+      <HintPath>..\lib\LaunchBox\Unbroken.LaunchBox.Plugins.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
