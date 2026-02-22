@@ -31,21 +31,6 @@ It was designed to provide a clean and automated workflow for managing ROM colle
 
 ---
 
-## 🏗 Architecture
-
-The project is divided into:
-
-```
-/RommPlugin           → Main LaunchBox plugin logic
-/RommPlugin.CLI       → Installer executable with progress UI
-/RommPlugin.Core      → Shared models & services
-/RommPlugin.UI        → Settings interface
-```
-
-The CLI runs as a Windows application (WinExe) and does not show a console window.
-
----
-
 ## ⚙️ Installation
 
 1. Download the latest release.
@@ -144,34 +129,6 @@ On processing:
 - The plugin updates installed status
 - Cleans up finished events
 - Removes the sync file when empty
-
----
-
-## 🧪 Development
-
-Build the solution using Visual Studio or:
-
-```
-dotnet build
-```
-
-The CLI is built as:
-
-```
-<OutputType>WinExe</OutputType>
-```
-
-So it runs without opening a console window.
-
----
-
-## 🚀 CI/CD
-
-This repository is prepared for GitHub Actions to:
-
-- Build automatically
-- Package release artifacts
-- Publish on tag creation (vX.X.X)
 
 ---
 
@@ -281,18 +238,6 @@ Após processamento:
 - Atualiza status
 - Remove eventos concluídos
 - Deleta o arquivo se vazio
-
----
-
-## 🧪 Desenvolvimento
-
-Compile usando:
-
-```
-dotnet build
-```
-
-O CLI roda como aplicação Windows (WinExe), portanto não exibe janela de CMD.
 
 ---
 
