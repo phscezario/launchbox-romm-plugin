@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="settings.json" />
+  </Folder>
+  <Folder Name="/Solution Items/Images/">
+    <File Path="Images/ico.png" />
+  </Folder>
+  <Project Path="RommPlugin.CLI/RommPlugin.CLI.csproj" Id="71aac390-5ea5-4843-be4c-b27e3598bba1" />
+  <Project Path="RommPlugin.Core/RommPlugin.Core.csproj" Id="5c10f607-5822-4931-af7d-5a091dd3a094" />
+  <Project Path="RommPlugin.UI/RommPlugin.UI.csproj" Id="2f245f99-b82d-44dc-898d-554d194e55e4" />
+  <Project Path="RommPlugin/RommPlugin.csproj" Id="2f182437-32d3-404d-8642-240e4b206d6a" />
+</Solution>
