@@ -20,7 +20,7 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       - name: Build Solution (Release)
-        run: msbuild RommPlugin.sln /p:Configuration=Release
+        run: msbuild LaunchBoxRommPlugin.slnx /p:Configuration=Release
 
       - name: Extract version from tag
         id: vars
