@@ -1,0 +1,59 @@
+name: Auto Version Tag from PR Title
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get latest tag
+        id: get_tag
+        run: |
+          git fetch --tags
+          latest=$(git tag --sort=-v:refname | head -n 1)
+          if [ -z "$latest" ]; then
+            latest="v0.0.0"
+          fi
+          echo "latest=$latest" >> $GITHUB_OUTPUT
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          title="${{ github.event.pull_request.title }}"
+          version=${{ steps.get_tag.outputs.latest }}
+          version=${version#v}
+
+          IFS='.' read -r major minor patch <<< "$version"
+
+          if [[ "$title" == feat:* ]]; then
+            minor=$((minor + 1))
+            patch=0
+          elif [[ "$title" == version:* || "$title" == breaking:* ]]; then
+            major=$((major + 1))
+            minor=0
+            patch=0
+          else
+            patch=$((patch + 1))
+          fi
+
+          new_version="v$major.$minor.$patch"
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git tag ${{ steps.bump.outputs.new_version }}
+          git push origin ${{ steps.bump.outputs.new_version }}
