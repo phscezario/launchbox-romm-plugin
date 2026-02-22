@@ -2,6 +2,10 @@
   <Folder Name="/Solution Items/">
     <File Path="settings.json" />
   </Folder>
+  <Folder Name="/Solution Items/.github/" />
+  <Folder Name="/Solution Items/.github/workflows/">
+    <File Path=".github/workflows/release.yml" />
+  </Folder>
   <Folder Name="/Solution Items/Images/">
     <File Path="Images/ico.png" />
   </Folder>

@@ -1,0 +1,66 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Solution (Release)
+        run: msbuild RommPlugin.sln /p:Configuration=Release
+
+      - name: Extract version from tag
+        id: vars
+        shell: powershell
+        run: |
+          $version = "${env:GITHUB_REF_NAME}"
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Create package folder structure
+        shell: cmd
+        run: |
+          mkdir package
+          mkdir "package\RomM LaunchBox Integration"
+
+      - name: Copy required binaries
+        shell: cmd
+        run: |
+          copy RommPlugin.CLI\bin\Release\Newtonsoft.Json.* "package\RomM LaunchBox Integration\"
+          copy RommPlugin.CLI\bin\Release\RommPlugin.CLI.* "package\RomM LaunchBox Integration\"
+          copy RommPlugin.CLI\bin\Release\RommPlugin.Core.* "package\RomM LaunchBox Integration\"
+          copy RommPlugin.CLI\bin\Release\RommPlugin.* "package\RomM LaunchBox Integration\"
+          copy RommPlugin.CLI\bin\Release\RommPlugin.UI.* "package\RomM LaunchBox Integration\"
+
+      - name: Copy Images folder
+        shell: cmd
+        run: xcopy Images "package\RomM LaunchBox Integration\Images\" /E /I /Y
+
+      - name: Copy settings.json
+        shell: cmd
+        run: copy settings.json "package\RomM LaunchBox Integration\"
+
+      - name: Create ZIP with version
+        shell: powershell
+        run: |
+          $zipName = "launchbox-romm-plugin-${{ steps.vars.outputs.VERSION }}.zip"
+          Compress-Archive -Path package\* -DestinationPath $zipName
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: launchbox-romm-plugin-${{ steps.vars.outputs.VERSION }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
