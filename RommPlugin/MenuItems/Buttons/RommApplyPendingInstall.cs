@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Windows;
 using RommPlugin.Services;
 using Unbroken.LaunchBox.Plugins;
 
@@ -15,10 +16,12 @@ namespace RommPlugin.MenuItems.Buttons
             try
             {
                 await sync.ProcessSyncEvents();
+
+                MessageBox.Show("RomM finish all pending install");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("[RommPlugin] Sync error: " + ex);
+                throw new Exception("[RommPlugin] error: " + ex);
             }
         }
     }

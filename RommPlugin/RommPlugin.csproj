@@ -98,6 +98,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="MenuItems\Buttons\RommUpdateServerMetadataMenuMenuItem.cs" />
+    <Compile Include="MenuItems\Buttons\RommResetServerMenuMenuItem.cs" />
     <Compile Include="MenuItems\Buttons\RommApplyPendingInstall.cs" />
     <Compile Include="MenuItems\Buttons\RommSettingMenuItem.cs" />
     <Compile Include="MenuItems\Buttons\RommSyncMenuItem.cs" />

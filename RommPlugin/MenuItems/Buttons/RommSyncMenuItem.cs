@@ -23,7 +23,7 @@ namespace RommPlugin.MenuItems.Buttons
                 {
                     MessageBox.Show(
                         "RomM is not configured yet.",
-                        "Romm Plugin"
+                        "RomM Plugin"
                     );
                     return;
                 }
@@ -31,13 +31,13 @@ namespace RommPlugin.MenuItems.Buttons
                 var api = new RommApiClient(settings.RommBaseUrl);
                 sync.SetApi(api);
 
-                await sync.SyncAsync(settings.Username, settings.Password);
+                await sync.SyncAsync(settings.Username, settings.Password, settings.KeepLocalData);
 
                 MessageBox.Show("RomM sync completed successfully.");
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.ToString(), "Romm Plugin Error");
+                throw new Exception("[RommPlugin] error: " + ex);
             }
         }
     }

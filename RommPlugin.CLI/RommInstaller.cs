@@ -1,4 +1,5 @@
 ﻿using System;
+using System.CodeDom;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -26,77 +27,87 @@ namespace RommPlugin.CLI
 
             if (string.IsNullOrEmpty(_settings.RommBaseUrl))
             {
-                throw new Exception("Romm settings not configured.");
+                MessageBox.Show("RomM settings not configured");
             }
 
             _api = new RommApiClient(_settings.RommBaseUrl);
         }
 
-        private async Task LoginAsync()
-        {
-            await _api.LoginAsync(_settings.Username, _settings.Password);
-        }
-
         public async Task InstallGameAsync(int rommGameId)
         {
-            await LoginAsync();
-
-            _progress.SetStatus("Searching game info...");
-            _progress.SetIndeterminate(true);
-
-            var game = await _api.GetGameByIdAsync(rommGameId);
-
-            var localDir = Path.Combine(
-                _settings.RomsPath,
-                "romm",
-                game.FsPath.Replace("/", "\\")
-            );
-
-            Directory.CreateDirectory(localDir);
-
-            var isFolderGame = game.Files.Count > 1;
-
-            var localFile = Path.Combine(localDir, game.FsName + (isFolderGame ? ".zip" : ""));
-
-            _progress.SetStatus($"{game.FsName} is downloading...");
-            await _api.DownloadGameAsync(rommGameId, localFile);
-
-            AppendSyncEvent("install", game.Id, game.FsName);
-        }
-
-        public async Task UninstallGameAsync(int rommGameId)
-        {
-            await Task.Run(async () =>
+            try
             {
-                await LoginAsync();
+                _api.SetBasicAuthentication(_settings.Username, _settings.Password);
 
                 _progress.SetStatus("Searching game info...");
                 _progress.SetIndeterminate(true);
 
                 var game = await _api.GetGameByIdAsync(rommGameId);
 
-                var localFile = Path.Combine(
+                var localDir = Path.Combine(
                     _settings.RomsPath,
                     "romm",
-                    game.FsPath.Replace("/", "\\"),
-                    game.FsName
+                    game.FsPath.Replace("/", "\\")
                 );
 
-                _progress.SetStatus($"{game.FsName} is deleting...");
+                Directory.CreateDirectory(localDir);
 
-                if (File.Exists(localFile))
-                {
-                    _progress.SetIndeterminate(true);
-                    File.Delete(localFile);
-                }
-                else if (Directory.Exists(localFile))
-                {
-                    _progress.SetIndeterminate(true);
-                    Directory.Delete(localFile, true);
-                }
+                var isFolderGame = game.Files.Count > 1;
 
-                AppendSyncEvent("uninstall", game.Id, game.FsName);
-            });
+                var localFile = Path.Combine(localDir, game.FsName + (isFolderGame ? ".zip" : ""));
+
+                _progress.SetStatus($"{game.FsName} is downloading...");
+                await _api.DownloadGameAsync(rommGameId, localFile);
+
+                AppendSyncEvent("install", game.Id, game.FsName);
+            }
+            catch (Exception ex)
+            {
+
+                throw new Exception("[RommPlugin] error: " + ex);
+            }
+        }
+
+        public async Task UninstallGameAsync(int rommGameId)
+        {
+            try
+            {
+                await Task.Run(async () =>
+                {
+                    _api.SetBasicAuthentication(_settings.Username, _settings.Password);
+
+                    _progress.SetStatus("Searching game info...");
+                    _progress.SetIndeterminate(true);
+
+                    var game = await _api.GetGameByIdAsync(rommGameId);
+
+                    var localFile = Path.Combine(
+                        _settings.RomsPath,
+                        "romm",
+                        game.FsPath.Replace("/", "\\"),
+                        game.FsName
+                    );
+
+                    _progress.SetStatus($"{game.FsName} is deleting...");
+
+                    if (File.Exists(localFile))
+                    {
+                        _progress.SetIndeterminate(true);
+                        File.Delete(localFile);
+                    }
+                    else if (Directory.Exists(localFile))
+                    {
+                        _progress.SetIndeterminate(true);
+                        Directory.Delete(localFile, true);
+                    }
+
+                    AppendSyncEvent("uninstall", game.Id, game.FsName);
+                });
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("[RommPlugin] error: " + ex);
+            }
         }
 
         private void AppendSyncEvent(string action, int rommGameId, string gameName)

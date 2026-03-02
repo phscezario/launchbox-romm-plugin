@@ -1,6 +1,7 @@
 {
-  "RommBaseUrl": "",
-  "Username": "",
-  "Password": "",
-  "RomsPath": ""
+    "RommBaseUrl": "",
+    "Username": "",
+    "Password": "",
+    "RomsPath": "",
+    "KeepLocalData": false
 }

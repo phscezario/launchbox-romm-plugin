@@ -22,6 +22,7 @@ namespace RommPlugin.UI.Forms
             txtUsername.Text = settings.Username;
             txtPassword.Text = settings.Password;
             txtRomsPath.Text = settings.RomsPath;
+            keepLocalData.Checked = settings.KeepLocalData;
         }
 
         private void RommSettingsForm_Load(object sender, EventArgs e)
@@ -61,7 +62,8 @@ namespace RommPlugin.UI.Forms
                 RommBaseUrl = txtBaseUrl.Text.Trim(),
                 Username = txtUsername.Text.Trim(),
                 Password = txtPassword.Text,
-                RomsPath = txtRomsPath.Text
+                RomsPath = txtRomsPath.Text,
+                KeepLocalData = keepLocalData.Checked
             };
 
             RommPluginStorage.Save(settings);

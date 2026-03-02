@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using RommPlugin.Core.Models;
@@ -21,38 +23,17 @@ namespace RommPlugin.ApiClient
             };
         }
 
-        public async Task LoginAsync(string username, string password)
+        public void SetBasicAuthentication(string username, string password)
         {
-            var parameters = new Dictionary<string, string>
-            {
-                { "grant_type", "password" },
-                { "scope", "platforms.read roms.read" },
-                { "username", username },
-                { "password", password },
-                { "client_id", "" },
-                { "client_secret", "" },
-                { "refresh_token", "" }
-            };
-
-            var content = new FormUrlEncodedContent(parameters);
-
-            var response = await _http.PostAsync("/api/token", content);
-            response.EnsureSuccessStatusCode();
-
-            var json = await response.Content.ReadAsStringAsync();
-            var auth = JsonConvert.DeserializeObject<RommAuthResponse>(json);
-
-            _token = auth.AccessToken;
+            var credentials = $"{username}:{password}";
+            var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(credentials));
 
             _http.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue(
-                    "Bearer", _token);
+                new AuthenticationHeaderValue("Basic", base64);
         }
 
         public async Task<List<RommPlatform>> GetPlatformsAsync()
         {
-            EnsureAuthenticated();
-
             var response = await _http.GetAsync("/api/platforms");
             response.EnsureSuccessStatusCode();
 
@@ -62,8 +43,6 @@ namespace RommPlugin.ApiClient
 
         public async Task<List<RommGame>> GetAllGamesByPlatformAsync(int platformId)
         {
-            EnsureAuthenticated();
-
             var allGames = new List<RommGame>();
             int limit = 100;
             int offset = 0;
@@ -106,6 +85,42 @@ namespace RommPlugin.ApiClient
             return JsonConvert.DeserializeObject<RommGame>(json);
         }
 
+        public async Task UpdateGameById(int gameId, RommUpdateGameRequest request)
+        {
+            var content = new MultipartFormDataContent();
+
+            content.Add(new StringContent(request.Name ?? ""), "name");
+            content.Add(new StringContent(request.FsName ?? ""), "fs_name");
+            content.Add(new StringContent(request.Summary ?? ""), "summary");
+            content.Add(new StringContent(request.LaunchboxId?.ToString() ?? ""), "launchbox_id");
+
+            var launchboxJson = JsonConvert.SerializeObject(request.RawLaunchboxMetadata);
+            content.Add(new StringContent(launchboxJson, Encoding.UTF8, "application/json"), "raw_launchbox_metadata");
+
+            var manualJson = JsonConvert.SerializeObject(request.RawManualMetadata ?? new { });
+            content.Add(new StringContent(manualJson, Encoding.UTF8, "application/json"), "raw_manual_metadata");
+
+            if (!string.IsNullOrEmpty(request.ArtworkPath) && File.Exists(request.ArtworkPath))
+            {
+                var fileStream = File.OpenRead(request.ArtworkPath);
+                var fileContent = new StreamContent(fileStream);
+                fileContent.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+
+                content.Add(fileContent, "artwork", Path.GetFileName(request.ArtworkPath));
+            }
+
+            var response = await _http.PutAsync($"api/roms/{gameId}?remove_cover=false&unmatch_metadata=false", content);
+
+            response.EnsureSuccessStatusCode();
+        }
+
+        public async Task RemoveGameMetadataById(int gameId)
+        {
+            var response = await _http.PutAsync($"api/roms/{gameId}?remove_cover=false&unmatch_metadata=true", null);
+            
+            response.EnsureSuccessStatusCode();
+        }
+
         public async Task DownloadGameAsync(int gameId, string destinationFile)
         {
             var response = await _http.GetAsync(
@@ -120,12 +135,6 @@ namespace RommPlugin.ApiClient
             {
                 await stream.CopyToAsync(file);
             }
-        }
-
-        private void EnsureAuthenticated()
-        {
-            if (string.IsNullOrEmpty(_token))
-                throw new InvalidOperationException("RomM API not authenticated");
         }
     }
 }

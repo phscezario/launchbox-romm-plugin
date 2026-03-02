@@ -9,5 +9,7 @@
         public string Password { get; set; }
 
         public string RomsPath { get; set; }
+
+        public bool KeepLocalData { get; set; }
     }
 }
