@@ -88,11 +88,16 @@ namespace RommPlugin.ApiClient
         {
             const int maxAttempts = 5;
 
+            var artworkPath = "";
+
+            if (!string.IsNullOrEmpty(request.ArtworkPath) && File.Exists(request.ArtworkPath))
+            {
+                artworkPath = EnsureRgbJpeg(request.ArtworkPath);
+            }
+
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                try
-                {
-                    var content = new MultipartFormDataContent();
+                var content = new MultipartFormDataContent();
 
                     content.Add(new StringContent(request.Name ?? ""), "name");
                     content.Add(new StringContent(request.FsName ?? ""), "fs_name");
@@ -102,40 +107,44 @@ namespace RommPlugin.ApiClient
                     var launchboxJson = JsonConvert.SerializeObject(request.RawLaunchboxMetadata);
                     content.Add(new StringContent(launchboxJson, Encoding.UTF8, "application/json"), "raw_launchbox_metadata");
 
-                    if (!string.IsNullOrEmpty(request.ArtworkPath) && File.Exists(request.ArtworkPath))
+                    if (!string.IsNullOrEmpty(artworkPath))
                     {
-                        var fileStream = new FileStream(
-                                                request.ArtworkPath,
-                                                FileMode.Open,
-                                                FileAccess.Read,
-                                                FileShare.Read
-                                            );
+                        using (var fileStream = File.OpenRead(artworkPath))
+                        {
+                            var fileContent = new StreamContent(fileStream);
+                            fileContent.Headers.ContentType = new MediaTypeHeaderValue(GetMimeType(artworkPath));
 
-                        var fileContent = new StreamContent(fileStream);
+                            content.Add(fileContent, "artwork", Path.GetFileName(artworkPath));
 
-                        var mime = GetMimeType(request.ArtworkPath);
-                        fileContent.Headers.ContentType = new MediaTypeHeaderValue(mime);
+                            var response = await _http.PutAsync(
+                                $"api/roms/{gameId}?remove_cover=false&unmatch_metadata=false",
+                                content
+                            );
 
-                        content.Add(fileContent, "artwork", Path.GetFileName(request.ArtworkPath));
+                            if (!response.IsSuccessStatusCode)
+                            {
+                                if ((int)response.StatusCode >= 500)
+                                {
+                                    if (attempt == maxAttempts)
+                                    {
+                                        throw new HttpRequestException($"Server error {(int)response.StatusCode}");
+                                    }
+
+                                    await Task.Delay(500 * attempt);
+                                    continue;
+                                }
+
+                                response.EnsureSuccessStatusCode();
+                            }
+                        }
                     }
 
-                    var response = await _http.PutAsync(
-                        $"api/roms/{gameId}?remove_cover=false&unmatch_metadata=false",
-                        content
-                    );
+                    if (!string.IsNullOrEmpty(artworkPath) && artworkPath != request.ArtworkPath)
+                    {
+                        File.Delete(artworkPath);
+                    }
 
-                    response.EnsureSuccessStatusCode();
                     return;
-                }
-                catch
-                {
-                    if (attempt == maxAttempts)
-                    {
-                        throw;
-                    }
-
-                    await Task.Delay(500 * attempt);
-                }
             }
         }
 
@@ -173,11 +182,6 @@ namespace RommPlugin.ApiClient
                 return "image/png";
             }
 
-            if ((ext == ".jpg" || ext == ".jpeg") && HasAlpha(path))
-            {
-                return "image/png";
-            }
-
             if (ext == ".jpg" || ext == ".jpeg")
             {
                 return "image/jpeg";
@@ -191,13 +195,28 @@ namespace RommPlugin.ApiClient
             return "application/octet-stream";
         }
 
-        private bool HasAlpha(string path)
+        private string EnsureRgbJpeg(string originalPath)
         {
-            using (var img = System.Drawing.Image.FromFile(path))
+            using (var img = System.Drawing.Image.FromFile(originalPath))
             {
-                return (img.PixelFormat & System.Drawing.Imaging.PixelFormat.Alpha) != 0 ||
-                       (img.PixelFormat & System.Drawing.Imaging.PixelFormat.PAlpha) != 0;
+                if ((img.PixelFormat & System.Drawing.Imaging.PixelFormat.Alpha) != 0)
+                {
+                    var temp = Path.GetTempFileName() + ".jpg";
+
+                    using (var bmp = new System.Drawing.Bitmap(img.Width, img.Height))
+                    using (var g = System.Drawing.Graphics.FromImage(bmp))
+                    {
+                        g.Clear(System.Drawing.Color.Black);
+                        g.DrawImage(img, 0, 0);
+
+                        bmp.Save(temp, System.Drawing.Imaging.ImageFormat.Jpeg);
+                    }
+
+                    return temp;
+                }
             }
+
+            return originalPath;
         }
     }
 }
