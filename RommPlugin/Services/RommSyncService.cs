@@ -156,13 +156,8 @@ namespace RommPlugin.Services
 
                             if (localGamesById.TryGetValue(rommGame.Id, out var existingGame))
                             {
-                                var overwriteLocalData = !settings.KeepLocalData;
-
-                                if (overwriteLocalData)
-                                {
-                                    UpdateGame(existingGame, rommGame, platform.Name);
-                                    hasChanges = true;
-                                }
+                                UpdateGame(existingGame, rommGame, platform.Name, !settings.KeepLocalData);
+                                hasChanges = true;
                             }
                             else
                             {
@@ -269,11 +264,14 @@ namespace RommPlugin.Services
             return cleaned.Trim();
         }
 
-        private void UpdateGame(IGame game, RommGame rommGame, string platformName)
+        private void UpdateGame(IGame game, RommGame rommGame, string platformName, bool overwriteLocalData)
         {
-            game.Title = NormalizeGameTitle(rommGame.Name);
+            if (overwriteLocalData)
+            {
+                game.Title = NormalizeGameTitle(rommGame.Name);
 
-            game.Platform = platformName;
+                game.Platform = platformName;
+            }
 
             var isFolderGame = rommGame.Files.Count > 1;
 
