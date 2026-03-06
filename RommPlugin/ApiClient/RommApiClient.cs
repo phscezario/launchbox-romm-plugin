@@ -90,15 +90,11 @@ namespace RommPlugin.ApiClient
             var content = new MultipartFormDataContent();
 
             content.Add(new StringContent(request.Name ?? ""), "name");
-            content.Add(new StringContent(request.FsName ?? ""), "fs_name");
             content.Add(new StringContent(request.Summary ?? ""), "summary");
             content.Add(new StringContent(request.LaunchboxId?.ToString() ?? ""), "launchbox_id");
 
             var launchboxJson = JsonConvert.SerializeObject(request.RawLaunchboxMetadata);
             content.Add(new StringContent(launchboxJson, Encoding.UTF8, "application/json"), "raw_launchbox_metadata");
-
-            var manualJson = JsonConvert.SerializeObject(request.RawManualMetadata ?? new { });
-            content.Add(new StringContent(manualJson, Encoding.UTF8, "application/json"), "raw_manual_metadata");
 
             if (!string.IsNullOrEmpty(request.ArtworkPath) && File.Exists(request.ArtworkPath))
             {

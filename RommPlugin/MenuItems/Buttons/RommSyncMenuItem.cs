@@ -31,7 +31,7 @@ namespace RommPlugin.MenuItems.Buttons
                 var api = new RommApiClient(settings.RommBaseUrl);
                 sync.SetApi(api);
 
-                await sync.SyncAsync(settings.Username, settings.Password, settings.KeepLocalData);
+                await sync.SyncAsync();
 
                 MessageBox.Show("RomM sync completed successfully.");
             }

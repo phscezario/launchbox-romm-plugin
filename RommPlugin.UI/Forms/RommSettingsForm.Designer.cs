@@ -42,6 +42,7 @@
             this.groupBox1 = new System.Windows.Forms.GroupBox();
             this.txtRomsPath = new System.Windows.Forms.TextBox();
             this.keepLocalData = new System.Windows.Forms.CheckBox();
+            this.btnCancel = new System.Windows.Forms.Button();
             this.groupBox1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -54,7 +55,7 @@
             // 
             // btnSave
             // 
-            this.btnSave.Location = new System.Drawing.Point(26, 497);
+            this.btnSave.Location = new System.Drawing.Point(245, 510);
             this.btnSave.Name = "btnSave";
             this.btnSave.Size = new System.Drawing.Size(75, 23);
             this.btnSave.TabIndex = 3;
@@ -181,19 +182,32 @@
             this.keepLocalData.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.keepLocalData.ForeColor = System.Drawing.Color.White;
             this.keepLocalData.Location = new System.Drawing.Point(25, 453);
-            this.keepLocalData.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.keepLocalData.Margin = new System.Windows.Forms.Padding(2);
             this.keepLocalData.Name = "keepLocalData";
             this.keepLocalData.Size = new System.Drawing.Size(162, 19);
             this.keepLocalData.TabIndex = 17;
             this.keepLocalData.Text = "Keep Local data in sync?";
             this.keepLocalData.UseVisualStyleBackColor = true;
             // 
-            // RommAdversityLoginForm
+            // btnCancel
+            // 
+            this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnCancel.ForeColor = System.Drawing.SystemColors.ControlText;
+            this.btnCancel.Location = new System.Drawing.Point(164, 510);
+            this.btnCancel.Name = "btnCancel";
+            this.btnCancel.Size = new System.Drawing.Size(75, 23);
+            this.btnCancel.TabIndex = 18;
+            this.btnCancel.Text = "Cancel";
+            this.btnCancel.UseVisualStyleBackColor = true;
+            this.btnCancel.Click += new System.EventHandler(this.btnCancel_Click);
+            // 
+            // RommSettingsForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(30)))), ((int)(((byte)(30)))));
             this.ClientSize = new System.Drawing.Size(332, 555);
+            this.Controls.Add(this.btnCancel);
             this.Controls.Add(this.keepLocalData);
             this.Controls.Add(this.txtRomsPath);
             this.Controls.Add(this.groupBox1);
@@ -203,7 +217,7 @@
             this.Controls.Add(this.label1);
             this.Controls.Add(this.btnSave);
             this.Controls.Add(this.txtBaseUrl);
-            this.Name = "RommAdversityLoginForm";
+            this.Name = "RommSettingsForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "RommSettingsForm";
             this.Load += new System.EventHandler(this.RommSettingsForm_Load);
@@ -230,5 +244,6 @@
         private System.Windows.Forms.GroupBox groupBox1;
         private System.Windows.Forms.TextBox txtRomsPath;
         private System.Windows.Forms.CheckBox keepLocalData;
+        private System.Windows.Forms.Button btnCancel;
     }
 }

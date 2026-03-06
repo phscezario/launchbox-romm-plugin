@@ -3,5 +3,6 @@
     "Username": "",
     "Password": "",
     "RomsPath": "",
-    "KeepLocalData": false
+    "KeepLocalData": false,
+    "CurrentPlatforms":  []
 }

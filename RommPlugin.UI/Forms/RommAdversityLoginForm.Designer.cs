@@ -35,15 +35,16 @@
             this.label4 = new System.Windows.Forms.Label();
             this.txtPassword = new System.Windows.Forms.TextBox();
             this.label6 = new System.Windows.Forms.Label();
+            this.btnCancel = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // btnProceed
             // 
-            this.btnProceed.Location = new System.Drawing.Point(26, 304);
+            this.btnProceed.Location = new System.Drawing.Point(234, 323);
             this.btnProceed.Name = "btnProceed";
             this.btnProceed.Size = new System.Drawing.Size(75, 23);
             this.btnProceed.TabIndex = 3;
-            this.btnProceed.Text = "Proceed";
+            this.btnProceed.Text = "Ok";
             this.btnProceed.UseVisualStyleBackColor = true;
             this.btnProceed.Click += new System.EventHandler(this.btnProceed_Click);
             // 
@@ -107,12 +108,25 @@
     "l and will not be saved; you will need to fill it in each time you perform this " +
     "action!";
             // 
+            // btnCancel
+            // 
+            this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnCancel.ForeColor = System.Drawing.SystemColors.ControlText;
+            this.btnCancel.Location = new System.Drawing.Point(153, 323);
+            this.btnCancel.Name = "btnCancel";
+            this.btnCancel.Size = new System.Drawing.Size(75, 23);
+            this.btnCancel.TabIndex = 14;
+            this.btnCancel.Text = "Cancel";
+            this.btnCancel.UseVisualStyleBackColor = true;
+            this.btnCancel.Click += new System.EventHandler(this.btnCancel_Click);
+            // 
             // RommAdversityLoginForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(30)))), ((int)(((byte)(30)))));
             this.ClientSize = new System.Drawing.Size(332, 367);
+            this.Controls.Add(this.btnCancel);
             this.Controls.Add(this.label6);
             this.Controls.Add(this.label4);
             this.Controls.Add(this.label1);
@@ -136,5 +150,6 @@
         private System.Windows.Forms.Label label4;
         private System.Windows.Forms.TextBox txtPassword;
         private System.Windows.Forms.Label label6;
+        private System.Windows.Forms.Button btnCancel;
     }
 }

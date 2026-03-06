@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using Newtonsoft.Json;
-using RommPlugin.Core.Config;
+using RommPlugin.Core.Models;
 
 namespace RommPlugin.Core.Storage
 {

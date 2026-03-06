@@ -1,5 +1,4 @@
 ﻿using System;
-using System.CodeDom;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,7 +6,6 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using Newtonsoft.Json;
 using RommPlugin.ApiClient;
-using RommPlugin.Core.Config;
 using RommPlugin.Core.Interfaces;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Storage;

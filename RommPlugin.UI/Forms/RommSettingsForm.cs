@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Windows.Forms;
-using RommPlugin.Core.Config;
+using RommPlugin.Core.Models;
 using RommPlugin.Core.Storage;
 
 namespace RommPlugin.UI.Forms
@@ -95,6 +95,12 @@ namespace RommPlugin.UI.Forms
                     txtRomsPath.Text = dialog.SelectedPath;
                 }
             }
+        }
+
+        private void btnCancel_Click(object sender, EventArgs e)
+        {
+            DialogResult = DialogResult.Cancel;
+            Close();
         }
     }
 }
