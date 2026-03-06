@@ -197,6 +197,13 @@ namespace RommPlugin.ApiClient
 
         private string EnsureRgbJpeg(string originalPath)
         {
+            var ext = Path.GetExtension(originalPath).ToLower();
+
+            if (ext == ".png" || ext == ".webp")
+            {
+                return originalPath;
+            }
+                
             using (var img = System.Drawing.Image.FromFile(originalPath))
             {
                 if ((img.PixelFormat & System.Drawing.Imaging.PixelFormat.Alpha) != 0)
@@ -208,7 +215,6 @@ namespace RommPlugin.ApiClient
                     {
                         g.Clear(System.Drawing.Color.Black);
                         g.DrawImage(img, 0, 0);
-
                         bmp.Save(temp, System.Drawing.Imaging.ImageFormat.Jpeg);
                     }
 
