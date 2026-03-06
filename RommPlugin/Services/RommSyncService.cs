@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Runtime;
 using System.Threading.Tasks;
 using System.Windows;
 using Newtonsoft.Json;
@@ -72,7 +71,7 @@ namespace RommPlugin.Services
                     var list = rommPlatforms.Select(p => new PlatformSelection
                     {
                         Id = p.Id,
-                        Name = p.CustomName ?? p.Name,
+                        Name = string.IsNullOrEmpty(p.CustomName) ? p.Name : p.CustomName,
                         Selected = true
                     }).ToList();
 
@@ -210,9 +209,9 @@ namespace RommPlugin.Services
                     if (hasChanges)
                     {
                         dataManager.Save();
-
-                        CheckAndSavePlatforms(rommPlatforms, platforms);
                     }
+
+                    CheckAndSavePlatforms(rommPlatforms, platforms);
                 }
             );
         }
@@ -774,8 +773,9 @@ namespace RommPlugin.Services
                         var request = new RommUpdateGameRequest
                         {
                             Name = game.Title,
+                            FsName = serverGame.FsName,
                             Summary = game.Notes,
-                            LaunchboxId = game.LaunchBoxDbId ?? 0,
+                            LaunchboxId = game.LaunchBoxDbId,
                             RawLaunchboxMetadata = BuildLaunchboxMetadata(game),
                             ArtworkPath = GetCoverImagePath(game)
                         };
@@ -820,27 +820,34 @@ namespace RommPlugin.Services
                 FirstReleaseDate = game.ReleaseDate != null
                     ? new DateTimeOffset(game.ReleaseDate.Value).ToUnixTimeSeconds()
                     : (long?)null,
-                MaxPlayers = game.MaxPlayers,
-                ReleaseType = game.ReleaseType,
+                MaxPlayers = game.MaxPlayers ?? 1,
+                ReleaseType = string.IsNullOrEmpty(game.ReleaseType) ? "Released" : game.ReleaseType,
                 Cooperative = game.PlayMode == "Cooperative",
-                YoutubeVideoId = game.VideoUrl,
+                YoutubeVideoId = ExtractYoutubeId(game.VideoUrl),
                 CommunityRating = game.CommunityStarRating,
                 CommunityRatingCount = game.CommunityStarRatingTotalVotes,
                 WikipediaUrl = game.WikipediaUrl,
-                Esrb = game.Publisher,
-                Genres = game.Genres.ToList(),
-                Companies = game.Developers.ToList(),
-                Images = game.GetAllImagesWithDetails()
-                    .Select(i => new LaunchBoxImage
-                    {
-                        Type = i.ImageType,
-                        Url = i.FilePath,
-                        Region = i.Region
-                    })
-                    .ToList()
+                Esrb = game.Rating,
+                Genres = game.Genres?.ToList() ?? new List<string>(),
+                Companies = game.Developers?.ToList() ?? new List<string>(),
+                Images = new List<LaunchBoxImage>()
             };
 
             return metadata;
+        }
+
+        private string ExtractYoutubeId(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+            {
+                return "";
+            }
+
+            var uri = new Uri(url);
+            var query = uri.Query;
+
+            var match = System.Text.RegularExpressions.Regex.Match(query, @"v=([^&]+)");
+            return match.Success ? match.Groups[1].Value : "";
         }
     }
 }

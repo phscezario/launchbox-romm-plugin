@@ -13,7 +13,6 @@ namespace RommPlugin.ApiClient
     public class RommApiClient
     {
         private readonly HttpClient _http;
-        private string _token;
 
         public RommApiClient(string baseUrl)
         {
@@ -87,27 +86,51 @@ namespace RommPlugin.ApiClient
 
         public async Task UpdateGameById(int gameId, RommUpdateGameRequest request)
         {
-            var content = new MultipartFormDataContent();
+            const int maxAttempts = 5;
 
-            content.Add(new StringContent(request.Name ?? ""), "name");
-            content.Add(new StringContent(request.Summary ?? ""), "summary");
-            content.Add(new StringContent(request.LaunchboxId?.ToString() ?? ""), "launchbox_id");
-
-            var launchboxJson = JsonConvert.SerializeObject(request.RawLaunchboxMetadata);
-            content.Add(new StringContent(launchboxJson, Encoding.UTF8, "application/json"), "raw_launchbox_metadata");
-
-            if (!string.IsNullOrEmpty(request.ArtworkPath) && File.Exists(request.ArtworkPath))
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                var fileStream = File.OpenRead(request.ArtworkPath);
-                var fileContent = new StreamContent(fileStream);
-                fileContent.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+                try
+                {
+                    var content = new MultipartFormDataContent();
 
-                content.Add(fileContent, "artwork", Path.GetFileName(request.ArtworkPath));
+                    content.Add(new StringContent(request.Name ?? ""), "name");
+                    content.Add(new StringContent(request.FsName ?? ""), "fs_name");
+                    content.Add(new StringContent(request.Summary ?? ""), "summary");
+                    content.Add(new StringContent(request.LaunchboxId?.ToString() ?? ""), "launchbox_id");
+
+                    var launchboxJson = JsonConvert.SerializeObject(request.RawLaunchboxMetadata);
+                    content.Add(new StringContent(launchboxJson, Encoding.UTF8, "application/json"), "raw_launchbox_metadata");
+
+                    if (!string.IsNullOrEmpty(request.ArtworkPath) && File.Exists(request.ArtworkPath))
+                    {
+                        var fileStream = File.OpenRead(request.ArtworkPath);
+                        var fileContent = new StreamContent(fileStream);
+
+                        var mime = GetMimeType(request.ArtworkPath);
+                        fileContent.Headers.ContentType = new MediaTypeHeaderValue(mime);
+
+                        content.Add(fileContent, "artwork", Path.GetFileName(request.ArtworkPath));
+                    }
+
+                    var response = await _http.PutAsync(
+                        $"api/roms/{gameId}?remove_cover=false&unmatch_metadata=false",
+                        content
+                    );
+
+                    response.EnsureSuccessStatusCode();
+                    return;
+                }
+                catch
+                {
+                    if (attempt == maxAttempts)
+                    {
+                        throw;
+                    }
+
+                    await Task.Delay(500 * attempt);
+                }
             }
-
-            var response = await _http.PutAsync($"api/roms/{gameId}?remove_cover=false&unmatch_metadata=false", content);
-
-            response.EnsureSuccessStatusCode();
         }
 
         public async Task RemoveGameMetadataById(int gameId)
@@ -115,6 +138,7 @@ namespace RommPlugin.ApiClient
             var response = await _http.PutAsync($"api/roms/{gameId}?remove_cover=false&unmatch_metadata=true", null);
             
             response.EnsureSuccessStatusCode();
+            return;
         }
 
         public async Task DownloadGameAsync(int gameId, string destinationFile)
@@ -130,7 +154,24 @@ namespace RommPlugin.ApiClient
             using (var file = new FileStream(destinationFile, FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 await stream.CopyToAsync(file);
+                return;
             }
+        }
+
+        private string GetMimeType(string path)
+        {
+            var ext = Path.GetExtension(path).ToLower();
+
+            if (ext == ".png")
+                return "image/png";
+
+            if (ext == ".jpg" || ext == ".jpeg")
+                return "image/jpeg";
+
+            if (ext == ".webp")
+                return "image/webp";
+
+            return "application/octet-stream";
         }
     }
 }

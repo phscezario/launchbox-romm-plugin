@@ -41,9 +41,9 @@
             this.checkedListBoxPlatforms.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(30)))), ((int)(((byte)(30)))));
             this.checkedListBoxPlatforms.ForeColor = System.Drawing.Color.White;
             this.checkedListBoxPlatforms.FormattingEnabled = true;
-            this.checkedListBoxPlatforms.Location = new System.Drawing.Point(28, 95);
+            this.checkedListBoxPlatforms.Location = new System.Drawing.Point(28, 92);
             this.checkedListBoxPlatforms.Name = "checkedListBoxPlatforms";
-            this.checkedListBoxPlatforms.Size = new System.Drawing.Size(468, 79);
+            this.checkedListBoxPlatforms.Size = new System.Drawing.Size(432, 394);
             this.checkedListBoxPlatforms.TabIndex = 0;
             // 
             // label1
@@ -60,7 +60,7 @@
             // btnSelectAll
             // 
             this.btnSelectAll.ForeColor = System.Drawing.SystemColors.ControlText;
-            this.btnSelectAll.Location = new System.Drawing.Point(27, 190);
+            this.btnSelectAll.Location = new System.Drawing.Point(28, 503);
             this.btnSelectAll.Name = "btnSelectAll";
             this.btnSelectAll.Size = new System.Drawing.Size(75, 23);
             this.btnSelectAll.TabIndex = 6;
@@ -71,7 +71,7 @@
             // btnClearAll
             // 
             this.btnClearAll.ForeColor = System.Drawing.SystemColors.ControlText;
-            this.btnClearAll.Location = new System.Drawing.Point(117, 190);
+            this.btnClearAll.Location = new System.Drawing.Point(109, 503);
             this.btnClearAll.Name = "btnClearAll";
             this.btnClearAll.Size = new System.Drawing.Size(75, 23);
             this.btnClearAll.TabIndex = 7;
@@ -83,7 +83,7 @@
             // 
             this.btnOk.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnOk.ForeColor = System.Drawing.SystemColors.ControlText;
-            this.btnOk.Location = new System.Drawing.Point(421, 187);
+            this.btnOk.Location = new System.Drawing.Point(385, 558);
             this.btnOk.Name = "btnOk";
             this.btnOk.Size = new System.Drawing.Size(75, 23);
             this.btnOk.TabIndex = 9;
@@ -95,7 +95,7 @@
             // 
             this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnCancel.ForeColor = System.Drawing.SystemColors.ControlText;
-            this.btnCancel.Location = new System.Drawing.Point(331, 187);
+            this.btnCancel.Location = new System.Drawing.Point(295, 558);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(75, 23);
             this.btnCancel.TabIndex = 8;
@@ -108,7 +108,7 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(30)))), ((int)(((byte)(30)))));
-            this.ClientSize = new System.Drawing.Size(524, 222);
+            this.ClientSize = new System.Drawing.Size(488, 593);
             this.Controls.Add(this.btnOk);
             this.Controls.Add(this.btnCancel);
             this.Controls.Add(this.btnClearAll);
@@ -118,6 +118,7 @@
             this.ForeColor = System.Drawing.Color.White;
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
             this.Name = "RommPlatformSelectorForm";
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "RommPlaftormSelectorForm";
             this.ResumeLayout(false);
             this.PerformLayout();
