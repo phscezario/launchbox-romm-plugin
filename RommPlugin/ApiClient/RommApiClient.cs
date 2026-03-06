@@ -104,7 +104,13 @@ namespace RommPlugin.ApiClient
 
                     if (!string.IsNullOrEmpty(request.ArtworkPath) && File.Exists(request.ArtworkPath))
                     {
-                        var fileStream = File.OpenRead(request.ArtworkPath);
+                        var fileStream = new FileStream(
+                                                request.ArtworkPath,
+                                                FileMode.Open,
+                                                FileAccess.Read,
+                                                FileShare.Read
+                                            );
+
                         var fileContent = new StreamContent(fileStream);
 
                         var mime = GetMimeType(request.ArtworkPath);
@@ -163,15 +169,35 @@ namespace RommPlugin.ApiClient
             var ext = Path.GetExtension(path).ToLower();
 
             if (ext == ".png")
+            {
                 return "image/png";
+            }
+
+            if ((ext == ".jpg" || ext == ".jpeg") && HasAlpha(path))
+            {
+                return "image/png";
+            }
 
             if (ext == ".jpg" || ext == ".jpeg")
+            {
                 return "image/jpeg";
+            }
 
             if (ext == ".webp")
+            {
                 return "image/webp";
+            }
 
             return "application/octet-stream";
+        }
+
+        private bool HasAlpha(string path)
+        {
+            using (var img = System.Drawing.Image.FromFile(path))
+            {
+                return (img.PixelFormat & System.Drawing.Imaging.PixelFormat.Alpha) != 0 ||
+                       (img.PixelFormat & System.Drawing.Imaging.PixelFormat.PAlpha) != 0;
+            }
         }
     }
 }
