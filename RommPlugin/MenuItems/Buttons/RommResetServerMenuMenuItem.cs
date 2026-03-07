@@ -10,7 +10,7 @@ namespace RommPlugin.MenuItems.Buttons
 {
     public class RommResetServerMenuMenuItem : RommMenuItem, ISystemMenuItemPlugin
     {
-        private static readonly RommSyncService sync = new RommSyncService();
+        private static readonly RommResetServerService sync = new RommResetServerService();
 
         public override string Caption => "RomM: Remove all server metadata";
 

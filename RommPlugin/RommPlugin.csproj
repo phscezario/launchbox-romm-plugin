@@ -107,6 +107,10 @@
     <Compile Include="ApiClient\RommApiClient.cs" />
     <Compile Include="MenuItems\RommMenuItem.cs" />
     <Compile Include="RommPlugin.cs" />
+    <Compile Include="Services\LaunchboxMetadaService.cs" />
+    <Compile Include="Services\RommImageService.cs" />
+    <Compile Include="Services\RommProcessInstallUninstallService.cs" />
+    <Compile Include="Services\RommResetServerService.cs" />
     <Compile Include="Services\RommSyncService.cs" />
   </ItemGroup>
   <ItemGroup>

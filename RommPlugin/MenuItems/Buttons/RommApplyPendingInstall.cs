@@ -7,7 +7,7 @@ namespace RommPlugin.MenuItems.Buttons
 {
     public class RommApplyPendingMenuMenuItem : RommMenuItem, ISystemMenuItemPlugin
     {
-        private static readonly RommSyncService sync = new RommSyncService();
+        private static readonly RommProcessInstallUninstallService sync = new RommProcessInstallUninstallService();
 
         public override string Caption => "RomM: Apply pending installs";
 
@@ -15,7 +15,7 @@ namespace RommPlugin.MenuItems.Buttons
         {
             try
             {
-                await sync.ProcessSyncEvents();
+                await sync.ProcessInstallUninstallEvents();
 
                 MessageBox.Show("RomM finish all pending install");
             }

@@ -7,7 +7,7 @@ namespace RommPlugin
 {
     public class RommMenuPlugin : ISystemEventsPlugin
     {
-        private RommSyncService sync = new RommSyncService();
+        private RommProcessInstallUninstallService sync = new RommProcessInstallUninstallService();
 
         public async void OnEventRaised(string eventType)
         {
@@ -18,7 +18,7 @@ namespace RommPlugin
 
             try
             {
-                await sync.ProcessSyncEvents();
+                await sync.ProcessInstallUninstallEvents();
             }
             catch (Exception ex)
             {
