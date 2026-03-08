@@ -6,10 +6,6 @@ on:
     types:
       - completed
 
-  push:
-    tags:
-      - 'v*'
-
 permissions:
   contents: write
   pull-requests: read
