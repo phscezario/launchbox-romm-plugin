@@ -62,11 +62,13 @@ jobs:
 
       - name: Copy Images folder
         shell: cmd
-        run: xcopy Images "package\RomM LaunchBox Integration\Images\" /E /I /Y
+        run: |
+          xcopy Images "package\RomM LaunchBox Integration\Images\" /E /I /Y
 
       - name: Copy settings.json
         shell: cmd
-        run: copy settings.json "package\RomM LaunchBox Integration\"
+        run: |
+          copy settings.json "package\RomM LaunchBox Integration\"
 
       - name: Create ZIP with version
         shell: powershell
@@ -77,6 +79,39 @@ jobs:
       - name: Generate Changelog
         id: changelog
         uses: mikepenz/release-changelog-builder-action@v4
+        with:
+          configurationJson: |
+            {
+              "categories": [
+                {
+                  "title": "💥 New Version",
+                  "rules": [
+                    { "title": "^breaking" },
+                    { "title": "^version" }
+                  ]
+                },
+                {
+                  "title": "🚀 Features",
+                  "rules": [
+                    { "title": "^feat" }
+                  ]
+                },
+                {
+                  "title": "🐛 Fixes",
+                  "rules": [
+                    { "title": "^fix" },
+                    { "title": "^bug" }
+                  ]
+                },
+                {
+                  "title": "🧰 Maintenance",
+                  "rules": [
+                    { "title": "^refactor" },
+                    { "title": "^chore" }
+                  ]
+                }
+              ]
+            }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
