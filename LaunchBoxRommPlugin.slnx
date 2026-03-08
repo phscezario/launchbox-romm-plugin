@@ -6,6 +6,7 @@
   <Folder Name="/Solution Items/.github/" />
   <Folder Name="/Solution Items/.github/workflows/">
     <File Path=".github/workflows/auto-tag.yml" />
+    <File Path=".github/workflows/pr-labeler.yml" />
     <File Path=".github/workflows/release.yml" />
   </Folder>
   <Folder Name="/Solution Items/Images/">
