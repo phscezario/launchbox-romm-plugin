@@ -28,6 +28,8 @@ It was designed to provide a clean and automated workflow for managing ROM colle
 - ✔ CLI without visible console window
 - ✔ Automatic ApplicationPath management
 - ✔ DLC support (when configured)
+- ✔ Update RomM server metadata using LaunchBox metadata
+- ✔ Delete all RomM server metadata
 
 ---
 
@@ -175,6 +177,8 @@ Ele foi projetado para oferecer um fluxo automatizado e limpo para gerenciar col
 - ✔ CLI sem janela de console
 - ✔ Atualização automática do ApplicationPath
 - ✔ Suporte a DLC (quando configurado)
+- ✔ Atualiza metadados do servidor RomM usando metadados do LaunchBox
+- ✔ Deleta todos os metadados do servidor RomM
 
 ---
 
