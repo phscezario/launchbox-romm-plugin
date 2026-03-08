@@ -5,17 +5,25 @@ on:
     tags:
       - 'v*'
 
+  workflow_run:
+    workflows: ["Auto Tag"]
+    types:
+      - completed
+
 permissions:
   contents: write
   pull-requests: read
 
 jobs:
   build:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: windows-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
@@ -33,7 +41,12 @@ jobs:
         id: vars
         shell: powershell
         run: |
-          $version = "${env:GITHUB_REF_NAME}"
+          if ("${{ github.event_name }}" -eq "push") {
+            $version = "${env:GITHUB_REF_NAME}"
+          } else {
+            git fetch --tags
+            $version = git describe --tags --abbrev=0
+          }
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
 
       - name: Create package folder structure
@@ -68,33 +81,13 @@ jobs:
       - name: Generate Changelog
         id: changelog
         uses: mikepenz/release-changelog-builder-action@v4
-        with:
-          configurationJson: |
-            {
-              "template": "# Changes\n\n{{CHANGELOG}}\n",
-              "pr_template": "- {{TITLE}} (#{{NUMBER}})",
-              "empty_template": "- No changes",
-              "categories": [
-                {
-                  "title": "🚀 Features",
-                  "labels": ["feature", "enhancement"]
-                },
-                {
-                  "title": "🐛 Fixes",
-                  "labels": ["fix", "bug"]
-                },
-                {
-                  "title": "🧰 Maintenance",
-                  "labels": ["chore", "refactor"]
-                }
-              ]
-            }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.vars.outputs.VERSION }}
           body: ${{ steps.changelog.outputs.changelog }}
           files: launchbox-romm-plugin-${{ steps.vars.outputs.VERSION }}.zip
         env:
