@@ -2,7 +2,7 @@ name: Build and Release
 
 on:
   workflow_run:
-    workflows: ["Auto Tag"]
+    workflows: ["Auto Version Tag from PR Title"]
     types:
       - completed
 
