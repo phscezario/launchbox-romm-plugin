@@ -82,7 +82,7 @@ jobs:
         with:
           configurationJson: |
             {
-              "pr_template": "- #{{title}} (##{{number}})",
+              "pr_template": "- #{{TITLE}} (##{{NUMBER}})",
               "categories": [
                 {
                   "title": "💥 New Version",
