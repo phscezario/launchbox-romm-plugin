@@ -20,10 +20,13 @@ jobs:
 
             let labels = [];
 
-            if (title.startsWith("feat:")) labels.push("feature");
-            else if (title.startsWith("fix:")) labels.push("bug");
+            if (title.startsWith("feat:")) labels.push("feat");
+            else if (title.startsWith("fix:")) labels.push("fix");
+            else if (title.startsWith("bug:")) labels.push("bug");
             else if (title.startsWith("refactor:")) labels.push("refactor");
             else if (title.startsWith("chore:")) labels.push("chore");
+            else if (title.startsWith("version:")) labels.push("version");
+            else if (title.startsWith("breaking:")) labels.push("version");
 
             if (labels.length > 0) {
               await github.rest.issues.addLabels({
