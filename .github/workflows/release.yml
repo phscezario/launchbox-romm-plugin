@@ -1,14 +1,14 @@
 name: Build and Release
 
 on:
-  push:
-    tags:
-      - 'v*'
-
   workflow_run:
     workflows: ["Auto Tag"]
     types:
       - completed
+
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
