@@ -98,6 +98,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="MenuItems\Buttons\RommUpdateServerMetadataMenuMenuItem.cs" />
+    <Compile Include="MenuItems\Buttons\RommResetServerMenuMenuItem.cs" />
     <Compile Include="MenuItems\Buttons\RommApplyPendingInstall.cs" />
     <Compile Include="MenuItems\Buttons\RommSettingMenuItem.cs" />
     <Compile Include="MenuItems\Buttons\RommSyncMenuItem.cs" />
@@ -105,6 +107,10 @@
     <Compile Include="ApiClient\RommApiClient.cs" />
     <Compile Include="MenuItems\RommMenuItem.cs" />
     <Compile Include="RommPlugin.cs" />
+    <Compile Include="Services\LaunchboxMetadaService.cs" />
+    <Compile Include="Services\RommImageService.cs" />
+    <Compile Include="Services\RommProcessInstallUninstallService.cs" />
+    <Compile Include="Services\RommResetServerService.cs" />
     <Compile Include="Services\RommSyncService.cs" />
   </ItemGroup>
   <ItemGroup>

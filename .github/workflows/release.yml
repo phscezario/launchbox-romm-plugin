@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
   build:
@@ -64,9 +65,37 @@ jobs:
           $zipName = "launchbox-romm-plugin-${{ steps.vars.outputs.VERSION }}.zip"
           Compress-Archive -Path package\* -DestinationPath $zipName
 
+      - name: Generate Changelog
+        id: changelog
+        uses: mikepenz/release-changelog-builder-action@v4
+        with:
+          configurationJson: |
+            {
+              "template": "# Changes\n\n{{CHANGELOG}}\n",
+              "pr_template": "- {{TITLE}} (#{{NUMBER}})",
+              "empty_template": "- No changes",
+              "categories": [
+                {
+                  "title": "🚀 Features",
+                  "labels": ["feature", "enhancement"]
+                },
+                {
+                  "title": "🐛 Fixes",
+                  "labels": ["fix", "bug"]
+                },
+                {
+                  "title": "🧰 Maintenance",
+                  "labels": ["chore", "refactor"]
+                }
+              ]
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          body: ${{ steps.changelog.outputs.changelog }}
           files: launchbox-romm-plugin-${{ steps.vars.outputs.VERSION }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

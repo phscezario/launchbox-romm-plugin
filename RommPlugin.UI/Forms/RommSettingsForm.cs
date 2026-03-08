@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Windows.Forms;
-using RommPlugin.Core.Config;
+using RommPlugin.Core.Models;
 using RommPlugin.Core.Storage;
 
 namespace RommPlugin.UI.Forms
@@ -22,6 +22,7 @@ namespace RommPlugin.UI.Forms
             txtUsername.Text = settings.Username;
             txtPassword.Text = settings.Password;
             txtRomsPath.Text = settings.RomsPath;
+            keepLocalData.Checked = settings.KeepLocalData;
         }
 
         private void RommSettingsForm_Load(object sender, EventArgs e)
@@ -61,7 +62,8 @@ namespace RommPlugin.UI.Forms
                 RommBaseUrl = txtBaseUrl.Text.Trim(),
                 Username = txtUsername.Text.Trim(),
                 Password = txtPassword.Text,
-                RomsPath = txtRomsPath.Text
+                RomsPath = txtRomsPath.Text,
+                KeepLocalData = keepLocalData.Checked
             };
 
             RommPluginStorage.Save(settings);
@@ -93,6 +95,12 @@ namespace RommPlugin.UI.Forms
                     txtRomsPath.Text = dialog.SelectedPath;
                 }
             }
+        }
+
+        private void btnCancel_Click(object sender, EventArgs e)
+        {
+            DialogResult = DialogResult.Cancel;
+            Close();
         }
     }
 }

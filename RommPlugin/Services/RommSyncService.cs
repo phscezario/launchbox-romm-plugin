@@ -1,14 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
-using Newtonsoft.Json;
 using RommPlugin.ApiClient;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Storage;
+using RommPlugin.UI.Forms;
 using RommPlugin.UI.Helpers;
 using Unbroken.LaunchBox.Plugins;
 using Unbroken.LaunchBox.Plugins.Data;
@@ -24,142 +23,288 @@ namespace RommPlugin.Services
             _api = api;
         }
 
-        public async Task SyncAsync(string username, string password)
+        public async Task SyncAsync()
         {
             await ProgressRunner.RunAsync(
                 "Starting sync from RomM...",
                 async progress =>
                 {
-                    await _api.LoginAsync(username, password);
+                    var settings = RommPluginStorage.Load();
+
+                    _api.SetBasicAuthentication(settings.Username, settings.Password);
 
                     var dataManager = PluginHelper.DataManager;
 
-                    var platforms = dataManager.GetAllPlatforms().ToList();
-                    var games = dataManager.GetAllGames().ToList();
-                    var platformCategories = dataManager.GetAllPlatformCategories().ToList();
+                    var platforms = dataManager.GetAllPlatforms()
+                        .Where(p => p.Name != null && p.Name.StartsWith("RomM | "))
+                        .ToList();
+
+                    var rommGamesOnly = dataManager.GetAllGames()
+                        .Where(g => g.Platform != null && g.Platform.StartsWith("RomM | "))
+                        .ToList();
+
+                    var platformCategories = dataManager.GetAllPlatformCategories()
+                        .Where(c => c.Name != null && c.Name.StartsWith("RomM | "))
+                        .ToList();
 
                     var rommPlatforms = await _api.GetPlatformsAsync();
-                    int platformCompleted = 0;
-                    int platformTotal = rommPlatforms.Count;
+
+                    if (rommPlatforms == null || rommPlatforms.Count == 0)
+                    {
+                        return;
+                    }
+
+                    var localGamesById = new Dictionary<int, IGame>();
+
+                    foreach (var game in rommGamesOnly)
+                    {
+                        if (TryGetRommId(game, out var id))
+                        {
+                            localGamesById[id] = game;
+                        }
+                    }
+
+                    var selectedPlatformIds = new HashSet<int>();
+
+                    var list = rommPlatforms.Select(p => new PlatformSelection
+                    {
+                        Id = p.Id,
+                        Name = string.IsNullOrEmpty(p.CustomName) ? p.Name : p.CustomName,
+                        Selected = true
+                    }).ToList();
+
+                    using (var form = new RommPlatformSelectorForm(list))
+                    {
+                        if (form.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+                        {
+                            return;
+                        }
+
+                        selectedPlatformIds = form.Platforms
+                            .Where(p => p.Selected)
+                            .Select(p => p.Id)
+                            .ToHashSet();
+                    }
+
+                    var hasChanges = false;
+                    var serverGameIds = new HashSet<int>();
+                    var platformCompleted = 0;
+                    var platformTotal = selectedPlatformIds.Count;
 
                     foreach (var rommPlatform in rommPlatforms)
                     {
-                        try
+                        if (!selectedPlatformIds.Contains(rommPlatform.Id))
                         {
-                            var parsedCategory = parseCategory(rommPlatform.Category);
-                            var rommCategoryName = $"RomM | {parsedCategory}";
-
-                            var rommCategory = platformCategories.FirstOrDefault(p => p.Name == rommCategoryName);
-
-                            if (rommCategory == null)
-                            {
-                                rommCategory = dataManager.AddNewPlatformCategory(rommCategoryName);
-                                platformCategories.Add(rommCategory);
-                            }
-
-                            var name = rommPlatform.CustomName != "" && rommPlatform.CustomName != null
-                                ? rommPlatform.CustomName
-                                : rommPlatform.Name;
-
-                            var platformName = $"RomM | {name}";
-                            var platform = platforms.FirstOrDefault(p => p.Name == platformName);
-
-                            if (platform == null)
-                            {
-                                platform = dataManager.AddNewPlatform(platformName);
-                                platform.Category = rommCategoryName;
-                                platforms.Add(platform);
-                            }
-
-                            List<RommGame> rommGames = null;
-
-                            try
-                            {
-                                rommGames = await _api.GetAllGamesByPlatformAsync(rommPlatform.Id);
-                            }
-                            catch (Exception error)
-                            {
-                                MessageBox.Show(error.ToString(), "Romm Plugin");
-                                continue;
-                            }
-
-                            int completedGames = 0;
-                            int totalGames = rommGames.Count;
-
-                            progress.SetTitle($"RomM: Installing games from {platform.Name}");
-
-                            foreach (var rommGame in rommGames)
-                            {
-                                try
-                                {
-                                    progress.SetStatus($"Platform: {platformCompleted} of {platformTotal} | Games for this platform: {completedGames} of {totalGames}");
-
-                                    var exists = GameExistsByRommId(games, rommGame.Id);
-
-                                    if (!exists)
-                                    {
-                                        var game = dataManager.AddNewGame(rommGame.Name);
-                                        game.Platform = platform.Name;
-
-                                        var isFolderGame = rommGame.Files.Count > 1;
-
-                                        SetCustomField(game, GameCustomFields.GameId, rommGame.Id.ToString());
-                                        SetCustomField(game, GameCustomFields.PlatformId, rommPlatform.Id.ToString());
-                                        SetCustomField(game, GameCustomFields.RemotePath, rommGame.FsPath ?? "");
-                                        SetCustomField(game, GameCustomFields.FileName, (rommGame.FsName + (isFolderGame ? ".zip" : "")) ?? "");
-                                        SetCustomField(game, GameCustomFields.IsFolderGame, isFolderGame.ToString());
-
-                                        bool hasInstallApp = game.GetAllAdditionalApplications().Any(a => a.Name == "Install (RomM)");
-
-                                        if (!hasInstallApp)
-                                        {
-                                            var installApp = game.AddNewAdditionalApplication();
-                                            installApp.Name = "Install (RomM)";
-                                            installApp.ApplicationPath = ".\\Plugins\\RomM LaunchBox Integration\\RommPlugin.CLI.exe";
-                                            installApp.CommandLine = $"install {rommGame.Id.ToString()}";
-                                            installApp.AutoRunAfter = false;
-                                        }
-
-                                        bool hasUninstallApp = game.GetAllAdditionalApplications().Any(a => a.Name == "Uninstall (RomM)");
-
-                                        if (!hasUninstallApp)
-                                        {
-                                            var uninstallApp = game.AddNewAdditionalApplication();
-                                            uninstallApp.Name = "Uninstall (RomM)";
-                                            uninstallApp.ApplicationPath = ".\\Plugins\\RomM LaunchBox Integration\\RommPlugin.CLI.exe";
-                                            uninstallApp.CommandLine = $"uninstall {rommGame.Id.ToString()}";
-                                            uninstallApp.AutoRunAfter = false;
-                                        }
-
-                                        game.Installed = game.Installed != null ? game.Installed : false;
-                                        games.Add(game);
-                                    }
-
-                                }
-                                catch (Exception error)
-                                {
-                                    MessageBox.Show(error.ToString(), "Romm Plugin");
-                                    continue;
-                                }
-                                finally
-                                {
-                                    completedGames++;
-
-                                }
-                            }
+                            continue;
                         }
-                        catch (Exception error)
+
+                        var parsedCategory = parseCategory(rommPlatform.Category);
+                        var rommCategoryName = $"RomM | {parsedCategory}";
+
+                        var rommCategory = platformCategories
+                            .FirstOrDefault(p => p.Name == rommCategoryName);
+
+                        if (rommCategory == null)
                         {
-                            MessageBox.Show(error.ToString(), "Romm Plugin");
+                            rommCategory = dataManager.AddNewPlatformCategory(rommCategoryName);
+                            platformCategories.Add(rommCategory);
+                            hasChanges = true;
                         }
-                        finally
+
+                        var name = !string.IsNullOrWhiteSpace(rommPlatform.CustomName)
+                            ? rommPlatform.CustomName
+                            : rommPlatform.Name;
+
+                        var platformName = $"RomM | {name}";
+
+                        var platform = platforms
+                            .FirstOrDefault(p => p.Name == platformName);
+
+                        if (platform == null)
                         {
-                            dataManager.Save();
-                            platformCompleted++;
+                            platform = dataManager.AddNewPlatform(platformName);
+                            platform.Category = rommCategoryName;
+                            platforms.Add(platform);
+                            hasChanges = true;
+
+                            settings.CurrentPlatforms.Add(new RommCurrentPlatform
+                            {
+                                Id = rommPlatform.Id,
+                                Name = platformName
+                            });
+                        }
+
+                        var rommGames = await _api.GetAllGamesByPlatformAsync(rommPlatform.Id);
+
+                        if (rommGames == null)
+                        {
+                            continue;
+                        }
+
+                        progress.SetTitle($"RomM: Syncing {platform.Name}");
+
+                        var completedGames = 0;
+                        var totalGames = rommGames.Count;
+
+                        foreach (var rommGame in rommGames)
+                        {
+                            progress.SetStatus($"Platform {platformCompleted}/{platformTotal} | Games {completedGames}/{totalGames}");
+
+                            serverGameIds.Add(rommGame.Id);
+
+                            if (localGamesById.TryGetValue(rommGame.Id, out var existingGame))
+                            {
+                                UpdateGame(existingGame, rommGame, platform.Name, !settings.KeepLocalData);
+                                hasChanges = true;
+                            }
+                            else
+                            {
+                                var normalizedTitle = NormalizeGameTitle(rommGame.Name);
+                                var game = dataManager.AddNewGame(normalizedTitle);
+
+                                game.Platform = platform.Name;
+
+                                var isFolderGame = rommGame.Files.Count > 1;
+
+                                SetCustomField(game, GameCustomFields.GameId, rommGame.Id.ToString());
+                                SetCustomField(game, GameCustomFields.PlatformId, rommPlatform.Id.ToString());
+                                SetCustomField(game, GameCustomFields.RemotePath, rommGame.FsPath ?? "");
+                                SetCustomField(game, GameCustomFields.FileName, (rommGame.FsName + (isFolderGame ? ".zip" : "")) ?? "");
+                                SetCustomField(game, GameCustomFields.IsFolderGame, isFolderGame.ToString());
+
+                                AddInstallUninstallIfMissing(game, rommGame.Id);
+
+                                game.Installed = game.Installed != null ? game.Installed : false;
+
+                                localGamesById[rommGame.Id] = game;
+                                hasChanges = true;
+                            }
+
+                            completedGames++;
+                        }
+
+                        platformCompleted++;
+                    }
+
+                    var localRommGames = localGamesById.Values.ToList();
+
+                    foreach (var localGame in localRommGames)
+                    {
+                        var rommId = GetRommId(localGame);
+
+                        if (!serverGameIds.Contains(rommId) && localGame.Platform?.StartsWith("RomM | ") == true)
+                        {
+                            dataManager.TryRemoveGame(localGame);
+                            hasChanges = true;
                         }
                     }
+
+                    if (hasChanges)
+                    {
+                        dataManager.Save();
+                    }
+
+                    CheckAndSavePlatforms(rommPlatforms, platforms);
                 }
             );
+        }
+
+        private bool TryGetRommId(IGame game, out int rommId)
+        {
+            rommId = 0;
+
+            var value = game.GetAllCustomFields().FirstOrDefault(f => f.Name == GameCustomFields.GameId)?.Value;
+
+            return int.TryParse(value, out rommId);
+        }
+
+        private int GetRommId(IGame game)
+        {
+            var value = game.GetAllCustomFields()
+                .FirstOrDefault(f => f.Name == GameCustomFields.GameId)?.Value;
+
+            return int.TryParse(value, out var id) ? id : 0;
+        }
+
+        private static readonly HashSet<string> KnownExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".zip", ".7z", ".rar",
+            ".iso", ".cue", ".bin", ".img",
+            ".chd", ".cso",
+            ".nes", ".sfc", ".smc", ".gba",
+            ".gb", ".gbc", ".n64", ".z64", ".v64",
+            ".nds", ".3ds",
+            ".gcz", ".nkit",
+            ".xiso", ".xci", ".rvz",
+            ".vpx", ".wad", ".wux"
+        };
+
+        public object RoomImageService { get; private set; }
+
+        private string NormalizeGameTitle(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return name;
+            }
+
+            var cleaned = name;
+
+            while (true)
+            {
+                var ext = Path.GetExtension(cleaned);
+                if (string.IsNullOrEmpty(ext) || !KnownExtensions.Contains(ext))
+                {
+                    break;
+                }
+
+                cleaned = Path.GetFileNameWithoutExtension(cleaned);
+            }
+
+            return cleaned.Trim();
+        }
+
+        private void UpdateGame(IGame game, RommGame rommGame, string platformName, bool overwriteLocalData)
+        {
+            if (overwriteLocalData)
+            {
+                game.Title = NormalizeGameTitle(rommGame.Name);
+
+                game.Platform = platformName;
+            }
+
+            var isFolderGame = rommGame.Files.Count > 1;
+
+            SetCustomField(game, GameCustomFields.RemotePath, rommGame.FsPath ?? "");
+            SetCustomField(game, GameCustomFields.FileName, (rommGame.FsName + (isFolderGame ? ".zip" : "")) ?? "");
+            SetCustomField(game, GameCustomFields.IsFolderGame, isFolderGame.ToString());
+        }
+
+        private void AddInstallUninstallIfMissing(IGame game, int rommId)
+        {
+            var hasInstallApp = game.GetAllAdditionalApplications()
+                .Any(a => a.Name == "Install (RomM)");
+
+            if (!hasInstallApp)
+            {
+                var installApp = game.AddNewAdditionalApplication();
+                installApp.Name = "Install (RomM)";
+                installApp.ApplicationPath = ".\\Plugins\\RomM LaunchBox Integration\\RommPlugin.CLI.exe";
+                installApp.CommandLine = $"install {rommId}";
+                installApp.AutoRunAfter = false;
+            }
+
+            var hasUninstallApp = game.GetAllAdditionalApplications()
+                .Any(a => a.Name == "Uninstall (RomM)");
+
+            if (!hasUninstallApp)
+            {
+                var uninstallApp = game.AddNewAdditionalApplication();
+                uninstallApp.Name = "Uninstall (RomM)";
+                uninstallApp.ApplicationPath = ".\\Plugins\\RomM LaunchBox Integration\\RommPlugin.CLI.exe";
+                uninstallApp.CommandLine = $"uninstall {rommId}";
+                uninstallApp.AutoRunAfter = false;
+            }
         }
 
         private string parseCategory(string category)
@@ -179,7 +324,7 @@ namespace RommPlugin.Services
             }
         }
 
-        void SetCustomField(IGame game, string name, string value, bool overwrite = true)
+        private void SetCustomField(IGame game, string name, string value, bool overwrite = true)
         {
             var field = game.GetAllCustomFields().FirstOrDefault(f => f.Name == name);
 
@@ -200,259 +345,178 @@ namespace RommPlugin.Services
             field.Value = value;
         }
 
-        bool GameExistsByRommId(List<IGame> games, int rommGameId)
+        private void CheckAndSavePlatforms(List<RommPlatform> rommPlatforms, List<IPlatform> launchboxPlatforms)
         {
-            return games.Any(g => g.GetAllCustomFields().Any(f => f.Name == GameCustomFields.GameId && f.Value == rommGameId.ToString()));
+            var settings = RommPluginStorage.Load();
+            var manager = PluginHelper.DataManager;
+            var serverIds = new HashSet<int>(rommPlatforms.Select(p => p.Id));
+
+            foreach (var rommPlatform in rommPlatforms)
+            {
+                var name = !string.IsNullOrWhiteSpace(rommPlatform.CustomName)
+                    ? rommPlatform.CustomName
+                    : rommPlatform.Name;
+
+                var platformName = $"RomM | {name}";
+
+                var existing = settings.CurrentPlatforms
+                    .FirstOrDefault(p => p.Id == rommPlatform.Id);
+
+                if (existing == null)
+                {
+                    settings.CurrentPlatforms.Add(new RommCurrentPlatform
+                    {
+                        Id = rommPlatform.Id,
+                        Name = platformName
+                    });
+                }
+                else
+                {
+                    existing.Name = platformName;
+                }
+            }
+
+            var removedPlatforms = settings.CurrentPlatforms
+                .Where(p => !serverIds.Contains(p.Id))
+                .ToList();
+
+            foreach (var removed in removedPlatforms)
+            {
+                var platform = launchboxPlatforms
+                    .FirstOrDefault(p => p.Name == removed.Name);
+
+                if (platform != null)
+                {
+                    manager.TryRemovePlatform(platform);
+                }
+
+                settings.CurrentPlatforms.Remove(removed);
+            }
+
+            RommPluginStorage.Save(settings);
+            manager.Save();
         }
 
-        public async Task ProcessSyncEvents()
+        public async Task UpdateServerMetadata(string username, string password)
         {
             await ProgressRunner.RunAsync(
-                "Processing installations events",
+                "Reset Metadata in RomM server...",
                 async progress =>
                 {
-                    var flagPath = Path.Combine(
-                        AppDomain.CurrentDomain.BaseDirectory,
-                        "..",
-                        "Plugins",
-                        "RomM LaunchBox Integration",
-                        "romm.sync"
-                    );
+                    _api.SetBasicAuthentication(username, password);
 
-                    if (!File.Exists(flagPath))
-                    {
-                        MessageBox.Show("Romm do not have any pending install");
-                        return;
-                    }
-
-                    var file = JsonConvert.DeserializeObject<RommSyncFile>(File.ReadAllText(flagPath));
-
-                    if (file?.Events == null || file.Events.Count == 0)
-                    {
-                        MessageBox.Show("Romm do not have any pending install");
-                        return;
-                    }
-
-                    var settings = RommPluginStorage.Load();
                     var dataManager = PluginHelper.DataManager;
-                    var games = dataManager.GetAllGames().ToList();
+                    var settings = RommPluginStorage.Load();
 
-                    var totalEvents = file.Events.Count;
-                    var completedEvents = 0;
-
-                    await Task.Run(() =>
+                    if (settings.CurrentPlatforms == null || settings.CurrentPlatforms.Count == 0)
                     {
-                        foreach (var evt in file.Events.ToList())
+                        MessageBox.Show("No RomM platforms available.");
+                        return;
+                    }
+
+                    var list = settings.CurrentPlatforms
+                        .Select(p => new PlatformSelection
                         {
-                            progress.SetStatus($"Processing: {completedEvents} of {totalEvents}");
+                            Id = p.Id,
+                            Name = p.Name,
+                            Selected = true
+                        })
+                        .ToList();
 
-                            var game = games.FirstOrDefault(g =>
-                                g.GetAllCustomFields()
-                                 .Any(f => f.Name == GameCustomFields.GameId &&
-                                           f.Value == evt.RommGameId.ToString())
-                            );
-
-                            var installed = false;
-
-                            if (game == null)
-                            {
-                                continue;
-                            }
-
-                            if (evt.Action == "install")
-                            {
-                                var remotePath = game.GetAllCustomFields().FirstOrDefault(f => f.Name == GameCustomFields.RemotePath)?.Value;
-
-                                var fileName = game.GetAllCustomFields().FirstOrDefault(f => f.Name == GameCustomFields.FileName)?.Value;
-
-                                var isFolderGame = game.GetAllCustomFields().FirstOrDefault(f => f.Name == GameCustomFields.IsFolderGame)?.Value == true.ToString();
-
-                                var localFile = Path.Combine(
-                                    settings.RomsPath,
-                                    "romm",
-                                    remotePath.Replace("/", "\\"),
-                                    fileName
-                                );
-
-                                if (isFolderGame)
-                                {
-                                    var zipPath = localFile;
-                                    var extractDir = Path.Combine(
-                                        Path.GetDirectoryName(zipPath),
-                                        Path.GetFileNameWithoutExtension(zipPath)
-                                    );
-
-                                    UnzipAndDelete(zipPath, extractDir);
-
-                                    var jsonPath = Path.Combine(extractDir, "_launchbox.json");
-
-                                    if (File.Exists(jsonPath))
-                                    {
-                                        ConfigureLaunchBoxGame(game, extractDir, jsonPath);
-                                    }
-
-                                    localFile = extractDir;
-                                    installed = Directory.Exists(localFile);
-                                }
-                                else
-                                {
-                                    installed = File.Exists(localFile);
-                                    game.ApplicationPath = installed ? localFile : null;
-                                }
-                            }
-                            else if (evt.Action == "uninstall")
-                            {
-                                ClearGameAdditionalApplications(game);
-                                game.ApplicationPath = null;
-                            }
-
-                            game.Installed = installed;
-
-                            file.Events.Remove(evt);
-
-                            completedEvents++;
+                    using (var form = new RommPlatformSelectorForm(list))
+                    {
+                        if (form.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+                        {
+                            return;
                         }
-                    });
-
-                    dataManager.Save();
-
-                    if (file.Events.Count == 0)
-                    {
-                        File.Delete(flagPath);
-                    }
-                    else
-                    {
-                        File.WriteAllText(
-                            flagPath,
-                            JsonConvert.SerializeObject(file, Formatting.Indented)
-                        );
                     }
 
-                    MessageBox.Show("Romm finish all pending install");
+                    var selectedPlatforms = list
+                        .Where(p => p.Selected)
+                        .Select(p => p.Name)
+                        .ToHashSet();
+
+                    var rommGamesOnly = dataManager.GetAllGames()
+                            .Where(g => g.Platform != null && selectedPlatforms.Contains(g.Platform))
+                            .ToList();
+
+                    if (rommGamesOnly == null || rommGamesOnly.Count == 0)
+                    {
+                        MessageBox.Show("No RomM games available.");
+                        return;
+                    }
+
+                    var completedGames = 0;
+                    var gamesTotal = rommGamesOnly.Count;
+
+                    progress.SetTitle($"RomM: Update all metadata");
+
+                    foreach (var game in rommGamesOnly)
+                    {
+                        TryGetRommId(game, out int rommId);
+                        var serverGame = await _api.GetGameByIdAsync(rommId);
+
+                        if (serverGame == null)
+                        {
+                            continue;
+                        }
+
+                        progress.SetStatus($"Games: {completedGames} of {gamesTotal}");
+
+                        var artworkPath = GetCoverImagePath(game);
+                        var originalArtwork = artworkPath;
+
+                        if (!string.IsNullOrEmpty(artworkPath) && File.Exists(artworkPath))
+                        {
+                            artworkPath = RommImageService.EnsureRgbJpeg(artworkPath);
+                        }
+
+                        var request = new RommUpdateGameRequest
+                        {
+                            Name = game.Title,
+                            FsName = serverGame.FsName,
+                            Summary = game.Notes,
+                            LaunchboxId = game.LaunchBoxDbId,
+                            RawLaunchboxMetadata = LaunchboxMetadaService.BuildLaunchboxMetadata(game),
+                            ArtworkPath = artworkPath
+                        };
+
+                        await _api.UpdateGameById(rommId, request);
+
+                        if (!string.IsNullOrEmpty(artworkPath) && artworkPath != originalArtwork)
+                        {
+                            File.Delete(artworkPath);
+                        }
+
+                        completedGames++;
+                    }
                 }
             );
         }
 
-        private void ConfigureLaunchBoxGame(IGame game, string baseFolder, string jsonPath)
+        private string GetCoverImagePath(IGame game)
         {
-            var config = JsonConvert.DeserializeObject<LaunchBoxFolderGameConfig>(File.ReadAllText(jsonPath));
+            var images = game.GetAllImagesWithDetails();
 
-            if (config == null)
+            foreach (var image in images)
             {
-                MessageBox.Show("Romm error while get game folder configuration");
-                return;
-            }
-
-            ClearGameAdditionalApplications(game);
-
-            if (!string.IsNullOrWhiteSpace(config.DefaultFileName))
-            {
-                game.ApplicationPath = Path.Combine(baseFolder, config.DefaultFileName);
-            }
-
-            if (config.AdditionalApplications != null)
-            {
-                foreach (var app in config.AdditionalApplications)
+                if (image.ImageType == "Box - Front")
                 {
-                    var add = game.AddNewAdditionalApplication();
-                    add.Name = app.Name;
-                    add.ApplicationPath = Path.Combine(baseFolder, app.Path);
-                    add.CommandLine = app.CommandLine;
+                    return image.FilePath;
+                }
+
+                if (image.ImageType == "Fanart - Box - Front")
+                {
+                    return image.FilePath;
+                }
+
+                if (image.ImageType == "Advertisement Flyer - Front")
+                {
+                    return image.FilePath;
                 }
             }
 
-            if (config.PreLoaders != null)
-            {
-                foreach (var loader in config.PreLoaders)
-                {
-                    var add = game.AddNewAdditionalApplication();
-                    add.Name = loader.Name;
-                    add.ApplicationPath = Path.Combine(baseFolder, loader.Path);
-                    add.CommandLine = loader.CommandLine;
-                    add.AutoRunBefore = true;
-                    add.WaitForExit = loader.WaitForExit ?? false;
-                }
-            }
-
-            if (config.PosLoaders != null)
-            {
-                foreach (var loader in config.PosLoaders)
-                {
-                    var add = game.AddNewAdditionalApplication();
-                    add.Name = loader.Name;
-                    add.ApplicationPath = Path.Combine(baseFolder, loader.Path);
-                    add.CommandLine = loader.CommandLine;
-                    add.AutoRunAfter = true;
-                }
-            }
-
-            if (config.HasDLC == true)
-            {
-                var dlcFolder = Path.Combine(baseFolder, "_DLCs");
-
-                if (Directory.Exists(dlcFolder))
-                {
-                    var files = Directory.GetFiles(dlcFolder);
-
-                    int index = 1;
-                    foreach (var file in files)
-                    {
-                        var add = game.AddNewAdditionalApplication();
-                        add.Name = $"DLC {index}";
-                        add.ApplicationPath = file;
-                        index++;
-                    }
-                }
-            }
-        }
-
-        private void ClearGameAdditionalApplications(IGame game)
-        {
-            var applications = game.GetAllAdditionalApplications()
-                .Where(a => !a.Name.Contains("(RomM)"))
-                .ToList();
-
-            foreach (var app in applications)
-            {
-                game.TryRemoveAdditionalApplication(app);
-            }
-        }
-
-        private void UnzipAndDelete(string zipPath, string extractDir)
-        {
-            var rootFolder = Path.GetFileNameWithoutExtension(zipPath);
-
-            using (var archive = ZipFile.OpenRead(zipPath))
-            {
-                foreach (var entry in archive.Entries)
-                {
-                    if (string.IsNullOrWhiteSpace(entry.Name))
-                    {
-                        continue;
-                    }
-
-                    var parts = entry.FullName
-                        .Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries)
-                        .SkipWhile(p => p != rootFolder)
-                        .Skip(1)
-                        .ToArray();
-
-                    if (parts.Length == 0)
-                    {
-                        continue;
-                    }
-
-                    var relativePath = Path.Combine(parts);
-
-                    var destinationPath = Path.Combine(extractDir, relativePath);
-
-                    Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
-
-                    entry.ExtractToFile(destinationPath, true);
-                }
-            }
-
-            File.Delete(zipPath);
+            return "";
         }
     }
 }

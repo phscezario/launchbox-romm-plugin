@@ -44,9 +44,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Config\RommPluginSettings.cs" />
+    <Compile Include="Models\PlatformSelection.cs" />
+    <Compile Include="Models\RommPluginSettings.cs" />
     <Compile Include="Interfaces\IProgressReporter.cs" />
     <Compile Include="Models\LaunchBoxFolderGameConfig.cs" />
+    <Compile Include="Models\LaunchBoxMetadataModel.cs" />
+    <Compile Include="Models\RommUpdateGameRequest.cs" />
     <Compile Include="Models\Statics\GameCustomFields.cs" />
     <Compile Include="Models\RommAuthResponse.cs" />
     <Compile Include="Models\RommGame.cs" />

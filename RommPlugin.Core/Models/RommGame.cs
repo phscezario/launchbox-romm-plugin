@@ -60,7 +60,7 @@ namespace RommPlugin.Core.Models
         public IgdbMetadata IgdbMetadata { get; set; }
 
         [JsonProperty("launchbox_metadata")]
-        public object LaunchBoxMetadata { get; set; }
+        public LaunchBoxMetadataModel LaunchBoxMetadata { get; set; }
 
         [JsonProperty("ss_metadata")]
         public object SsMetadata { get; set; }
