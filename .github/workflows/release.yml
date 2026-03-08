@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: windows-latest
 
     steps:
@@ -37,8 +37,12 @@ jobs:
         id: vars
         shell: powershell
         run: |
-          git fetch --tags
-          $version = git describe --tags --abbrev=0
+          if ("${{ github.event_name }}" -eq "push") {
+            $version = "${env:GITHUB_REF_NAME}"
+          } else {
+            git fetch --tags
+            $version = git describe --tags --abbrev=0
+          }
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
 
       - name: Create package folder structure
@@ -83,28 +87,28 @@ jobs:
                 {
                   "title": "💥 New Version",
                   "rules": [
-                    { "title": "^breaking", "regex": true },
-                    { "title": "^version", "regex": true }
+                    { "pattern": "^breaking", "on_property": "title" },
+                    { "pattern": "^version", "on_property": "title" }
                   ]
                 },
                 {
                   "title": "🚀 Features",
                   "rules": [
-                    { "title": "^feat", "regex": true }
+                    { "pattern": "^feat", "on_property": "title" }
                   ]
                 },
                 {
                   "title": "🐛 Fixes",
                   "rules": [
-                    { "title": "^fix", "regex": true },
-                    { "title": "^bug", "regex": true }
+                    { "pattern": "^fix", "on_property": "title" },
+                    { "pattern": "^bug", "on_property": "title" }
                   ]
                 },
                 {
                   "title": "🧰 Maintenance",
                   "rules": [
-                    { "title": "^refactor", "regex": true },
-                    { "title": "^chore", "regex": true }
+                    { "pattern": "^refactor", "on_property": "title" },
+                    { "pattern": "^chore", "on_property": "title" }
                   ]
                 }
               ]
