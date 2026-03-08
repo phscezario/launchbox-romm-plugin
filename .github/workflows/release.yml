@@ -1,10 +1,6 @@
 name: Build and Release
 
 on:
-  push:
-    tags:
-      - 'v*'
-
   workflow_run:
     workflows: ["Auto Version Tag from PR Title"]
     types:
