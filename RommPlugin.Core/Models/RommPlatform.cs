@@ -6,6 +6,25 @@ namespace RommPlugin.Core.Models
 {
     public class RommPlatform
     {
+        public RommPlatform()
+        {
+            Slug = "";
+            FsSlug = "";
+            Name = "";
+            CustomName = "";
+            Category = "";
+            Firmware = new List<Firmware>();
+            DisplayName = "";
+            IgdbSlug = "";
+            MobySlug = "";
+            HltbSlug = "";
+            FamilyName = "";
+            FamilySlug = "";
+            Url = "";
+            UrlLogo = "";
+            AspectRatio = "";
+        }
+
         [JsonProperty("id")]
         public int Id { get; set; }
 
@@ -79,19 +98,19 @@ namespace RommPlugin.Core.Models
         public string UrlLogo { get; set; }
 
         [JsonProperty("firmware")]
-        public List<string> Firmware { get; set; }
+        public List<Firmware> Firmware { get; set; }
 
         [JsonProperty("aspect_ratio")]
         public string AspectRatio { get; set; }
 
         [JsonProperty("created_at")]
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
 
         [JsonProperty("updated_at")]
-        public DateTime UpdatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
 
         [JsonProperty("fs_size_bytes")]
-        public long FsSizeBytes { get; set; }
+        public long? FsSizeBytes { get; set; }
 
         [JsonProperty("is_unidentified")]
         public bool IsUnidentified { get; set; }
@@ -104,16 +123,43 @@ namespace RommPlugin.Core.Models
 
         [JsonProperty("display_name")]
         public string DisplayName { get; set; }
+    }
 
-        public RommPlatform()
+    public class Firmware
+    {
+        public Firmware()
         {
-            Slug = "";
-            FsSlug = "";
             Name = "";
-            CustomName = "";
-            Category = "";
-            Firmware = new List<string>();
-            DisplayName = "";
+            FileName = "";
+            Sha256 = "";
+            Path = "";
         }
+
+        [JsonProperty("id")]
+        public int Id { get; set; }
+
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        [JsonProperty("platform_id")]
+        public int PlatformId { get; set; }
+
+        [JsonProperty("file_name")]
+        public string FileName { get; set; }
+
+        [JsonProperty("size")]
+        public long Size { get; set; }
+
+        [JsonProperty("sha256")]
+        public string Sha256 { get; set; }
+
+        [JsonProperty("path")]
+        public string Path { get; set; }
+
+        [JsonProperty("created_at")]
+        public DateTime? CreatedAt { get; set; }
+
+        [JsonProperty("updated_at")]
+        public DateTime? UpdatedAt { get; set; }
     }
 }

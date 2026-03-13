@@ -1,10 +1,36 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 
 namespace RommPlugin.Core.Models
 {
     public class RommGame
     {
+        public RommGame()
+        {
+            Name = "";
+            PlatformSlug = "";
+            PlatformFsSlug = "";
+            PlatformDisplayName = "";
+            FsName = "";
+            FsNameNoTags = "";
+            FsNameNoExt = "";
+            FsExtension = "";
+            FsPath = "";
+            Slug = "";
+            Summary = "";
+            YoutubeVideoId = "";
+            PathCoverSmall = "";
+            PathCoverLarge = "";
+            UrlCover = "";
+            PathManual = "";
+            UrlManual = "";
+
+            AlternativeNames = new List<string>();
+            Files = new List<RommFile>();
+            MergedScreenshots = new List<string>();
+        }
+
         [JsonProperty("id")]
         public int Id { get; set; }
 
@@ -39,7 +65,7 @@ namespace RommPlugin.Core.Models
         public string FsPath { get; set; }
 
         [JsonProperty("fs_size_bytes")]
-        public long FsSizeBytes { get; set; }
+        public long? FsSizeBytes { get; set; }
 
         [JsonProperty("slug")]
         public string Slug { get; set; }
@@ -63,7 +89,7 @@ namespace RommPlugin.Core.Models
         public LaunchBoxMetadataModel LaunchBoxMetadata { get; set; }
 
         [JsonProperty("ss_metadata")]
-        public object SsMetadata { get; set; }
+        public SsMetadata SsMetadata { get; set; }
 
         [JsonProperty("path_cover_small")]
         public string PathCoverSmall { get; set; }
@@ -110,6 +136,16 @@ namespace RommPlugin.Core.Models
 
     public class RommGameMeta
     {
+        public RommGameMeta()
+        {
+            Genres = new List<string>();
+            Franchises = new List<string>();
+            Companies = new List<string>();
+            GameModes = new List<string>();
+            AgeRatings = new List<string>();
+            PlayerCount = "";
+        }
+
         [JsonProperty("rom_id")]
         public int? RomId { get; set; }
 
@@ -138,8 +174,113 @@ namespace RommPlugin.Core.Models
         public double? AverageRating { get; set; }
     }
 
+    public class SsMetadata
+    {
+        public SsMetadata()
+        {
+            Name = "";
+            Description = "";
+            Developer = "";
+            Publisher = "";
+            Genre = "";
+            ReleaseDate = "";
+            Players = "";
+            Region = "";
+            Language = "";
+            SystemText = "";
+            Synopsis = "";
+            Note = "";
+            Media = "";
+            Classification = "";
+            RomCloneof = "";
+            Editeur = "";
+            Developpeur = "";
+            Joueurs = "";
+            Genres = new List<string>();
+        }
+
+        [JsonProperty("id")]
+        public int? Id { get; set; }
+
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        [JsonProperty("description")]
+        public string Description { get; set; }
+
+        [JsonProperty("developer")]
+        public string Developer { get; set; }
+
+        [JsonProperty("publisher")]
+        public string Publisher { get; set; }
+
+        [JsonProperty("genre")]
+        public string Genre { get; set; }
+
+        [JsonProperty("release_date")]
+        public string ReleaseDate { get; set; }
+
+        [JsonProperty("players")]
+        public string Players { get; set; }
+
+        [JsonProperty("rating")]
+        public double? Rating { get; set; }
+
+        [JsonProperty("region")]
+        public string Region { get; set; }
+
+        [JsonProperty("language")]
+        public string Language { get; set; }
+
+        [JsonProperty("ss_id")]
+        public int? SsId { get; set; }
+
+        [JsonProperty("system_text")]
+        public string SystemText { get; set; }
+
+        [JsonProperty("synopsis")]
+        public string Synopsis { get; set; }
+
+        [JsonProperty("note")]
+        public string Note { get; set; }
+
+        [JsonProperty("media")]
+        public string Media { get; set; }
+
+        [JsonProperty("classification")]
+        public string Classification { get; set; }
+
+        [JsonProperty("rom_cloneof")]
+        public string RomCloneof { get; set; }
+
+        [JsonProperty("editeur_id")]
+        public int? EditeurId { get; set; }
+
+        [JsonProperty("editeur")]
+        public string Editeur { get; set; }
+
+        [JsonProperty("developpeur_id")]
+        public int? DeveloppeurId { get; set; }
+
+        [JsonProperty("developpeur")]
+        public string Developpeur { get; set; }
+
+        [JsonProperty("joueurs")]
+        public string Joueurs { get; set; }
+
+        [JsonProperty("genres")]
+        public List<string> Genres { get; set; }
+    }
+
     public class AgeRating
     {
+        public AgeRating()
+        {
+            Rating = "";
+            Category = "";
+            RatingCoverUrl = "";
+        }
+
         [JsonProperty("rating")]
         public string Rating { get; set; }
 
@@ -152,11 +293,25 @@ namespace RommPlugin.Core.Models
 
     public class IgdbMetadata
     {
+        public IgdbMetadata()
+        {
+            YoutubeVideoId = "";
+            Genres = new List<string>();
+            Franchises = new List<string>();
+            AlternativeNames = new List<string>();
+            Collections = new List<string>();
+            Companies = new List<string>();
+            GameModes = new List<string>();
+            AgeRatings = new List<AgeRating>();
+            Platforms = new List<IgdbPlatform>();
+            SimilarGames = new List<SimilarGame>();
+        }
+
         [JsonProperty("total_rating")]
         public double? TotalRating { get; set; }
 
         [JsonProperty("aggregated_rating")]
-        public double ?AggregatedRating { get; set; }
+        public double? AggregatedRating { get; set; }
 
         [JsonProperty("first_release_date")]
         public long? FirstReleaseDate { get; set; }
@@ -194,6 +349,11 @@ namespace RommPlugin.Core.Models
 
     public class IgdbPlatform
     {
+        public IgdbPlatform()
+        {
+            Name = "";
+        }
+
         [JsonProperty("igdb_id")]
         public int IgdbId { get; set; }
 
@@ -203,6 +363,14 @@ namespace RommPlugin.Core.Models
 
     public class SimilarGame
     {
+        public SimilarGame()
+        {
+            Name = "";
+            Slug = "";
+            Type = "";
+            CoverUrl = "";
+        }
+
         [JsonProperty("id")]
         public int Id { get; set; }
 
@@ -221,6 +389,17 @@ namespace RommPlugin.Core.Models
 
     public class RommFile
     {
+        public RommFile()
+        {
+            FileName = "";
+            FilePath = "";
+            FullPath = "";
+            Category = "";
+            CrcHash = "";
+            Md5Hash = "";
+            Sha1Hash = "";
+        }
+
         [JsonProperty("id")]
         public int Id { get; set; }
 
@@ -231,7 +410,7 @@ namespace RommPlugin.Core.Models
         public string FilePath { get; set; }
 
         [JsonProperty("file_size_bytes")]
-        public long FileSizeBytes { get; set; }
+        public long? FileSizeBytes { get; set; }
 
         [JsonProperty("full_path")]
         public string FullPath { get; set; }
