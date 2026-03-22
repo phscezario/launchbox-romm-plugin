@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using RommPlugin.ApiClient;
 using RommPlugin.Core.Models;
+using RommPlugin.Core.Models.Statics;
 using RommPlugin.Core.Storage;
 using RommPlugin.UI.Forms;
 using RommPlugin.UI.Helpers;
@@ -226,19 +227,6 @@ namespace RommPlugin.Services
             return int.TryParse(value, out var id) ? id : 0;
         }
 
-        private static readonly HashSet<string> KnownExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".zip", ".7z", ".rar",
-            ".iso", ".cue", ".bin", ".img",
-            ".chd", ".cso",
-            ".nes", ".sfc", ".smc", ".gba",
-            ".gb", ".gbc", ".n64", ".z64", ".v64",
-            ".nds", ".3ds",
-            ".gcz", ".nkit",
-            ".xiso", ".xci", ".rvz",
-            ".vpx", ".wad", ".wux"
-        };
-
         public object RoomImageService { get; private set; }
 
         private string NormalizeGameTitle(string name)
@@ -253,7 +241,7 @@ namespace RommPlugin.Services
             while (true)
             {
                 var ext = Path.GetExtension(cleaned);
-                if (string.IsNullOrEmpty(ext) || !KnownExtensions.Contains(ext))
+                if (string.IsNullOrEmpty(ext) || !KnownExtensions.Extensions.Contains(ext))
                 {
                     break;
                 }

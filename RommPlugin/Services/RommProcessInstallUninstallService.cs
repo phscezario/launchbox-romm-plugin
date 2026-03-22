@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Abstractions;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
@@ -94,14 +95,14 @@ namespace RommPlugin.Services
                                     fileName
                                 );
 
+                                var zipPath = localFile;
+                                var extractDir = Path.Combine(
+                                    Path.GetDirectoryName(zipPath),
+                                    Path.GetFileNameWithoutExtension(zipPath)
+                                );
+
                                 if (isFolderGame)
                                 {
-                                    var zipPath = localFile;
-                                    var extractDir = Path.Combine(
-                                        Path.GetDirectoryName(zipPath),
-                                        Path.GetFileNameWithoutExtension(zipPath)
-                                    );
-
                                     UnzipAndDelete(zipPath, extractDir);
 
                                     var jsonPath = Path.Combine(extractDir, "_launchbox.json");
@@ -116,6 +117,8 @@ namespace RommPlugin.Services
                                 }
                                 else
                                 {
+                                    UnzipAndFlatten(zipPath);
+
                                     installed = File.Exists(localFile);
                                     game.ApplicationPath = installed ? localFile : null;
                                 }
@@ -281,6 +284,36 @@ namespace RommPlugin.Services
             }
 
             File.Delete(zipPath);
+        }
+
+        private void UnzipAndFlatten(string zipPath)
+        {
+            if (File.Exists(zipPath) && Path.GetExtension(zipPath).Equals(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                var tempExtract = Path.Combine(
+                    Path.GetDirectoryName(zipPath),
+                    "__temp_extract"
+                );
+
+                if (Directory.Exists(tempExtract))
+                {
+                    Directory.Delete(tempExtract, true);
+                }    
+
+                Directory.CreateDirectory(tempExtract);
+
+                ZipFile.ExtractToDirectory(zipPath, tempExtract);
+
+                var innerFile = Directory.GetFiles(tempExtract, "*.zip", SearchOption.AllDirectories)
+                    .FirstOrDefault();
+
+                if (innerFile != null)
+                {
+                    File.Copy(innerFile, zipPath, true);
+                }
+
+                Directory.Delete(tempExtract, true);
+            }
         }
     }
 }

@@ -57,6 +57,7 @@
     <Compile Include="Models\RommPlatform.cs" />
     <Compile Include="Models\RommSyncEvent.cs" />
     <Compile Include="Models\RommSyncFile.cs" />
+    <Compile Include="Models\Statics\KnownExtensions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Storage\RommPluginStorage.cs" />
   </ItemGroup>
