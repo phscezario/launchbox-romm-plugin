@@ -88,17 +88,13 @@ namespace RommPlugin.Services
                     }
 
                     var hasChanges = false;
-                    var serverGameIds = new HashSet<int>();
                     var platformCompleted = 0;
                     var platformTotal = selectedPlatformIds.Count;
 
+                    var newPlatforms = new List<string>();
+
                     foreach (var rommPlatform in rommPlatforms)
                     {
-                        if (!selectedPlatformIds.Contains(rommPlatform.Id))
-                        {
-                            continue;
-                        }
-
                         var parsedCategory = parseCategory(rommPlatform.Category);
                         var rommCategoryName = $"RomM | {parsedCategory}";
 
@@ -133,6 +129,13 @@ namespace RommPlugin.Services
                                 Id = rommPlatform.Id,
                                 Name = platformName
                             });
+
+                            newPlatforms.Add(platformName);
+                        }
+
+                        if (!selectedPlatformIds.Contains(rommPlatform.Id))
+                        { 
+                            continue;
                         }
 
                         var rommGames = await _api.GetAllGamesByPlatformAsync(rommPlatform.Id);
@@ -146,6 +149,8 @@ namespace RommPlugin.Services
 
                         var completedGames = 0;
                         var totalGames = rommGames.Count;
+
+                        var serverGameIds = new HashSet<int>();
 
                         foreach (var rommGame in rommGames)
                         {
@@ -184,20 +189,39 @@ namespace RommPlugin.Services
                             completedGames++;
                         }
 
+                        var localGamesFromPlatform = dataManager.GetAllGames()
+                            .Where(g =>
+                                g.Platform != null &&
+                                g.Platform.StartsWith("RomM | ") &&
+                                g.GetAllCustomFields()
+                                 .Any(f => f.Name == GameCustomFields.PlatformId && f.Value == rommPlatform.Id.ToString()))
+                            .ToList();
+
+                        foreach (var localGame in localGamesFromPlatform)
+                        {
+                            var rommId = GetRommId(localGame);
+
+                            if (rommId == 0)
+                            {
+                                continue;
+                            }
+
+                            if (!serverGameIds.Contains(rommId))
+                            {
+                                dataManager.TryRemoveGame(localGame);
+                                hasChanges = true;
+                            }
+                        }
+
                         platformCompleted++;
                     }
 
-                    var localRommGames = localGamesById.Values.ToList();
-
-                    foreach (var localGame in localRommGames)
+                    if (newPlatforms.Any())
                     {
-                        var rommId = GetRommId(localGame);
-
-                        if (!serverGameIds.Contains(rommId) && localGame.Platform?.StartsWith("RomM | ") == true)
-                        {
-                            dataManager.TryRemoveGame(localGame);
-                            hasChanges = true;
-                        }
+                        MessageBox.Show(
+                            "RomM new platforms detected:\n\n" + string.Join("\n", newPlatforms) +
+                            "\n\nYou can sync them later."
+                        );
                     }
 
                     if (hasChanges)
