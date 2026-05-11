@@ -75,10 +75,101 @@ Example:
       "Name": "Config",
       "Path": "Config.exe"
     }
+  ],
+  "PreLoaders": [
+    {
+      "Name": "Launcher",
+      "Path": "Launcher.exe",
+      "CommandLine": "\"%romsFolder%\"",
+      "WaitToExit": false
+    }
+  ],
+  "PosLoaders": [
+    {
+      "Name": "PostProcess",
+      "Path": "PostProcess.exe",
+      "CommandLine": "\"%romsFolder%\""
+    }
   ]
 }
 ```
 
+### 🔹 PreLoaders
+
+`PreLoaders` are executed before the main game starts.
+
+They can be used for:
+
+- Custom launchers
+- Setup applications
+- Virtual disk mounting
+- Dependency initialization
+- Compatibility tools
+
+Supported fields:
+
+| Field | Description |
+|---|---|
+| `Name` | Name displayed inside LaunchBox |
+| `Path` | Executable path |
+| `CommandLine` | Custom command line arguments |
+| `WaitToExit` | Waits for completion before launching the game |
+
+---
+
+### 🔹 PosLoaders
+
+`PosLoaders` are executed after the main game closes.
+
+They can be used for:
+
+- Temporary file cleanup
+- Virtual disk unmounting
+- Auxiliary process termination
+- Post-processing
+- Automated scripts
+
+Supported fields:
+
+| Field | Description |
+|---|---|
+| `Name` | Name displayed inside LaunchBox |
+| `Path` | Executable path |
+| `CommandLine` | Custom command line arguments |
+
+---
+
+### 🔹 AdditionalApplications
+
+`AdditionalApplications` allow adding extra tools directly to the game inside LaunchBox.
+
+Examples:
+
+- Configurators
+- Alternative launchers
+- Editors
+- Setup tools
+- Trainers
+- Auxiliary tools
+
+Supported fields:
+
+| Field | Description |
+|---|---|
+| `Name` | Application name |
+| `Path` | Executable path |
+
+---
+
+### 🔹 Supported Variables
+
+The plugin supports dynamic variables inside `CommandLine`.
+
+| Variable | Description |
+|---|---|
+| `%romsFolder%` | Folder where the game was installed |
+
+This allows portable and automated configurations.
 ---
 
 ### 🔄 Metadata Synchronization (LaunchBox → RomM)
@@ -348,9 +439,101 @@ Exemplo:
       "Name": "Config",
       "Path": "Config.exe"
     }
+  ],
+  "PreLoaders": [
+    {
+      "Name": "Launcher",
+      "Path": "Launcher.exe",
+      "CommandLine": "\"%romsFolder%\"",
+      "WaitToExit": false
+    }
+  ],
+  "PosLoaders": [
+    {
+      "Name": "PostProcess",
+      "Path": "PostProcess.exe",
+      "CommandLine": "\"%romsFolder%\""
+    }
   ]
 }
 ```
+
+### 🔹 PreLoaders
+
+Os `PreLoaders` são executados antes do jogo principal iniciar.
+
+Eles podem ser utilizados para:
+
+- Launchers customizados
+- Aplicações de setup
+- Montagem de discos virtuais
+- Inicialização de dependências
+- Ferramentas de compatibilidade
+
+Campos suportados:
+
+| Campo | Descrição |
+|---|---|
+| `Name` | Nome exibido no LaunchBox |
+| `Path` | Caminho do executável |
+| `CommandLine` | Argumentos personalizados |
+| `WaitToExit` | Aguarda finalizar antes de iniciar o jogo |
+
+---
+
+### 🔹 PosLoaders
+
+Os `PosLoaders` são executados após o encerramento do jogo principal.
+
+Eles podem ser utilizados para:
+
+- Limpeza de arquivos temporários
+- Desmontagem de discos virtuais
+- Encerramento de processos auxiliares
+- Pós-processamento
+- Scripts automáticos
+
+Campos suportados:
+
+| Campo | Descrição |
+|---|---|
+| `Name` | Nome exibido no LaunchBox |
+| `Path` | Caminho do executável |
+| `CommandLine` | Argumentos personalizados |
+
+---
+
+### 🔹 AdditionalApplications
+
+As `AdditionalApplications` permitem adicionar ferramentas extras diretamente ao jogo dentro do LaunchBox.
+
+Exemplos:
+
+- Configuradores
+- Launchers alternativos
+- Editors
+- Setup tools
+- Trainers
+- Ferramentas auxiliares
+
+Campos suportados:
+
+| Campo | Descrição |
+|---|---|
+| `Name` | Nome da aplicação |
+| `Path` | Caminho do executável |
+
+---
+
+### 🔹 Variáveis Suportadas
+
+O plugin suporta variáveis dinâmicas dentro de `CommandLine`.
+
+| Variável | Descrição |
+|---|---|
+| `%romsFolder%` | Pasta onde o jogo foi instalado |
+
+Isso permite criar configurações portáveis e automatizadas.
 
 ---
 
