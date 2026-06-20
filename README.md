@@ -1,15 +1,3 @@
-# LaunchBox — RomM Integration Plugin
-
-Seamless integration between RomM Server and LaunchBox / BigBox — Integração entre RomM Server e LaunchBox / BigBox.
-
-This README focuses on how to use the plugin from a LaunchBox user perspective (installing games, syncing and common tasks). No build or development instructions are included.
-
-English and Portuguese (PT-BR) sections are provided so you can follow in the preferred language.
-
----
-
-English (Quick User Guide)
-==========================
 
 Overview
 --------
@@ -27,179 +15,803 @@ Quick start
    LaunchBox/Plugins/RomM LaunchBox Integration
 
 2. Configure connection settings (see Settings below). You can edit settings.json inside the plugin folder or configure via the LaunchBox plugin settings UI.
+# 🎮 LaunchBox RomM Plugin
+
+![License](https://img.shields.io/badge/license-GPL--3.0-blue)
+![Platform](https://img.shields.io/badge/platform-LaunchBox-orange)
+![Integration](https://img.shields.io/badge/integration-RomM-green)
+
+> Sync, install and manage your RomM library directly from LaunchBox and BigBox.
+
+Integração completa entre **RomM Server** e **LaunchBox / BigBox**.
+
+---
+
+# 🇺🇸 English
+
+## Overview
+
+The **LaunchBox RomM Plugin** connects your local LaunchBox installation directly to a RomM server, allowing you to synchronize, install, manage and launch games seamlessly.
+
+The plugin was designed to create an automated workflow between a self-hosted RomM server and a local LaunchBox setup.
+
+Supports both traditional ROM setups and PC/native games depending on your LaunchBox configuration.
+
+---
+
+## ✨ Main Features
+
+### 📚 Library Synchronization
+
+- Sync platforms directly from RomM
+- Sync games directly from RomM
+- Automatically create missing LaunchBox platforms
+- Preserve installed/uninstalled state
+- Background synchronization processing
+- Keep LaunchBox and RomM synchronized
+
+---
+
+### ⬇️ Install & Uninstall Games
+
+Every synchronized game receives additional actions:
+
+- `Install (RomM)`
+- `Uninstall (RomM)`
+
+The plugin automatically:
+
+- Downloads games from RomM
+- Extracts ZIP files
+- Fixes nested folder structures
+- Configures executable paths
+- Marks games as installed/uninstalled
+- Supports DLC packages
+
+---
+
+### 📦 Automatic Archive Handling
+
+Compressed game files are automatically extracted during installation.
+
+The plugin also attempts to fix common nested archive structures automatically to ensure LaunchBox points to the correct executable.
+
+---
+
+### 🧠 Installed State Detection
+
+The plugin automatically tracks installation status for synchronized games.
+
+Installed games will:
+
+- Have executable paths configured
+- Be marked as installed inside LaunchBox
+- Support uninstall actions directly from LaunchBox
+
+Uninstalled games remain visible in the library without local files.
+
+---
+
+### ⚙️ Advanced `_launchbox.json` Support
+
+Games may contain a `_launchbox.json` file for advanced LaunchBox integration.
+
+Supported features include:
+
+- Custom executable selection
+- Additional applications
+- Pre-loaders
+- Post-loaders
+- Custom command line arguments
+- DLC handling
+
+Example:
+
+```json
+{
+  "DefaultFileName": "Game.exe",
+  "HasDLC": false,
+  "AdditionalApplications": [
+    {
+      "Name": "Config",
+      "Path": "Config.exe"
+    }
+  ],
+  "PreLoaders": [
+    {
+      "Name": "Launcher",
+      "Path": "Launcher.exe",
+      "CommandLine": "\"%romsFolder%\"",
+      "WaitToExit": false
+    }
+  ],
+  "PosLoaders": [
+    {
+      "Name": "PostProcess",
+      "Path": "PostProcess.exe",
+      "CommandLine": "\"%romsFolder%\""
+    }
+  ]
+}
+```
+
+---
+
+### 🔹 PreLoaders
+
+`PreLoaders` are executed before the main game starts.
+
+They can be used for:
+
+- Custom launchers
+- Setup applications
+- Virtual disk mounting
+- Dependency initialization
+- Compatibility tools
+
+Supported fields:
+
+| Field | Description |
+|---|---|
+| `Name` | Name displayed inside LaunchBox |
+| `Path` | Executable path |
+| `CommandLine` | Custom command line arguments |
+| `WaitToExit` | Waits for completion before launching the game |
+
+---
+
+### 🔹 PosLoaders
+
+`PosLoaders` are executed after the main game closes.
+
+They can be used for:
+
+- Temporary file cleanup
+- Virtual disk unmounting
+- Auxiliary process termination
+- Post-processing
+- Automated scripts
+
+Supported fields:
+
+| Field | Description |
+|---|---|
+| `Name` | Name displayed inside LaunchBox |
+| `Path` | Executable path |
+| `CommandLine` | Custom command line arguments |
+
+---
+
+### 🔹 AdditionalApplications
+
+`AdditionalApplications` allow adding extra tools directly to the game inside LaunchBox.
+
+Examples:
+
+- Configurators
+- Alternative launchers
+- Editors
+- Setup tools
+- Trainers
+- Auxiliary tools
+
+Supported fields:
+
+| Field | Description |
+|---|---|
+| `Name` | Application name |
+| `Path` | Executable path |
+
+---
+
+### 🔹 Supported Variables
+
+The plugin supports dynamic variables inside `CommandLine`.
+
+| Variable | Description |
+|---|---|
+| `%romsFolder%` | Folder where the game was installed |
+
+This allows portable and automated configurations.
+
+---
+
+### 🔄 Metadata Synchronization (LaunchBox → RomM)
+
+One of the most powerful features of the plugin is the ability to use your existing LaunchBox metadata as the source for RomM metadata.
+
+This allows RomM to inherit all your already-organized LaunchBox data automatically.
+
+The plugin can synchronize:
+
+- Game titles
+- Descriptions
+- Genres
+- Release dates
+- Developers
+- Publishers
+- Ratings
+- Play modes
+- Media references
+
+Available actions:
+
+| Action | Description |
+|---|---|
+| `Update RomM Metadata` | Sends LaunchBox metadata to RomM |
+| `Clear RomM Metadata` | Removes synchronized metadata from RomM |
+
+### Recommended Workflow
+
+1. Organize metadata inside LaunchBox
+2. Synchronize your RomM library
+3. Execute `Update RomM Metadata`
+4. RomM receives all LaunchBox metadata automatically
+
+This keeps your LaunchBox and RomM metadata fully synchronized.
+
+---
+
+### 🧠 Internal Processing Features
+
+- Background event queue system
+- `romm.sync` event tracking
+- Hidden CLI execution (no console popup)
+- Automatic cleanup of completed operations
+
+---
+
+## 📦 Requirements
+
+- LaunchBox / BigBox
+- Active RomM server
+- Windows environment
+- Network access to RomM server
+
+---
+
+## 📦 Installation
+
+### 1. Download the Plugin
+
+Download the latest release from:
+
+- GitHub Repository
+- LaunchBox Community Page
+
+---
+
+### 2. Extract Into LaunchBox
+
+Extract the plugin folder into:
+
+```text
+LaunchBox/Plugins/RomM LaunchBox Integration
+```
+
+Expected structure:
+
+```text
+LaunchBox
+ └── Plugins
+      └── RomM LaunchBox Integration
+```
+
+---
+
+### 3. Configure the Plugin
+
+You can configure the plugin using:
+
+- `settings.json`
+- LaunchBox plugin interface
+
+Example:
 
 3. Open LaunchBox and use the main menu command:
 
-   RomM: Sync roms list from server
+| Setting | Description |
+|---|---|
+| `RommBaseUrl` | RomM server URL |
+| `Username` | RomM username |
+| `Password` | RomM password |
+| `RomsPath` | Local installation folder |
 
-4. After sync you will see platforms and games created or updated in LaunchBox. Each synced game gets two extra actions: Install (RomM) and Uninstall (RomM).
+---
 
-Settings (fields)
------------------
-- RommBaseUrl: URL of your RomM server (e.g. http://192.168.1.100:9000)
-- Username / Password: RomM credentials (if your server requires auth)
-- RomsPath: Local path where games should be installed (e.g. D:\\LaunchBox\\Games)
-- KeepLocalData: When true, sync only fills empty metadata fields and downloads cover only if none exists. When false, sync overwrites all fields and replaces existing cover.
+### 4. Open LaunchBox
 
-How sync works
---------------
-- Platforms and games are requested from RomM and mirrored into LaunchBox. If a LaunchBox platform does not exist, the plugin creates it.
-- The plugin stores RomM metadata into custom fields so LaunchBox items retain origin information.
-- Metadata is applied with priority: LaunchBoxMetadata > ScreenScraper > IGDB > RomM Metadata.
-- Cover art (Box - Front) is downloaded from the server only if the game has no existing cover in LaunchBox.
-- When KeepLocalData is true, only empty/null fields are filled; existing data is preserved. When false, all fields are overwritten.
-- Games that no longer exist on the server are removed from LaunchBox and their orphan images are cleaned up.
-- After sync completes, LaunchBox reloads its library automatically via ForceReload so new metadata and images appear immediately.
+Start LaunchBox normally.
 
-Metadata fields synchronized (when available from the server):
-- Release date, max players, play mode, community rating, community rating votes
-- Video URL (YouTube), Wikipedia URL, ESRB rating, synopsis / notes
-- LaunchBox ID mapping (LaunchBoxDbId) for cross-reference
+The plugin menus will become available automatically.
 
-Install / Uninstall flow
-------------------------
-- Install (RomM) — downloads the game package from RomM, extracts ZIPs when needed, applies folder layout fixes, parses an optional _launchbox.json and sets ApplicationPath automatically.
-- Uninstall (RomM) — removes the installed files, clears ApplicationPath in LaunchBox and marks the game as uninstalled.
+---
 
-Actions are implemented as LaunchBox applications that call the bundled CLI:
+### 5. Synchronize Your Library
 
-  RommPlugin.CLI.exe install <gameId>
-  RommPlugin.CLI.exe uninstall <gameId>
+Use the menu option:
 
-_launchbox.json (advanced per-game config)
------------------------------------------
-If a package contains a _launchbox.json file the plugin uses it to configure the game's files and applications. Typical keys:
+```text
+RomM: Sync roms list from server
+```
+
+The plugin will:
+
+- Connect to RomM
+- Retrieve platforms
+- Retrieve games
+- Automatically create missing platforms
+- Import games into LaunchBox
+
+---
+
+## 🧠 Internal Sync System
+
+The plugin uses a `romm.sync` file internally to process queued events.
+
+This system manages:
+
+- Install events
+- Uninstall events
+- Metadata synchronization
+- Automatic cleanup
+- Background execution
+
+This ensures LaunchBox and RomM stay synchronized safely.
+
+---
+
+## 🕹️ Recommended Usage Flow
+
+```text
+RomM Server
+     ↓
+Sync Library
+     ↓
+LaunchBox Imports Games
+     ↓
+Install Game From LaunchBox
+     ↓
+Plugin Downloads + Configures Game
+     ↓
+Play Through LaunchBox / BigBox
+```
+
+---
+
+## ⚠️ Known Limitations
+
+- Requires an active RomM server connection
+- Installation folders must be writable
+- Some emulators may still require manual LaunchBox configuration
+- Metadata synchronization depends on existing LaunchBox metadata
+
+---
+
+## 📸 Screenshots
+
+Recommended screenshots to include:
+
+- Plugin settings
+- Synchronization menu
+- Install / uninstall actions
+- Installed game example
+- Metadata synchronization actions
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome.
+
+If you find bugs or want improvements:
+
+- Open an issue
+- Submit a pull request
+- Include reproduction steps whenever possible
+
+---
+
+## 📄 License
+
+GPL-3.0 License
+
+---
+
+---
+
+# 🇧🇷 Português
+
+## Visão Geral
+
+O **LaunchBox RomM Plugin** conecta sua instalação local do LaunchBox diretamente a um servidor RomM, permitindo sincronizar, instalar, gerenciar e executar jogos de forma integrada.
+
+O plugin foi desenvolvido para criar um fluxo automatizado entre um servidor RomM self-hosted e uma instalação local do LaunchBox.
+
+Suporta tanto bibliotecas tradicionais de ROMs quanto jogos nativos de PC, dependendo da configuração do seu LaunchBox.
+
+---
+
+## ✨ Funcionalidades
+
+### 📚 Sincronização da Biblioteca
+
+- Sincroniza plataformas diretamente do RomM
+- Sincroniza jogos diretamente do RomM
+- Cria plataformas automaticamente no LaunchBox
+- Mantém o status de instalado/desinstalado
+- Processamento de sincronização em background
+- Mantém LaunchBox e RomM sincronizados
+
+---
+
+### ⬇️ Instalar e Desinstalar Jogos
+
+Cada jogo sincronizado recebe ações adicionais:
+
+- `Install (RomM)`
+- `Uninstall (RomM)`
+
+O plugin automaticamente:
+
+- Faz download dos jogos pelo RomM
+- Extrai arquivos ZIP
+- Corrige estruturas de pastas aninhadas
+- Configura caminhos de executáveis automaticamente
+- Marca jogos como instalados/desinstalados
+- Suporta pacotes de DLC
+
+---
+
+### 📦 Manipulação Automática de Arquivos Compactados
+
+Arquivos compactados são extraídos automaticamente durante a instalação.
+
+O plugin também tenta corrigir automaticamente estruturas comuns de pastas aninhadas para garantir que o LaunchBox aponte para o executável correto.
+
+---
+
+### 🧠 Detecção de Estado de Instalação
+
+O plugin rastreia automaticamente o status de instalação dos jogos sincronizados.
+
+Jogos instalados:
+
+- Possuem caminhos de executáveis configurados
+- São marcados como instalados dentro do LaunchBox
+- Suportam ações de desinstalação diretamente pelo LaunchBox
+
+Jogos não instalados permanecem visíveis na biblioteca sem arquivos locais.
+
+---
+
+### ⚙️ Suporte Avançado ao `_launchbox.json`
+
+Os jogos podem conter um arquivo `_launchbox.json` para integração avançada com o LaunchBox.
+
+Os recursos suportados incluem:
+
+- Seleção personalizada de executável
+- Aplicações adicionais
+- Pre-loaders
+- Pós-loaders
+- Argumentos personalizados de linha de comando
+- Suporte a DLC
+
+Exemplo:
+
+```json
+{
+  "DefaultFileName": "Game.exe",
+  "HasDLC": false,
+  "AdditionalApplications": [
+    {
+      "Name": "Config",
+      "Path": "Config.exe"
+    }
+  ],
+  "PreLoaders": [
+    {
+      "Name": "Launcher",
+      "Path": "Launcher.exe",
+      "CommandLine": "\"%romsFolder%\"",
+      "WaitToExit": false
+    }
+  ],
+  "PosLoaders": [
+    {
+      "Name": "PostProcess",
+      "Path": "PostProcess.exe",
+      "CommandLine": "\"%romsFolder%\""
+    }
+  ]
+}
+```
+
+---
+
+### 🔹 PreLoaders
+
+Os `PreLoaders` são executados antes do jogo principal iniciar.
+
+Eles podem ser utilizados para:
+
+- Launchers customizados
+- Aplicações de setup
+- Montagem de discos virtuais
+- Inicialização de dependências
+- Ferramentas de compatibilidade
+
+Campos suportados:
+
+| Campo | Descrição |
+|---|---|
+| `Name` | Nome exibido dentro do LaunchBox |
+| `Path` | Caminho do executável |
+| `CommandLine` | Argumentos personalizados |
+| `WaitToExit` | Aguarda finalizar antes de iniciar o jogo |
+
+---
+
+### 🔹 PosLoaders
+
+Os `PosLoaders` são executados após o encerramento do jogo principal.
+
+Eles podem ser utilizados para:
+
+- Limpeza de arquivos temporários
+- Desmontagem de discos virtuais
+- Encerramento de processos auxiliares
+- Pós-processamento
+- Scripts automatizados
+
+Campos suportados:
+
+| Campo | Descrição |
+|---|---|
+| `Name` | Nome exibido dentro do LaunchBox |
+| `Path` | Caminho do executável |
+| `CommandLine` | Argumentos personalizados |
+
+---
+
+### 🔹 AdditionalApplications
+
+As `AdditionalApplications` permitem adicionar ferramentas extras diretamente ao jogo dentro do LaunchBox.
+
+Exemplos:
+
+- Configuradores
+- Launchers alternativos
+- Editors
+- Ferramentas de setup
+- Trainers
+- Ferramentas auxiliares
+
+Campos suportados:
+
+| Campo | Descrição |
+|---|---|
+| `Name` | Nome da aplicação |
+| `Path` | Caminho do executável |
+
+---
+
+### 🔹 Variáveis Suportadas
+
+O plugin suporta variáveis dinâmicas dentro de `CommandLine`.
+
+| Variável | Descrição |
+|---|---|
+| `%romsFolder%` | Pasta onde o jogo foi instalado |
+
+Isso permite criar configurações automatizadas e portáveis.
 
 - DefaultFileName — executable used as main application (relative to the game folder)
 - HasDLC — whether the game bundle contains DLC that the plugin must treat specially
 - AdditionalApplications — list of extra LaunchBox applications (Name, Path, optional CommandLine)
 - PreLoaders / PosLoaders — programs or scripts to run before/after the main application
 
-Placeholders like %romsFolder% are supported inside command lines and paths to point to the installed game folder.
+### 🔄 Sincronização de Metadados (LaunchBox → RomM)
 
-Background events
------------------
-The plugin queues install/uninstall requests into a romm.sync file. The background worker processes the queue, updates installed status and removes finished events. The sync file is removed when there are no pending events.
+Uma das funcionalidades mais poderosas do plugin é a possibilidade de utilizar os metadados já existentes no LaunchBox como fonte para os metadados do RomM.
 
-CLI (silent)
-------------
-The included CLI performs install/uninstall tasks without showing a console window so LaunchBox actions run smoothly.
+Isso permite que o RomM herde automaticamente toda a organização já existente no LaunchBox.
 
-Troubleshooting / Common Issues
--------------------------------
-- Server unreachable: check RommBaseUrl and that the RomM server is running and accessible on the network.
-- Authentication failed: verify Username/Password and try via the RomM web UI.
-- Permission errors writing files: ensure RomsPath is writable by your user and LaunchBox.
-- Missing extracted EXE: check _launchbox.json DefaultFileName or inspect the extracted folder to find the correct executable.
+O plugin pode sincronizar:
 
-Tips
-----
-- Keep RomsPath on a drive with enough free space.
-- Use _launchbox.json for complex multi-file games so the plugin configures applications properly.
-- Back up LaunchBox database before large syncs if you rely on custom edits.
+- Nome dos jogos
+- Descrições
+- Gêneros
+- Datas de lançamento
+- Desenvolvedores
+- Publishers
+- Avaliações
+- Modos de jogo
+- Referências de mídia
+
+Ações disponíveis:
+
+| Ação | Descrição |
+|---|---|
+| `Update RomM Metadata` | Envia os metadados do LaunchBox para o RomM |
+| `Clear RomM Metadata` | Remove os metadados sincronizados do RomM |
+
+### Fluxo Recomendado
+
+1. Organize os metadados dentro do LaunchBox
+2. Sincronize sua biblioteca do RomM
+3. Execute `Update RomM Metadata`
+4. O RomM receberá automaticamente todos os metadados do LaunchBox
+
+Isso mantém os metadados do LaunchBox e do RomM totalmente sincronizados.
+
+---
+
+### 🧠 Recursos Internos de Processamento
+
+- Sistema de fila de eventos em background
+- Controle de eventos através do `romm.sync`
+- Execução oculta de CLI (sem popup de console)
+- Limpeza automática de operações concluídas
+
+---
+
+## 📦 Requisitos
+
+- LaunchBox / BigBox
+- Servidor RomM ativo
+- Ambiente Windows
+- Acesso de rede ao servidor RomM
 
 FAQ
 ---
 Q: How do I force a full resync?
 A: Use the RomM: Sync roms list from server option. If needed, remove problematic platforms/games from LaunchBox and run sync again.
 
-Q: Can I revert metadata the plugin wrote?
-A: Metadata is stored in LaunchBox fields; you can edit or remove it from individual game entries via LaunchBox.
+## 📦 Instalação
+
+### 1. Baixe o Plugin
+
+Faça download da versão mais recente através do:
+
+- GitHub Repository
+- Página da Comunidade LaunchBox
 
 Português (Guia Rápido ao Usuário)
 ==================================
 
-Visão geral
------------
-O plugin conecta o LaunchBox/BigBox ao servidor RomM permitindo:
-- Sincronizar plataformas e jogos do servidor RomM
-- Preencher automaticamente os metadados do LaunchBox com dados do servidor (data, gênero, empresa, rating, ESRB, sinopse, etc.) com prioridade: LaunchBoxMetadata > ScreenScraper > IGDB
-- Baixar capa (Box - Front) automaticamente do servidor RomM
-- Instalar e desinstalar jogos diretamente pelo LaunchBox
-- Enviar metadados e capa do LaunchBox de volta ao servidor RomM
+### 2. Extraia Dentro do LaunchBox
 
-Início rápido
--------------
-1. Baixe o plugin e extraia a pasta do plugin dentro da pasta de Plugins do LaunchBox:
+Extraia a pasta do plugin em:
 
-   LaunchBox/Plugins/RomM LaunchBox Integration
+```text
+LaunchBox/Plugins/RomM LaunchBox Integration
+```
 
-2. Configure as opções de conexão (veja Configurações). Você pode editar settings.json na pasta do plugin ou usar a UI de plugins do LaunchBox.
+Estrutura esperada:
+
+```text
+LaunchBox
+ └── Plugins
+      └── RomM LaunchBox Integration
+```
+
+---
+
+### 3. Configure o Plugin
+
+Você pode configurar o plugin utilizando:
+
+- `settings.json`
+- Interface do plugin dentro do LaunchBox
+
+Exemplo:
 
 3. Abra o LaunchBox e use o comando no menu:
 
-   RomM: Sync roms list from server
+| Configuração | Descrição |
+|---|---|
+| `RommBaseUrl` | URL do servidor RomM |
+| `Username` | Usuário do RomM |
+| `Password` | Senha do RomM |
+| `RomsPath` | Pasta local de instalação |
 
-4. Após a sincronização, plataformas e jogos aparecerão no LaunchBox. Cada jogo sincronizado ganha as ações Install (RomM) e Uninstall (RomM).
+---
 
-Configurações (campos)
----------------------
-- RommBaseUrl: endereço do servidor RomM (ex.: http://192.168.1.100:9000)
-- Username / Password: credenciais do RomM (se necessário)
-- RomsPath: pasta local onde os jogos serão instalados (ex.: D:\\Jogos)
-- KeepLocalData: quando true, a sync só preenche campos vazios e baixa capa se não existir. Quando false, sobrescreve tudo.
+### 4. Abra o LaunchBox
 
-Como a sincronização funciona
----------------------------
-- Plataformas e jogos são obtidos do RomM e espelhados no LaunchBox. Plataformas novas são criadas automaticamente quando necessário.
-- Metadados do RomM são gravados em campos personalizados no LaunchBox para manter rastreabilidade.
-- Metadados seguem a prioridade: LaunchBoxMetadata > ScreenScraper > IGDB > RomM Metadata.
-- Capa (Box - Front) é baixada do servidor apenas se o jogo não tiver capa no LaunchBox.
-- Com KeepLocalData=true, só campos vazios são preenchidos. Com false, todos os campos são sobrescritos.
-- Jogos que não existem mais no servidor são removidos do LaunchBox e suas imagens órfãs são deletadas.
-- Após a sync, o LaunchBox recarrega a biblioteca automaticamente via ForceReload para que os metadados e capas apareçam na hora.
+Abra o LaunchBox normalmente.
 
-Campos de metadados sincronizados (quando disponíveis no servidor):
-- Data de lançamento, número máximo de jogadores, modo de jogo, vídeo (YouTube), rating comunitário
-- Wikipedia, ESRB, sinopse / notas
-- LaunchBox ID (LaunchBoxDbId) para referência cruzada
+Os menus do plugin ficarão disponíveis automaticamente.
 
-Fluxo de Instalar / Desinstalar
-------------------------------
-- Install (RomM) — baixa o pacote do RomM, extrai ZIPs, ajusta hierarquia, aplica configurações do _launchbox.json (se houver) e configura ApplicationPath.
-- Uninstall (RomM) — remove arquivos instalados, limpa ApplicationPath no LaunchBox e marca o jogo como não instalado.
+---
 
-Ações são adicionadas como aplicações do LaunchBox que executam o CLI incluso:
+### 5. Sincronize Sua Biblioteca
 
-  RommPlugin.CLI.exe install <gameId>
-  RommPlugin.CLI.exe uninstall <gameId>
+Utilize a opção do menu:
 
-_launchbox.json (config avançada por jogo)
-----------------------------------------
-Se o pacote contém _launchbox.json o plugin usa essas configurações para montar aplicações e paths do jogo. Chaves comuns:
+```text
+RomM: Sync roms list from server
+```
 
-- DefaultFileName — executável principal (relativo à pasta do jogo)
-- HasDLC — indica se o pacote contém DLCs
-- AdditionalApplications — aplicativos adicionais (Name, Path, CommandLine)
-- PreLoaders / PosLoaders — processos a rodar antes/depois do jogo
+O plugin irá:
 
-Suporte a placeholders como %romsFolder% para indicar a pasta instalada do jogo.
+- Conectar ao RomM
+- Buscar plataformas
+- Buscar jogos
+- Criar plataformas automaticamente
+- Importar jogos para o LaunchBox
 
-Processamento em segundo plano
-------------------------------
-Eventos de instalar/desinstalar são enfileirados no arquivo romm.sync. O worker processa a fila, atualiza status e remove eventos concluídos. O arquivo é deletado se não houver eventos pendentes.
+---
 
-CLI (silencioso)
-----------------
-O CLI incluido executa operações sem abrir janela de console, permitindo que as ações do LaunchBox rodem sem interrupções.
+## 🧠 Sistema Interno de Sincronização
 
-Resolução de problemas comuns
-----------------------------
-- Servidor inacessível: verifique RommBaseUrl e se o servidor RomM está online e acessível.
-- Autenticação: verifique usuário e senha no settings.json ou na UI do plugin.
-- Erros de permissão: confirme se a pasta RomsPath tem permissões de escrita para o usuário do LaunchBox.
-- Executável não encontrado: verifique DefaultFileName no _launchbox.json ou abra a pasta extraída para localizar o .exe correto.
+O plugin utiliza internamente um arquivo `romm.sync` para processar eventos pendentes.
 
-Dicas
------
-- Mantenha RomsPath em um disco com espaço suficiente.
-- Use _launchbox.json para jogos com múltiplos arquivos ou aplicações secundárias.
-- Faça backup do banco de dados do LaunchBox antes de uma sincronização em larga escala.
+Esse sistema gerencia:
 
-Contribuições e Suporte
------------------------
-Pull requests e issues são bem-vindos. Para bugs ou sugestões, abra uma issue descrevendo passos para reproduzir e logs quando possível.
+- Eventos de instalação
+- Eventos de desinstalação
+- Sincronização de metadados
+- Limpeza automática
+- Execução em background
 
-License
--------
-GPL-3.0
+Isso garante que o LaunchBox e o RomM permaneçam sincronizados com segurança.
+
+---
+
+## 🕹️ Fluxo Recomendado de Uso
+
+```text
+Servidor RomM
+      ↓
+Sincronizar Biblioteca
+      ↓
+LaunchBox Importa Jogos
+      ↓
+Instalar Jogo Pelo LaunchBox
+      ↓
+Plugin Faz Download + Configuração
+      ↓
+Executar Pelo LaunchBox / BigBox
+```
+
+---
+
+## ⚠️ Limitações Conhecidas
+
+- Requer conexão ativa com o servidor RomM
+- As pastas de instalação precisam possuir permissão de escrita
+- Alguns emuladores ainda podem exigir configuração manual no LaunchBox
+- A sincronização de metadados depende de metadados existentes no LaunchBox
+
+---
+
+## 📸 Screenshots
+
+Screenshots recomendadas:
+
+- Tela de configurações do plugin
+- Menu de sincronização
+- Ações de instalação/desinstalação
+- Exemplo de jogo instalado
+- Tela de sincronização de metadados
+
+---
+
+## 🤝 Contribuições
+
+Contribuições são bem-vindas.
+
+Caso encontre bugs ou queira melhorias:
+
+- Abra uma issue
+- Envie um pull request
+- Inclua passos para reprodução sempre que possível
+
+---
+
+## 📄 Licença
+
+GPL-3.0 License
