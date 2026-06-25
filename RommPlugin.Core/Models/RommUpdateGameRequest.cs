@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace RommPlugin.Core.Models
+﻿namespace RommPlugin.Core.Models
 {
     public class RommUpdateGameRequest
     {
