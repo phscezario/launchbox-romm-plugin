@@ -34,7 +34,7 @@ namespace RommPlugin.Services
                 {
                     var settings = RommPluginStorage.Load();
 
-                    _api.SetBasicAuthentication(settings.Username, settings.Password);
+                    _api.ApplyAuthentication(settings);
 
                     var dataManager = PluginHelper.DataManager;
 
@@ -448,13 +448,20 @@ namespace RommPlugin.Services
             manager.Save();
         }
 
-        public async Task UpdateServerMetadata(string username, string password)
+        public async Task UpdateServerMetadata(string username, string password, string clientApiToken = null)
         {
             await ProgressRunner.RunAsync(
                 "Reset Metadata in RomM server...",
                 async progress =>
                 {
-                    _api.SetBasicAuthentication(username, password);
+                    if (!string.IsNullOrWhiteSpace(clientApiToken))
+                    {
+                        _api.SetBearerAuthentication(clientApiToken.Trim());
+                    }
+                    else
+                    {
+                        _api.SetBasicAuthentication(username, password);
+                    }
 
                     var dataManager = PluginHelper.DataManager;
                     var settings = RommPluginStorage.Load();

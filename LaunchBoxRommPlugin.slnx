@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/Solution Items/">
     <File Path="README.md" />
+    <File Path="BUILD.md" />
     <File Path="settings.json" />
   </Folder>
   <Folder Name="/Solution Items/.github/" />

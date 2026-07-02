@@ -10,6 +10,8 @@ namespace RommPlugin.Core.Models
 
         public string Password { get; set; }
 
+        public string ClientApiToken { get; set; }
+
         public string RomsPath { get; set; }
 
         public bool KeepLocalData { get; set; }

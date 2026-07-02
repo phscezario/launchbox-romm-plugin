@@ -15,13 +15,20 @@ namespace RommPlugin.Services
             _api = api;
         }
 
-        public async Task RemoveAllGamesServerMetadata(string username, string password)
+        public async Task RemoveAllGamesServerMetadata(string username, string password, string clientApiToken = null)
         {
             await ProgressRunner.RunAsync(
                 "Reset Metadata in RomM server...",
                 async progress =>
                 {
-                    _api.SetBasicAuthentication(username, password);
+                    if (!string.IsNullOrWhiteSpace(clientApiToken))
+                    {
+                        _api.SetBearerAuthentication(clientApiToken.Trim());
+                    }
+                    else
+                    {
+                        _api.SetBasicAuthentication(username, password);
+                    }
 
                     var rommPlatforms = await _api.GetPlatformsAsync();
 

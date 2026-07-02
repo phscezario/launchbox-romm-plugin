@@ -34,7 +34,7 @@ namespace RommPlugin.CLI
 
         public async Task InstallGameAsync(int rommGameId)
         {
-            _api.SetBasicAuthentication(_settings.Username, _settings.Password);
+            _api.ApplyAuthentication(_settings);
 
             _progress.SetStatus("Searching game info...");
             _progress.SetIndeterminate(true);
@@ -90,7 +90,7 @@ namespace RommPlugin.CLI
         {
             await Task.Run(async () =>
             {
-                _api.SetBasicAuthentication(_settings.Username, _settings.Password);
+                _api.ApplyAuthentication(_settings);
 
                 _progress.SetStatus("Searching game info...");
                 _progress.SetIndeterminate(true);
