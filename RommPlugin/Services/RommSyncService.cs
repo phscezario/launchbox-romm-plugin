@@ -680,17 +680,28 @@ namespace RommPlugin.Services
                 DateTime? date = null;
 
                 if (lb?.FirstReleaseDate != null)
-                    date = DateTimeOffset.FromUnixTimeSeconds(lb.FirstReleaseDate.Value).DateTime;
+                    date = UnixToDateTime(lb.FirstReleaseDate.Value);
                 else if (ss?.ReleaseDate != null && DateTime.TryParse(ss.ReleaseDate, out var ssDate))
                     date = ssDate;
                 else if (igdb?.FirstReleaseDate != null)
-                    date = DateTimeOffset.FromUnixTimeSeconds(igdb.FirstReleaseDate.Value).DateTime;
+                    date = UnixToDateTime(igdb.FirstReleaseDate.Value);
                 else if (meta?.FirstReleaseDate != null)
-                    date = DateTimeOffset.FromUnixTimeSeconds(meta.FirstReleaseDate.Value).DateTime;
+                    date = UnixToDateTime(meta.FirstReleaseDate.Value);
 
                 if (date != null)
                     game.ReleaseDate = date.Value;
             }
+        }
+
+        // RomM 4.x's merged metadata view returns first_release_date in milliseconds,
+        // while older servers (and this plugin's own writes) use seconds. Values above the
+        // threshold cannot be valid seconds, so treat them as milliseconds.
+        private static DateTime UnixToDateTime(long value)
+        {
+            var dto = value > 100_000_000_000L
+                ? DateTimeOffset.FromUnixTimeMilliseconds(value)
+                : DateTimeOffset.FromUnixTimeSeconds(value);
+            return dto.DateTime;
         }
 
         private void ApplyMaxPlayers(IGame game, LaunchBoxMetadataModel lb, SsMetadata ss, bool overwrite)
