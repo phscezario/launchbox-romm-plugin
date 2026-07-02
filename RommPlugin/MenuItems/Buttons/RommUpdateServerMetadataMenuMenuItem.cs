@@ -31,6 +31,7 @@ namespace RommPlugin.MenuItems.Buttons
 
             string username;
             string password;
+            string clientApiToken = null;
 
             using (var form = new RommAdversityLoginForm(settings))
             {
@@ -40,6 +41,7 @@ namespace RommPlugin.MenuItems.Buttons
                 {
                     username = settings.Username;
                     password = settings.Password;
+                    clientApiToken = settings.ClientApiToken;
                 }
                 else
                 {
@@ -62,7 +64,7 @@ namespace RommPlugin.MenuItems.Buttons
 
             try
             {
-                await sync.UpdateServerMetadata(username, password);
+                await sync.UpdateServerMetadata(username, password, clientApiToken);
             }
             catch (Exception ex)
             {
