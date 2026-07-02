@@ -15,6 +15,53 @@ automated release pipeline in [`.github/workflows/release.yml`](.github/workflow
 > The project uses the newer `.slnx` solution format, so use a recent MSBuild/Visual Studio 2022
 > that understands `.slnx`.
 
+### Install prerequisites (winget)
+
+From an elevated PowerShell (Build Tools require admin):
+
+```powershell
+# .NET Framework 4.8 Developer Pack
+winget install -e --id Microsoft.DotNet.Framework.DeveloperPack_4 --version 4.8
+
+# MSBuild and .NET desktop build tools (headless; matches CI)
+winget install -e --id Microsoft.VisualStudio.2022.BuildTools `
+  --override "--passive --wait --add Microsoft.VisualStudio.Workload.ManagedDesktopBuildTools --includeRecommended"
+
+# NuGet CLI for packages.config restore
+winget install -e --id Microsoft.NuGet
+```
+
+Restart your terminal after installing. Visual Studio and Build Tools install MSBuild but do **not** add it to your regular terminal PATH.
+
+### Configure your shell (PATH)
+
+Run this once per terminal session before building:
+
+```powershell
+$msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+  -latest -requires Microsoft.Component.MSBuild `
+  -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
+$env:Path = "$(Split-Path -Parent $msbuild);$env:Path"
+
+msbuild -version
+```
+
+Alternatively, open **Developer PowerShell for VS 2022** from the Start menu (PATH is preconfigured there).
+
+If `nuget` is also not recognized, ensure `%LOCALAPPDATA%\Microsoft\WinGet\Links` is on your user PATH (winget adds this on install) and restart the terminal, or invoke it directly:
+
+```powershell
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Links\nuget.exe" help
+```
+
+Alternatively, install Visual Studio 2022 Community with the **".NET desktop development"** workload instead of Build Tools:
+
+```powershell
+winget install -e --id Microsoft.VisualStudio.2022.Community `
+  --override "--passive --wait --add Microsoft.VisualStudio.Workload.ManagedDesktop --includeRecommended"
+winget install -e --id Microsoft.NuGet
+```
+
 ## Solution layout
 
 | Project | Output | Purpose |
@@ -32,9 +79,9 @@ The LaunchBox SDK is referenced from a checked-in assembly at
 
 ## Build (command line)
 
-From the repository root:
+From the repository root, configure PATH (see [Configure your shell](#configure-your-shell-path)), then:
 
-```bat
+```powershell
 nuget restore LaunchBoxRommPlugin.slnx
 msbuild LaunchBoxRommPlugin.slnx /p:Configuration=Release
 ```
