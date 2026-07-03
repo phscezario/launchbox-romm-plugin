@@ -32,6 +32,24 @@ namespace RommPlugin.ApiClient
                 new AuthenticationHeaderValue("Basic", base64);
         }
 
+        public void SetBearerAuthentication(string token)
+        {
+            _http.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        public void ApplyAuthentication(RommPluginSettings settings)
+        {
+            if (!string.IsNullOrWhiteSpace(settings.ClientApiToken))
+            {
+                SetBearerAuthentication(settings.ClientApiToken.Trim());
+            }
+            else
+            {
+                SetBasicAuthentication(settings.Username, settings.Password);
+            }
+        }
+
         public async Task<List<RommPlatform>> GetPlatformsAsync()
         {
             var response = await _http.GetAsync("/api/platforms");

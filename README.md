@@ -312,10 +312,29 @@ LaunchBox
 | `RommBaseUrl` | RomM server URL (e.g. http://192.168.1.100:9000) |
 | `Username` | RomM username |
 | `Password` | RomM password |
+| `ClientApiToken` | RomM Client API token (`rmm_...`). If set, it is used instead of username/password |
 | `RomsPath` | Local folder where games will be installed |
 | `KeepLocalData` | `true` = preserve existing LaunchBox data, `false` = overwrite |
 
 You can configure via `settings.json` or the LaunchBox plugin settings UI.
+
+#### Authentication: Client API token vs username/password
+
+You can authenticate either with a username/password or with a **Client API token**, which
+is more secure than storing credentials. Generate a token in RomM under
+**Administration → Client API Tokens** (format `rmm_` + 64 hex characters) and paste it into the
+`Client API Token` field.
+
+- If a token is provided, it **takes priority** over username/password (sent as
+  `Authorization: Bearer rmm_...`).
+- When you save with both a token and a username/password present, the plugin asks whether to
+  clear the stored username and password.
+- Provide **either** a token **or** a username and password.
+
+#### Test Connection
+
+The settings UI includes a **Test Connection** button that validates your server URL and
+credentials against the RomM server before saving, so you can confirm everything works up front.
 
 ### 4. Open LaunchBox
 
@@ -574,8 +593,26 @@ LaunchBox/Plugins/RomM LaunchBox Integration
 | `RommBaseUrl` | URL do servidor RomM (ex.: http://192.168.1.100:9000) |
 | `Username` | Usuário do RomM |
 | `Password` | Senha do RomM |
+| `ClientApiToken` | Token de API do RomM (`rmm_...`). Se definido, é usado no lugar de usuário/senha |
 | `RomsPath` | Pasta local onde os jogos serão instalados |
 | `KeepLocalData` | `true` = preserva dados existentes, `false` = sobrescreve |
+
+#### Autenticação: token de API vs usuário/senha
+
+Você pode autenticar com usuário/senha ou com um **Client API token**, que é mais seguro do que
+armazenar credenciais. Gere um token no RomM em **Administration → Client API Tokens**
+(formato `rmm_` + 64 caracteres hexadecimais) e cole no campo `Client API Token`.
+
+- Se um token for informado, ele **tem prioridade** sobre usuário/senha (enviado como
+  `Authorization: Bearer rmm_...`).
+- Ao salvar com token e usuário/senha preenchidos, o plugin pergunta se deseja limpar o usuário e a
+  senha armazenados.
+- Informe **um** token **ou** usuário e senha.
+
+#### Testar Conexão
+
+A tela de configurações inclui um botão **Test Connection** que valida a URL do servidor e as
+credenciais contra o servidor RomM antes de salvar, permitindo confirmar que tudo funciona.
 
 ### 4. Sincronize Sua Biblioteca
 

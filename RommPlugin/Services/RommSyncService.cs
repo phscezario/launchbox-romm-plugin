@@ -34,7 +34,7 @@ namespace RommPlugin.Services
                 {
                     var settings = RommPluginStorage.Load();
 
-                    _api.SetBasicAuthentication(settings.Username, settings.Password);
+                    _api.ApplyAuthentication(settings);
 
                     var dataManager = PluginHelper.DataManager;
 
@@ -448,13 +448,20 @@ namespace RommPlugin.Services
             manager.Save();
         }
 
-        public async Task UpdateServerMetadata(string username, string password)
+        public async Task UpdateServerMetadata(string username, string password, string clientApiToken = null)
         {
             await ProgressRunner.RunAsync(
                 "Reset Metadata in RomM server...",
                 async progress =>
                 {
-                    _api.SetBasicAuthentication(username, password);
+                    if (!string.IsNullOrWhiteSpace(clientApiToken))
+                    {
+                        _api.SetBearerAuthentication(clientApiToken.Trim());
+                    }
+                    else
+                    {
+                        _api.SetBasicAuthentication(username, password);
+                    }
 
                     var dataManager = PluginHelper.DataManager;
                     var settings = RommPluginStorage.Load();
@@ -680,17 +687,25 @@ namespace RommPlugin.Services
                 DateTime? date = null;
 
                 if (lb?.FirstReleaseDate != null)
-                    date = DateTimeOffset.FromUnixTimeSeconds(lb.FirstReleaseDate.Value).DateTime;
+                    date = UnixToDateTime(lb.FirstReleaseDate.Value);
                 else if (ss?.ReleaseDate != null && DateTime.TryParse(ss.ReleaseDate, out var ssDate))
                     date = ssDate;
                 else if (igdb?.FirstReleaseDate != null)
-                    date = DateTimeOffset.FromUnixTimeSeconds(igdb.FirstReleaseDate.Value).DateTime;
+                    date = UnixToDateTime(igdb.FirstReleaseDate.Value);
                 else if (meta?.FirstReleaseDate != null)
-                    date = DateTimeOffset.FromUnixTimeSeconds(meta.FirstReleaseDate.Value).DateTime;
+                    date = UnixToDateTime(meta.FirstReleaseDate.Value);
 
                 if (date != null)
                     game.ReleaseDate = date.Value;
             }
+        }
+
+        private static DateTime UnixToDateTime(long value)
+        {
+            var dto = value > 100_000_000_000L
+                ? DateTimeOffset.FromUnixTimeMilliseconds(value)
+                : DateTimeOffset.FromUnixTimeSeconds(value);
+            return dto.DateTime;
         }
 
         private void ApplyMaxPlayers(IGame game, LaunchBoxMetadataModel lb, SsMetadata ss, bool overwrite)

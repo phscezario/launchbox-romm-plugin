@@ -29,11 +29,15 @@
             this.btnBrowseRomsPath = new System.Windows.Forms.Button();
             this.label6 = new System.Windows.Forms.Label();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.labelToken = new System.Windows.Forms.Label();
+            this.txtClientApiToken = new System.Windows.Forms.TextBox();
+            this.labelTokenHint = new System.Windows.Forms.Label();
             this.txtRomsPath = new System.Windows.Forms.TextBox();
             this.keepLocalData = new System.Windows.Forms.CheckBox();
             this.saveLogs = new System.Windows.Forms.CheckBox();
             this.processPendingOnStartup = new System.Windows.Forms.CheckBox();
             this.btnCancel = new System.Windows.Forms.Button();
+            this.btnTestConnection = new System.Windows.Forms.Button();
             this.groupBox1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -46,7 +50,7 @@
             // 
             // btnSave
             // 
-            this.btnSave.Location = new System.Drawing.Point(245, 510);
+            this.btnSave.Location = new System.Drawing.Point(245, 622);
             this.btnSave.Name = "btnSave";
             this.btnSave.Size = new System.Drawing.Size(75, 23);
             this.btnSave.TabIndex = 3;
@@ -113,12 +117,41 @@
             this.txtPassword.TabIndex = 8;
             this.txtPassword.UseSystemPasswordChar = true;
             // 
+            // labelToken
+            // 
+            this.labelToken.AutoSize = true;
+            this.labelToken.Font = new System.Drawing.Font("Microsoft Sans Serif", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.labelToken.ForeColor = System.Drawing.Color.White;
+            this.labelToken.Location = new System.Drawing.Point(8, 143);
+            this.labelToken.Name = "labelToken";
+            this.labelToken.Size = new System.Drawing.Size(165, 16);
+            this.labelToken.TabIndex = 21;
+            this.labelToken.Text = "Client API Token (rmm_...):";
+            // 
+            // txtClientApiToken
+            // 
+            this.txtClientApiToken.Location = new System.Drawing.Point(12, 170);
+            this.txtClientApiToken.Name = "txtClientApiToken";
+            this.txtClientApiToken.Size = new System.Drawing.Size(246, 20);
+            this.txtClientApiToken.TabIndex = 22;
+            this.txtClientApiToken.UseSystemPasswordChar = true;
+            // 
+            // labelTokenHint
+            // 
+            this.labelTokenHint.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Italic, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.labelTokenHint.ForeColor = System.Drawing.Color.Gainsboro;
+            this.labelTokenHint.Location = new System.Drawing.Point(11, 193);
+            this.labelTokenHint.Name = "labelTokenHint";
+            this.labelTokenHint.Size = new System.Drawing.Size(248, 30);
+            this.labelTokenHint.TabIndex = 23;
+            this.labelTokenHint.Text = "If set, the token takes priority over username/password.";
+            // 
             // label5
             // 
             this.label5.AutoSize = true;
             this.label5.Font = new System.Drawing.Font("Microsoft Sans Serif", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.label5.ForeColor = System.Drawing.Color.White;
-            this.label5.Location = new System.Drawing.Point(22, 384);
+            this.label5.Location = new System.Drawing.Point(22, 473);
             this.label5.Name = "label5";
             this.label5.Size = new System.Drawing.Size(76, 16);
             this.label5.TabIndex = 11;
@@ -126,7 +159,7 @@
             // 
             // btnBrowseRomsPath
             // 
-            this.btnBrowseRomsPath.Location = new System.Drawing.Point(261, 410);
+            this.btnBrowseRomsPath.Location = new System.Drawing.Point(261, 499);
             this.btnBrowseRomsPath.Name = "btnBrowseRomsPath";
             this.btnBrowseRomsPath.Size = new System.Drawing.Size(39, 20);
             this.btnBrowseRomsPath.TabIndex = 12;
@@ -138,7 +171,7 @@
             // 
             this.label6.Font = new System.Drawing.Font("Microsoft Sans Serif", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.label6.ForeColor = System.Drawing.Color.White;
-            this.label6.Location = new System.Drawing.Point(11, 135);
+            this.label6.Location = new System.Drawing.Point(11, 228);
             this.label6.Name = "label6";
             this.label6.Size = new System.Drawing.Size(248, 53);
             this.label6.TabIndex = 13;
@@ -147,6 +180,9 @@
             // 
             // groupBox1
             // 
+            this.groupBox1.Controls.Add(this.labelTokenHint);
+            this.groupBox1.Controls.Add(this.txtClientApiToken);
+            this.groupBox1.Controls.Add(this.labelToken);
             this.groupBox1.Controls.Add(this.label6);
             this.groupBox1.Controls.Add(this.label4);
             this.groupBox1.Controls.Add(this.txtPassword);
@@ -155,14 +191,14 @@
             this.groupBox1.ForeColor = System.Drawing.Color.White;
             this.groupBox1.Location = new System.Drawing.Point(26, 165);
             this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(274, 201);
+            this.groupBox1.Size = new System.Drawing.Size(274, 290);
             this.groupBox1.TabIndex = 14;
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "Login";
             // 
             // txtRomsPath
             // 
-            this.txtRomsPath.Location = new System.Drawing.Point(26, 411);
+            this.txtRomsPath.Location = new System.Drawing.Point(26, 500);
             this.txtRomsPath.Name = "txtRomsPath";
             this.txtRomsPath.Size = new System.Drawing.Size(229, 20);
             this.txtRomsPath.TabIndex = 15;
@@ -172,7 +208,7 @@
             this.keepLocalData.AutoSize = true;
             this.keepLocalData.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.keepLocalData.ForeColor = System.Drawing.Color.White;
-            this.keepLocalData.Location = new System.Drawing.Point(25, 453);
+            this.keepLocalData.Location = new System.Drawing.Point(25, 542);
             this.keepLocalData.Margin = new System.Windows.Forms.Padding(2);
             this.keepLocalData.Name = "keepLocalData";
             this.keepLocalData.Size = new System.Drawing.Size(162, 19);
@@ -185,7 +221,7 @@
             this.saveLogs.AutoSize = true;
             this.saveLogs.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.saveLogs.ForeColor = System.Drawing.Color.White;
-            this.saveLogs.Location = new System.Drawing.Point(25, 478);
+            this.saveLogs.Location = new System.Drawing.Point(25, 567);
             this.saveLogs.Margin = new System.Windows.Forms.Padding(2);
             this.saveLogs.Name = "saveLogs";
             this.saveLogs.Size = new System.Drawing.Size(117, 19);
@@ -198,7 +234,7 @@
             this.processPendingOnStartup.AutoSize = true;
             this.processPendingOnStartup.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.processPendingOnStartup.ForeColor = System.Drawing.Color.White;
-            this.processPendingOnStartup.Location = new System.Drawing.Point(25, 501);
+            this.processPendingOnStartup.Location = new System.Drawing.Point(25, 590);
             this.processPendingOnStartup.Margin = new System.Windows.Forms.Padding(2);
             this.processPendingOnStartup.Name = "processPendingOnStartup";
             this.processPendingOnStartup.Size = new System.Drawing.Size(211, 19);
@@ -210,7 +246,7 @@
             // 
             this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnCancel.ForeColor = System.Drawing.SystemColors.ControlText;
-            this.btnCancel.Location = new System.Drawing.Point(164, 510);
+            this.btnCancel.Location = new System.Drawing.Point(164, 622);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(75, 23);
             this.btnCancel.TabIndex = 18;
@@ -218,12 +254,23 @@
             this.btnCancel.UseVisualStyleBackColor = true;
             this.btnCancel.Click += new System.EventHandler(this.btnCancel_Click);
             // 
+            // btnTestConnection
+            // 
+            this.btnTestConnection.Location = new System.Drawing.Point(26, 622);
+            this.btnTestConnection.Name = "btnTestConnection";
+            this.btnTestConnection.Size = new System.Drawing.Size(110, 23);
+            this.btnTestConnection.TabIndex = 24;
+            this.btnTestConnection.Text = "Test Connection";
+            this.btnTestConnection.UseVisualStyleBackColor = true;
+            this.btnTestConnection.Click += new System.EventHandler(this.btnTestConnection_Click);
+            // 
             // RommSettingsForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(30)))), ((int)(((byte)(30)))));
-            this.ClientSize = new System.Drawing.Size(332, 580);
+            this.ClientSize = new System.Drawing.Size(332, 660);
+            this.Controls.Add(this.btnTestConnection);
             this.Controls.Add(this.btnCancel);
             this.Controls.Add(this.processPendingOnStartup);
             this.Controls.Add(this.saveLogs);
@@ -265,5 +312,9 @@
         private System.Windows.Forms.CheckBox saveLogs;
         private System.Windows.Forms.CheckBox processPendingOnStartup;
         private System.Windows.Forms.Button btnCancel;
+        private System.Windows.Forms.Label labelToken;
+        private System.Windows.Forms.TextBox txtClientApiToken;
+        private System.Windows.Forms.Label labelTokenHint;
+        private System.Windows.Forms.Button btnTestConnection;
     }
 }

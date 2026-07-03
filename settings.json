@@ -2,6 +2,7 @@
   "RommBaseUrl": "",
   "Username": "",
   "Password": "",
+  "ClientApiToken": "",
   "RomsPath": "",
   "KeepLocalData": false,
   "SaveLogs": false,
