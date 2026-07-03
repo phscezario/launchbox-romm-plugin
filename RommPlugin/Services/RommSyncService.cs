@@ -700,9 +700,6 @@ namespace RommPlugin.Services
             }
         }
 
-        // RomM 4.x's merged metadata view returns first_release_date in milliseconds,
-        // while older servers (and this plugin's own writes) use seconds. Values above the
-        // threshold cannot be valid seconds, so treat them as milliseconds.
         private static DateTime UnixToDateTime(long value)
         {
             var dto = value > 100_000_000_000L
