@@ -11,5 +11,7 @@
         public LaunchBoxMetadataModel RawLaunchboxMetadata { get; set; }
 
         public string ArtworkPath { get; set; }
+
+        public string ArtworkHash { get; set; }
     }
 }

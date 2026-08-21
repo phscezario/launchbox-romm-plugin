@@ -1,9 +1,16 @@
 ﻿using System.Collections.Generic;
+using System.Runtime.Serialization;
+using Newtonsoft.Json;
 
 namespace RommPlugin.Core.Models
 {
     public class RommPluginSettings
     {
+        [OnDeserialized]
+        internal void OnDeserialized(System.Runtime.Serialization.StreamingContext context)
+        {
+            CurrentPlatforms = CurrentPlatforms ?? new List<RommCurrentPlatform>();
+        }
         public string RommBaseUrl { get; set; }
 
         public string Username { get; set; }
@@ -20,9 +27,23 @@ namespace RommPlugin.Core.Models
 
         public bool ProcessPendingOnStartup { get; set; } = true;
 
-        public bool LoginFormUseConfiguredAccount { get; set; }
+        public string Language { get; set; } = "en";
 
-        public bool LoginFormSaveAdminAccount { get; set; }
+        public bool ForceFullResync { get; set; }
+
+        public int LogRetentionDays { get; set; } = 7;
+
+        public bool PublicScreenshots { get; set; } = true;
+
+        public bool UpdateStatsOnGameLaunch { get; set; } = false;
+
+        public bool IsAdmin { get; set; } = false;
+
+        public bool AutoUpdateEnabled { get; set; } = true;
+
+        public int AutoSyncIntervalDays { get; set; } = 0;
+
+        public int SaveBatchSize { get; set; } = 50;
 
         public List<RommCurrentPlatform> CurrentPlatforms { get; set; } = new List<RommCurrentPlatform>();
     }

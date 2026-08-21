@@ -1,0 +1,22 @@
+{
+  "RommBaseUrl": "",
+  "Username": "",
+  "Password": "",
+  "ClientApiToken": "",
+  "RomsPath": "",
+  "KeepLocalData": false,
+  "SaveLogs": false,
+  "ProcessPendingOnStartup": true,
+  "Language": "en",
+  "ForceFullResync": false,
+  "SuppressNeedsProcess": false,
+  "LoginFormUseConfiguredAccount": false,
+  "LoginFormSaveAdminAccount": false,
+  "LogRetentionDays": 7,
+  "PublicScreenshots": true,
+  "UpdateStatsOnGameLaunch": false,
+  "DetailedSyncLogs": false,
+  "IsAdmin": false,
+  "AutoSyncEnabled": false,
+  "AutoSyncIntervalDays": 0
+}

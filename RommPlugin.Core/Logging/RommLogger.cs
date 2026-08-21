@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using RommPlugin.Core.Storage;
 
 namespace RommPlugin.Core.Logging
 {
@@ -11,17 +12,38 @@ namespace RommPlugin.Core.Logging
 
         static RommLogger()
         {
-            LogDirectory = Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                "Plugins",
-                "RomM LaunchBox Integration",
-                "Logs"
-            );
+            LogDirectory = RommPaths.LogsFolder;
+            System.Diagnostics.Debug.WriteLine($"[DIAG] RommLogger: LogDirectory={LogDirectory}");
         }
 
-        public static void Initialize(bool enabled)
+        public static void Initialize(bool enabled, int retentionDays = 7)
         {
             _enabled = enabled;
+            CleanupOldLogs(retentionDays);
+        }
+
+        private static void CleanupOldLogs(int retentionDays)
+        {
+            try
+            {
+                if (!Directory.Exists(LogDirectory))
+                    return;
+
+                var cutoff = DateTime.Now.AddDays(-retentionDays);
+                var logFiles = Directory.GetFiles(LogDirectory, "romm-*.log");
+
+                foreach (var file in logFiles)
+                {
+                    var fileInfo = new FileInfo(file);
+                    if (fileInfo.LastWriteTime < cutoff)
+                    {
+                        fileInfo.Delete();
+                    }
+                }
+            }
+            catch
+            {
+            }
         }
 
         public static void Log(string message)

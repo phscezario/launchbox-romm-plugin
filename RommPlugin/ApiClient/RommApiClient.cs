@@ -3,14 +3,28 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 
 namespace RommPlugin.ApiClient
 {
-    public class RommApiClient
+    public class ClientErrorException : Exception
+    {
+        public int StatusCode { get; }
+
+        public ClientErrorException(int statusCode, string message)
+            : base(message)
+        {
+            StatusCode = statusCode;
+        }
+    }
+
+    public class RommApiClient : IDisposable
     {
         private readonly HttpClient _http;
 
@@ -18,9 +32,19 @@ namespace RommPlugin.ApiClient
         {
             _http = new HttpClient
             {
-                BaseAddress = new Uri(baseUrl),
-                Timeout = System.Threading.Timeout.InfiniteTimeSpan
+                BaseAddress = new Uri(baseUrl.TrimEnd('/')),
+                Timeout = TimeSpan.FromSeconds(120)
             };
+        }
+
+        internal RommApiClient(HttpClient httpClient)
+        {
+            _http = httpClient;
+        }
+
+        public void Dispose()
+        {
+            _http?.Dispose();
         }
 
         public void SetBasicAuthentication(string username, string password)
@@ -52,11 +76,13 @@ namespace RommPlugin.ApiClient
 
         public async Task<List<RommPlatform>> GetPlatformsAsync()
         {
-            var response = await _http.GetAsync("/api/platforms");
-            response.EnsureSuccessStatusCode();
+            using (var response = await _http.GetAsync("/api/platforms"))
+            {
+                response.EnsureSuccessStatusCode();
 
-            var json = await response.Content.ReadAsStringAsync();
-            return JsonConvert.DeserializeObject<List<RommPlatform>>(json);
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<List<RommPlatform>>(json);
+            }
         }
 
         public async Task<List<RommGame>> GetAllGamesByPlatformAsync(int platformId)
@@ -66,15 +92,20 @@ namespace RommPlugin.ApiClient
             int offset = 0;
             bool hasMore = true;
 
+            RommLogger.Log($"Fetching games for platform {platformId}...");
+
             while (hasMore)
             {
                 var url = $"/api/roms?" +
-                          $"with_filter_values=true&" +
                           $"platform_ids={platformId}&" +
                           $"order_by=name&order_dir=asc&" +
-                          $"limit={limit}&offset={offset}";
+                          $"limit={limit}&offset={offset}&" +
+                          $"with_rom_id_index=false&" +
+                          $"with_char_index=false&" +
+                          $"with_filter_values=false";
 
-                var response = await _http.GetAsync(url);
+                using (var response = await _http.GetAsync(url))
+                {
                 response.EnsureSuccessStatusCode();
 
                 var json = await response.Content.ReadAsStringAsync();
@@ -84,23 +115,33 @@ namespace RommPlugin.ApiClient
                 {
                     allGames.AddRange(rommResponse.Items);
                     offset += rommResponse.Items.Count;
+                    RommLogger.Log($"Fetched {allGames.Count}/{rommResponse.Total} games (page offset={offset})");
+
+                    if (offset >= rommResponse.Total)
+                    {
+                        hasMore = false;
+                    }
                 }
                 else
                 {
                     hasMore = false;
                 }
+                }
             }
 
+            RommLogger.Log($"Total games fetched for platform {platformId}: {allGames.Count}");
             return allGames;
         }
 
         public async Task<RommGame> GetGameByIdAsync(int gameId)
         {
-            var response = await _http.GetAsync($"/api/roms/{gameId}");
-            response.EnsureSuccessStatusCode();
+            using (var response = await _http.GetAsync($"/api/roms/{gameId}"))
+            {
+                response.EnsureSuccessStatusCode();
 
-            var json = await response.Content.ReadAsStringAsync();
-            return JsonConvert.DeserializeObject<RommGame>(json);
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<RommGame>(json);
+            }
         }
 
         public async Task UpdateGameById(int gameId, RommUpdateGameRequest request)
@@ -109,127 +150,150 @@ namespace RommPlugin.ApiClient
 
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                var content = new MultipartFormDataContent();
-
-                content.Add(new StringContent(request.Name ?? ""), "name");
-                content.Add(new StringContent(request.Summary ?? ""), "summary");
-                content.Add(new StringContent(request.LaunchboxId?.ToString() ?? ""), "launchbox_id");
-
-                if (request.RawLaunchboxMetadata != null)
+                try
                 {
-                    ReplaceNullStrings(request.RawLaunchboxMetadata);
-                }
-
-                var launchboxJson = JsonConvert.SerializeObject(
-                    request.RawLaunchboxMetadata,
-                    new JsonSerializerSettings
+                    using (var content = new MultipartFormDataContent())
                     {
-                        NullValueHandling = NullValueHandling.Ignore
+                    content.Add(new StringContent(request.Name ?? ""), "name");
+                    content.Add(new StringContent(request.Summary ?? ""), "summary");
+                    content.Add(new StringContent(request.LaunchboxId?.ToString() ?? ""), "launchbox_id");
+
+                    if (request.RawLaunchboxMetadata != null)
+                    {
+                        ReplaceNullStrings(request.RawLaunchboxMetadata);
                     }
-                );
 
-                content.Add(new StringContent(launchboxJson, Encoding.UTF8, "application/json"), "raw_launchbox_metadata");
+                    var launchboxJson = JsonConvert.SerializeObject(
+                        request.RawLaunchboxMetadata,
+                        new JsonSerializerSettings
+                        {
+                            NullValueHandling = NullValueHandling.Ignore
+                        }
+                    );
 
-                if (!string.IsNullOrEmpty(request.ArtworkPath))
-                {
-                    using (var fileStream = File.OpenRead(request.ArtworkPath))
+                    content.Add(new StringContent(launchboxJson, Encoding.UTF8, "application/json"), "raw_launchbox_metadata");
+
+                    if (!string.IsNullOrEmpty(request.ArtworkPath))
                     {
-                        var fileContent = new StreamContent(fileStream);
+                        using (var fileStream = File.OpenRead(request.ArtworkPath))
+                        {
+                            var fileContent = new StreamContent(fileStream);
 
-                        fileContent.Headers.ContentType =
-                            new MediaTypeHeaderValue(GetMimeType(request.ArtworkPath));
+                            fileContent.Headers.ContentType =
+                                new MediaTypeHeaderValue(GetMimeType(request.ArtworkPath));
 
-                        content.Add(
-                            fileContent,
-                            "artwork",
-                            Path.GetFileName(request.ArtworkPath)
-                        );
+                            content.Add(
+                                fileContent,
+                                "artwork",
+                                SanitizeFileName(Path.GetFileName(request.ArtworkPath))
+                            );
 
-                        var response = await _http.PutAsync(
+                            using (var response = await _http.PutAsync(
+                                $"api/roms/{gameId}?remove_cover=false&unmatch_metadata=false",
+                                content
+                            ))
+                            {
+                            if (!response.IsSuccessStatusCode)
+                            {
+                                var statusCode = (int)response.StatusCode;
+                                var isRetryable = statusCode >= 500 || statusCode == 499;
+
+                                if (isRetryable)
+                                {
+                                    if (attempt == maxAttempts)
+                                    {
+                                        var body = await response.Content.ReadAsStringAsync();
+                                        var detail = string.IsNullOrWhiteSpace(body) ? "" : $" - {body}";
+                                        throw new HttpRequestException($"Server error {statusCode}{detail}");
+                                    }
+
+                                    await Task.Delay(500 * attempt);
+                                    continue;
+                                }
+
+                                await ThrowIfNotSuccessAsync(response);
+                            }
+
+                            return;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        using (var response = await _http.PutAsync(
                             $"api/roms/{gameId}?remove_cover=false&unmatch_metadata=false",
                             content
-                        );
-
+                        ))
+                        {
                         if (!response.IsSuccessStatusCode)
                         {
-                            if ((int)response.StatusCode >= 500)
+                            var statusCode = (int)response.StatusCode;
+                            var isRetryable = statusCode >= 500 || statusCode == 499;
+
+                            if (isRetryable)
                             {
                                 if (attempt == maxAttempts)
                                 {
-                                    throw new HttpRequestException($"Server error {(int)response.StatusCode}");
+                                    var body = await response.Content.ReadAsStringAsync();
+                                    var detail = string.IsNullOrWhiteSpace(body) ? "" : $" - {body}";
+                                    throw new HttpRequestException($"Server error {statusCode}{detail}");
                                 }
 
                                 await Task.Delay(500 * attempt);
                                 continue;
                             }
 
-                            response.EnsureSuccessStatusCode();
+                            await ThrowIfNotSuccessAsync(response);
                         }
 
                         return;
+                        }
+                    }
                     }
                 }
-                else
+                catch (Exception ex) when (attempt < maxAttempts && IsTransientError(ex))
                 {
-                    var response = await _http.PutAsync(
-                        $"api/roms/{gameId}?remove_cover=false&unmatch_metadata=false",
-                        content
-                    );
-
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        if ((int)response.StatusCode >= 500)
-                        {
-                            if (attempt == maxAttempts)
-                            {
-                                throw new HttpRequestException($"Server error {(int)response.StatusCode}");
-                            }
-
-                            await Task.Delay(500 * attempt);
-                            continue;
-                        }
-
-                        response.EnsureSuccessStatusCode();
-                    }
-
-                    return;
+                    RommLogger.LogError($"Connection error updating game {gameId} (attempt {attempt}/{maxAttempts}): {ex.Message}");
+                    await Task.Delay(1000 * attempt);
+                }
+                catch (Exception ex) when (attempt == maxAttempts && IsTransientError(ex))
+                {
+                    RommLogger.LogError($"Connection error updating game {gameId} (all {maxAttempts} attempts failed): {ex.Message}");
+                    throw;
                 }
             }
         }
 
         public async Task RemoveGameMetadataById(int gameId)
         {
-            var response = await _http.PutAsync($"api/roms/{gameId}?remove_cover=false&unmatch_metadata=true", null);
-
-            response.EnsureSuccessStatusCode();
-            return;
-        }
-
-        public async Task DownloadGameAsync(int gameId, string destinationFile)
-        {
-            const int maxAttempts = 3;
+            const int maxAttempts = 5;
 
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                try
+                using (var response = await _http.PutAsync($"api/roms/{gameId}?remove_cover=false&unmatch_metadata=true", null))
                 {
-                    var response = await _http.GetAsync(
-                        $"/api/roms/download?rom_ids={gameId}",
-                        HttpCompletionOption.ResponseHeadersRead
-                    );
-
-                    response.EnsureSuccessStatusCode();
-
-                    using (var stream = await response.Content.ReadAsStreamAsync())
-                    using (var file = new FileStream(destinationFile, FileMode.Create, FileAccess.Write, FileShare.None))
-                    {
-                        await stream.CopyToAsync(file);
-                        return;
-                    }
+                if (response.IsSuccessStatusCode)
+                {
+                    return;
                 }
-                catch (Exception) when (attempt < maxAttempts)
+
+                var statusCode = (int)response.StatusCode;
+                var isRetryable = statusCode >= 500 || statusCode == 499;
+
+                if (isRetryable)
                 {
-                    await Task.Delay(1000);
+                    if (attempt == maxAttempts)
+                    {
+                        var body = await response.Content.ReadAsStringAsync();
+                        var detail = string.IsNullOrWhiteSpace(body) ? "" : $" - {body}";
+                        throw new HttpRequestException($"Server error {statusCode}{detail}");
+                    }
+
+                    await Task.Delay(500 * attempt);
+                    continue;
+                }
+
+                await ThrowIfNotSuccessAsync(response);
                 }
             }
         }
@@ -240,14 +304,182 @@ namespace RommPlugin.ApiClient
 
             if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
             {
-                var response = await _http.GetAsync(uri);
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadAsByteArrayAsync();
+                using (var response = await _http.GetAsync(uri))
+                {
+                    response.EnsureSuccessStatusCode();
+                    return await response.Content.ReadAsByteArrayAsync();
+                }
             }
 
-            var relativeResponse = await _http.GetAsync(url);
-            relativeResponse.EnsureSuccessStatusCode();
-            return await relativeResponse.Content.ReadAsByteArrayAsync();
+            using (var relativeResponse = await _http.GetAsync(url))
+            {
+                relativeResponse.EnsureSuccessStatusCode();
+                return await relativeResponse.Content.ReadAsByteArrayAsync();
+            }
+        }
+
+        public async Task<int> UploadScreenshotAsync(int gameId, string filePath)
+        {
+            return await ExecuteWithRetryAsync(async () =>
+            {
+                var fileName = SanitizeFileName(Path.GetFileName(filePath));
+                var mimeType = GetMimeType(filePath);
+
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(300)))
+                using (var fileStream = File.OpenRead(filePath))
+                using (var content = new MultipartFormDataContent())
+                {
+                    var fileContent = new StreamContent(fileStream);
+                    fileContent.Headers.ContentType = new MediaTypeHeaderValue(mimeType);
+
+                    content.Add(fileContent, "screenshotFile", fileName);
+
+                    using (var response = await _http.PostAsync(
+                        $"api/screenshots?rom_id={gameId}", content, cts.Token))
+                    {
+                        await ThrowIfNotSuccessAsync(response);
+
+                        var json = await response.Content.ReadAsStringAsync();
+                        var result = JsonConvert.DeserializeObject<ScreenshotUploadResult>(json);
+                        return result?.Id ?? 0;
+                    }
+                }
+            });
+        }
+
+        public async Task SetScreenshotPublicAsync(int screenshotId)
+        {
+            await ExecuteWithRetryAsync(async () =>
+            {
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120)))
+                {
+                    var json = JsonConvert.SerializeObject(new { is_public = true });
+                    using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
+                    using (var response = await _http.PutAsync(
+                        $"api/screenshots/{screenshotId}", content, cts.Token))
+                    {
+                        await ThrowIfNotSuccessAsync(response);
+                    }
+                    return true;
+                }
+            });
+        }
+
+        public async Task<List<PlaySessionSchema>> GetPlaySessionsAsync(int romId)
+        {
+            return await ExecuteWithRetryAsync(async () =>
+            {
+                using (var response = await _http.GetAsync(
+                    $"/api/play-sessions?rom_id={romId}&limit=1000"))
+                {
+                await ThrowIfNotSuccessAsync(response);
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<List<PlaySessionSchema>>(json);
+                }
+            });
+        }
+
+        public async Task<PlaySessionIngestResponse> IngestPlaySessionsAsync(PlaySessionIngestPayload payload)
+        {
+            return await ExecuteWithRetryAsync(async () =>
+            {
+                var json = JsonConvert.SerializeObject(payload);
+                using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
+                using (var response = await _http.PostAsync("/api/play-sessions", content))
+                {
+                    await ThrowIfNotSuccessAsync(response);
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    return JsonConvert.DeserializeObject<PlaySessionIngestResponse>(responseJson);
+                }
+            });
+        }
+
+        public async Task UpdateGameLastPlayedAsync(int gameId)
+        {
+            await ExecuteWithRetryAsync(async () =>
+            {
+                using (var response = await _http.PutAsync(
+                    $"api/roms/{gameId}/props?update_last_played=true", null))
+                {
+                await ThrowIfNotSuccessAsync(response);
+                return true;
+                }
+            });
+        }
+
+        private async Task<T> ExecuteWithRetryAsync<T>(Func<Task<T>> action, int maxAttempts = 3)
+        {
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                try
+                {
+                    return await action();
+                }
+                catch (ClientErrorException)
+                {
+                    throw;
+                }
+                catch (Exception) when (attempt < maxAttempts)
+                {
+                    await Task.Delay(500 * (int)Math.Pow(2, attempt - 1));
+                }
+            }
+
+            return default;
+        }
+
+        private static async Task ThrowIfNotSuccessAsync(HttpResponseMessage response)
+        {
+            if (response.IsSuccessStatusCode)
+            {
+                return;
+            }
+
+            var statusCode = (int)response.StatusCode;
+            var body = await response.Content.ReadAsStringAsync();
+            var detail = string.IsNullOrWhiteSpace(body) ? "" : $" - {body}";
+
+            if (statusCode >= 400 && statusCode < 500)
+            {
+                throw new ClientErrorException(statusCode,
+                    $"HTTP {statusCode}{detail}");
+            }
+
+            throw new HttpRequestException(
+                $"Server error {statusCode}{detail}");
+        }
+
+        private static bool IsTransientError(Exception ex)
+        {
+            return ex is SocketException
+                || ex is IOException
+                || ex is TaskCanceledException
+                || (ex is HttpRequestException hre
+                    && (hre.InnerException is SocketException
+                        || hre.InnerException is IOException));
+        }
+
+        private string SanitizeFileName(string fileName)
+        {
+            var name = Path.GetFileNameWithoutExtension(fileName);
+            var ext = Path.GetExtension(fileName);
+
+            var sb = new StringBuilder();
+            foreach (var c in name)
+            {
+                if (c <= 0x7F)
+                {
+                    sb.Append(c);
+                }
+            }
+
+            var sanitized = sb.ToString().Trim('.', ' ');
+            if (string.IsNullOrEmpty(sanitized))
+            {
+                sanitized = "file";
+            }
+
+            return sanitized + ext;
         }
 
         private string GetMimeType(string path)
@@ -294,5 +526,21 @@ namespace RommPlugin.ApiClient
                     }
                 }
             }
+
+        public async Task DownloadScreenshotAsync(int screenshotId, string targetPath, CancellationToken ct = default)
+        {
+            using (var cts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                cts.CancelAfter(TimeSpan.FromSeconds(300));
+
+                using (var response = await _http.GetAsync($"/api/screenshots/{screenshotId}/content", cts.Token))
+                {
+                response.EnsureSuccessStatusCode();
+
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                File.WriteAllBytes(targetPath, bytes);
+                }
+            }
+        }
     }
 }

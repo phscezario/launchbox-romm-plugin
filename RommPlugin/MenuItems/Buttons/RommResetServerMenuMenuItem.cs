@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Windows.Forms;
 using RommPlugin.ApiClient;
+using RommPlugin.Core.Locale;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Storage;
 using RommPlugin.Services;
-using RommPlugin.UI.Forms;
 using Unbroken.LaunchBox.Plugins;
 
 namespace RommPlugin.MenuItems.Buttons
@@ -14,64 +14,49 @@ namespace RommPlugin.MenuItems.Buttons
     {
         private static readonly RommResetServerService sync = new RommResetServerService();
 
-        public override string Caption => "RomM: Remove all server metadata";
+        public override string Caption => LocaleManager.Get("menu.reset_server");
 
         public override async void OnSelected()
         {
+            RommLogger.Log("[DIAG] RommResetServerMenuMenuItem.OnSelected: clicked");
             var settings = RommPluginStorage.Load();
 
             if (string.IsNullOrWhiteSpace(settings.RommBaseUrl))
             {
                 System.Windows.MessageBox.Show(
-                    "RomM is not configured yet.",
-                    "RomM Plugin"
+                    LocaleManager.Get("error.not_configured"),
+                    LocaleManager.Get("settings.title_box")
                 );
                 return;
             }
 
-            string username;
-            string password;
-            string clientApiToken = null;
-
-            using (var form = new RommAdversityLoginForm(settings))
+            using (var api = new RommApiClient(settings.RommBaseUrl))
             {
-                if (form.ShowDialog() != DialogResult.OK) return;
+                sync.SetApi(api);
 
-                if (form.UseConfiguredAccount)
+                try
                 {
-                    username = settings.Username;
-                    password = settings.Password;
-                    clientApiToken = settings.ClientApiToken;
+                    await sync.RemoveAllGamesServerMetadata(
+                        settings.Username,
+                        settings.Password,
+                        settings.ClientApiToken);
+
+                    var syncInfo = RommSyncInformationStorage.Load();
+                    syncInfo.SyncInProgress = false;
+                    syncInfo.CompletedPlatformIds.Clear();
+                    syncInfo.CompletedGameIdsByPlatform.Clear();
+                    RommSyncInformationStorage.Save(syncInfo);
                 }
-                else
+                catch (Exception ex)
                 {
-                    username = form.Username;
-                    password = form.Password;
+                    RommLogger.LogError("[RommPlugin] reset server error: " + ex);
+                    MessageBox.Show(
+                        ex.Message,
+                        LocaleManager.Get("settings.title_box"),
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
                 }
-
-                if (form.SaveAdminAccount)
-                {
-                    RommAdminStorage.Save(new RommAdminAccount
-                    {
-                        Username = username,
-                        Password = password
-                    });
-                }
-            }
-
-            var api = new RommApiClient(settings.RommBaseUrl);
-            sync.SetApi(api);
-
-            try
-            {
-                await sync.RemoveAllGamesServerMetadata(username, password, clientApiToken);
-            }
-            catch (Exception ex)
-            {
-                RommLogger.LogError("[RommPlugin] error: " + ex);
-                throw new Exception("[RommPlugin] error: " + ex);
             }
         }
     }
-
 }

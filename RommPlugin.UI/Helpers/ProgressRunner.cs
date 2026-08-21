@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using RommPlugin.Core.Interfaces;
+using RommPlugin.Core.Locale;
 using RommPlugin.UI.Forms;
 using RommPlugin.UI.Reporters;
 
@@ -35,7 +36,7 @@ namespace RommPlugin.UI.Helpers
                         {
                             MessageBox.Show(
                                 ex.ToString(),
-                                "RomM Error",
+                                LocaleManager.Get("progress.error"),
                                 MessageBoxButtons.OK,
                                 MessageBoxIcon.Error
                             );

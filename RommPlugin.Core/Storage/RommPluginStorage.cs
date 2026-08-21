@@ -1,31 +1,21 @@
 ﻿using System;
 using System.IO;
 using Newtonsoft.Json;
+using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 
 namespace RommPlugin.Core.Storage
 {
     public static class RommPluginStorage
     {
-        private static readonly string Folder =
-            Path.Combine(
-                 AppDomain.CurrentDomain.BaseDirectory,
-                "Plugins",
-                "RomM LaunchBox Integration"
-            );
-
-        private static readonly string FilePath = Path.Combine(Folder, "settings.json");
-
         public static RommPluginSettings Load()
         {
             try
             {
-                if (!File.Exists(FilePath))
-                {
+                if (!File.Exists(RommPaths.SettingsFile))
                     return new RommPluginSettings();
-                }
 
-                var json = File.ReadAllText(FilePath);
+                var json = File.ReadAllText(RommPaths.SettingsFile);
                 return JsonConvert.DeserializeObject<RommPluginSettings>(json) ?? new RommPluginSettings();
             }
             catch
@@ -34,22 +24,24 @@ namespace RommPlugin.Core.Storage
             }
         }
 
-        public static RommPluginSettings LoadFrom(string filePath)
-        {
-            if (!File.Exists(filePath))
-            {
-                throw new FileNotFoundException("Settings not found", filePath);
-            }
-
-            var json = File.ReadAllText(filePath);
-            return JsonConvert.DeserializeObject<RommPluginSettings>(json);
-        }
-
         public static void Save(RommPluginSettings settings)
         {
-            Directory.CreateDirectory(Folder);
-            var json = JsonConvert.SerializeObject(settings, Formatting.Indented);
-            File.WriteAllText(FilePath, json);
+            var tempPath = Path.Combine(RommPaths.PluginFolder, $"settings.{Guid.NewGuid():N}.tmp");
+            try
+            {
+                Directory.CreateDirectory(RommPaths.PluginFolder);
+                var json = JsonConvert.SerializeObject(settings, Formatting.Indented);
+                File.WriteAllText(tempPath, json);
+                File.Copy(tempPath, RommPaths.SettingsFile, true);
+            }
+            catch (Exception ex)
+            {
+                RommLogger.LogError($"Failed to save settings: {ex.Message}");
+            }
+            finally
+            {
+                try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+            }
         }
     }
 }

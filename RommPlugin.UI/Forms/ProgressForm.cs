@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Windows.Forms;
+using RommPlugin.Core.Locale;
+using RommPlugin.Core.Storage;
 
 namespace RommPlugin.UI.Forms
 {
@@ -8,15 +10,23 @@ namespace RommPlugin.UI.Forms
         public ProgressForm()
         {
             InitializeComponent();
+            LoadIcon();
+            ApplyLocale();
+        }
+
+        private void ApplyLocale()
+        {
+            Text = LocaleManager.Get("progress.title");
+            lblStatus.Text = LocaleManager.Get("progress.loading");
         }
 
         public void SetTitle(string title)
         {
-            if (InvokeRequired)
+            if (InvokeRequired && !IsDisposed && IsHandleCreated)
             {
-                Invoke(new Action(() => Text = title));
+                BeginInvoke(new Action(() => Text = title));
             }
-            else
+            else if (!IsDisposed && !InvokeRequired)
             {
                 Text = title;
             }  
@@ -24,11 +34,11 @@ namespace RommPlugin.UI.Forms
 
         public void SetStatus(string message)
         {
-            if (InvokeRequired)
+            if (InvokeRequired && !IsDisposed && IsHandleCreated)
             {
-                Invoke(new Action(() => lblStatus.Text = message));
+                BeginInvoke(new Action(() => lblStatus.Text = message));
             }   
-            else
+            else if (!IsDisposed && !InvokeRequired)
             {
                 lblStatus.Text = message;
             }
@@ -36,11 +46,11 @@ namespace RommPlugin.UI.Forms
 
         public void SetProgress(int value)
         {
-            if (InvokeRequired)
+            if (InvokeRequired && !IsDisposed && IsHandleCreated)
             {
-                Invoke(new Action(() => progressBar.Value = value));
+                BeginInvoke(new Action(() => progressBar.Value = value));
             }
-            else
+            else if (!IsDisposed && !InvokeRequired)
             {
                 progressBar.Value = value;
             }  
@@ -48,13 +58,36 @@ namespace RommPlugin.UI.Forms
 
         public void SetIndeterminate(bool value)
         {
-            if (InvokeRequired)
+            if (InvokeRequired && !IsDisposed && IsHandleCreated)
             {
-                Invoke(new Action(() => progressBar.Style = value ? ProgressBarStyle.Marquee : ProgressBarStyle.Continuous));
+                BeginInvoke(new Action(() => progressBar.Style = value ? ProgressBarStyle.Marquee : ProgressBarStyle.Continuous));
             }
-            else
+            else if (!IsDisposed && !InvokeRequired)
             {
                 progressBar.Style = value ? ProgressBarStyle.Marquee : ProgressBarStyle.Continuous;
+            }
+        }
+
+        private void LoadIcon()
+        {
+            try
+            {
+                var iconPath = System.IO.Path.Combine(RommPaths.ImagesFolder, "ico.ico");
+
+                if (!System.IO.File.Exists(iconPath))
+                {
+                    iconPath = System.IO.Path.Combine(
+                        AppDomain.CurrentDomain.BaseDirectory,
+                        "Images", "ico.ico");
+                }
+
+                if (System.IO.File.Exists(iconPath))
+                {
+                    Icon = new System.Drawing.Icon(iconPath);
+                }
+            }
+            catch
+            {
             }
         }
     }

@@ -34,6 +34,12 @@ namespace RommPlugin.Core.Models
         [JsonProperty("id")]
         public int Id { get; set; }
 
+        [JsonProperty("created_at")]
+        public DateTime? CreatedAt { get; set; }
+
+        [JsonProperty("updated_at")]
+        public DateTime? UpdatedAt { get; set; }
+
         [JsonProperty("name")]
         public string Name { get; set; }
 
@@ -135,6 +141,36 @@ namespace RommPlugin.Core.Models
 
         [JsonProperty("merged_screenshots")]
         public List<string> MergedScreenshots { get; set; }
+
+        [JsonProperty("user_screenshots")]
+        public List<RommScreenshot> UserScreenshots { get; set; } = new List<RommScreenshot>();
+    }
+
+    public class RommScreenshot
+    {
+        [JsonProperty("id")]
+        public int Id { get; set; }
+
+        [JsonProperty("file_name")]
+        public string FileName { get; set; }
+
+        [JsonProperty("file_name_no_ext")]
+        public string FileNameNoExt { get; set; }
+
+        [JsonProperty("file_size_bytes")]
+        public long FileSizeBytes { get; set; }
+
+        [JsonProperty("is_gallery")]
+        public bool IsGallery { get; set; }
+
+        [JsonProperty("is_public")]
+        public bool IsPublic { get; set; }
+
+        [JsonProperty("created_at")]
+        public DateTime? CreatedAt { get; set; }
+
+        [JsonProperty("updated_at")]
+        public DateTime? UpdatedAt { get; set; }
     }
 
     public class RommGameMeta
@@ -203,7 +239,13 @@ namespace RommPlugin.Core.Models
         }
 
         [JsonProperty("id")]
-        public int? Id { get; set; }
+        public int Id { get; set; }
+
+        [JsonProperty("created_at")]
+        public DateTime? CreatedAt { get; set; }
+
+        [JsonProperty("updated_at")]
+        public DateTime? UpdatedAt { get; set; }
 
         [JsonProperty("name")]
         public string Name { get; set; }

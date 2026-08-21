@@ -1,6 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
+using RommPlugin.Core.Locale;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Services;
@@ -13,19 +16,55 @@ namespace RommPlugin.UI.Forms
         public RommSettingsForm()
         {
             InitializeComponent();
-            LoadSettings();
+            LoadIcon();
+            ApplyLocale();
+        }
+
+        private void ApplyLocale()
+        {
+            Text = LocaleManager.Get("settings.title");
+            label1.Text = LocaleManager.Get("settings.title");
+            label2.Text = LocaleManager.Get("settings.base_url");
+            label3.Text = LocaleManager.Get("settings.username");
+            label4.Text = LocaleManager.Get("settings.password");
+            labelToken.Text = LocaleManager.Get("settings.token");
+            labelTokenHint.Text = LocaleManager.Get("settings.token_hint");
+            label6.Text = LocaleManager.Get("settings.login_info");
+            label5.Text = LocaleManager.Get("settings.roms_path");
+            keepLocalData.Text = LocaleManager.Get("settings.keep_local");
+            saveLogs.Text = LocaleManager.Get("settings.save_logs");
+            processPendingOnStartup.Text = LocaleManager.Get("settings.process_on_startup");
+            forceFullResync.Text = LocaleManager.Get("settings.force_full_resync");
+            forceFullResync.AccessibleDescription = LocaleManager.Get("settings.force_full_resync_hint");
+            publicScreenshots.Text = LocaleManager.Get("settings.public_screenshots");
+            updateStatsOnLaunch.Text = LocaleManager.Get("settings.update_stats_on_launch");
+            isAdmin.Text = LocaleManager.Get("settings.is_admin");
+            lblBehavior.Text = LocaleManager.Get("settings.behavior");
+            lblAutoSyncInterval.Text = LocaleManager.Get("settings.auto_sync_interval");
+            lblAutoSyncIntervalHint.Text = LocaleManager.Get("settings.auto_sync_interval_hint");
+            lblLogRetention.Text = LocaleManager.Get("settings.log_retention_days");
+            lblLogRetentionHint.Text = LocaleManager.Get("settings.log_retention_hint");
+            lblSaveBatchSize.Text = LocaleManager.Get("settings.save_batch_size");
+            lblSaveBatchSizeHint.Text = LocaleManager.Get("settings.save_batch_size_hint");
+            lblLanguage.Text = LocaleManager.Get("settings.language");
+            btnSave.Text = LocaleManager.Get("settings.save");
+            btnCancel.Text = LocaleManager.Get("settings.cancel");
+            btnTestConnection.Text = LocaleManager.Get("settings.test_connection");
         }
 
         private void LoadSettings()
         {
+            RommLogger.Log("[DIAG] RommSettingsForm.LoadSettings: called");
             RommPluginSettings settings;
 
             try
             {
                 settings = RommPluginStorage.Load();
+                RommLogger.Log($"[DIAG] RommSettingsForm.LoadSettings: baseUrl={settings.RommBaseUrl}");
             }
-            catch
+            catch (Exception ex)
             {
+                RommLogger.Log($"[DIAG] RommSettingsForm.LoadSettings: EXCEPTION - {ex.Message}");
                 settings = new RommPluginSettings();
             }
 
@@ -37,6 +76,29 @@ namespace RommPlugin.UI.Forms
             keepLocalData.Checked = settings.KeepLocalData;
             saveLogs.Checked = settings.SaveLogs;
             processPendingOnStartup.Checked = settings.ProcessPendingOnStartup;
+            forceFullResync.Checked = settings.ForceFullResync;
+            publicScreenshots.Checked = settings.PublicScreenshots;
+            updateStatsOnLaunch.Checked = settings.UpdateStatsOnGameLaunch;
+            isAdmin.Checked = settings.IsAdmin;
+            nudAutoSyncInterval.Value = Math.Max(0, Math.Min(365, settings.AutoSyncIntervalDays));
+            nudLogRetention.Value = Math.Max(1, Math.Min(365, settings.LogRetentionDays));
+            nudSaveBatchSize.Value = Math.Max(1, Math.Min(500, settings.SaveBatchSize));
+
+            var localeFolder = RommPaths.LocalesFolder;
+            RommLogger.Log($"[DIAG] RommSettingsForm.LoadSettings: localeFolder={localeFolder}, exists={Directory.Exists(localeFolder)}");
+            var languages = LocaleManager.GetAvailableLanguages(localeFolder);
+
+            cmbLanguage.Items.Clear();
+            foreach (var lang in languages)
+            {
+                cmbLanguage.Items.Add(lang);
+            }
+
+            var currentLang = languages.FirstOrDefault(kvp => kvp.Key == (settings.Language ?? "en"));
+            if (currentLang.Key != null)
+                cmbLanguage.SelectedItem = currentLang;
+            else if (cmbLanguage.Items.Count > 0)
+                cmbLanguage.SelectedIndex = 0;
         }
 
         private void RommSettingsForm_Load(object sender, EventArgs e)
@@ -48,7 +110,7 @@ namespace RommPlugin.UI.Forms
         {
             if (string.IsNullOrWhiteSpace(txtBaseUrl.Text))
             {
-                MessageBox.Show("Base URL is required.");
+                MessageBox.Show(LocaleManager.Get("settings.base_url_required"));
                 return;
             }
 
@@ -59,7 +121,7 @@ namespace RommPlugin.UI.Forms
             if (!hasToken && !hasUserPass)
             {
                 MessageBox.Show(
-                    "Provide either a Client API token or a username and password."
+                    LocaleManager.Get("settings.auth_required")
                 );
                 return;
             }
@@ -67,7 +129,7 @@ namespace RommPlugin.UI.Forms
             if (string.IsNullOrWhiteSpace(txtRomsPath.Text) ||
                 !Directory.Exists(txtRomsPath.Text))
             {
-                MessageBox.Show("Please select a valid ROMs path.");
+                MessageBox.Show(LocaleManager.Get("settings.roms_path_invalid"));
                 return;
             }
 
@@ -76,9 +138,8 @@ namespace RommPlugin.UI.Forms
                  !string.IsNullOrWhiteSpace(txtPassword.Text)))
             {
                 var choice = MessageBox.Show(
-                    "A Client API token was provided and will take priority over username/password. " +
-                    "Do you want to clear the stored username and password?",
-                    "RomM Plugin",
+                    LocaleManager.Get("settings.token_priority"),
+                    LocaleManager.Get("settings.title_box"),
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question
                 );
@@ -99,13 +160,32 @@ namespace RommPlugin.UI.Forms
             settings.KeepLocalData = keepLocalData.Checked;
             settings.SaveLogs = saveLogs.Checked;
             settings.ProcessPendingOnStartup = processPendingOnStartup.Checked;
+            settings.ForceFullResync = forceFullResync.Checked;
+            settings.PublicScreenshots = publicScreenshots.Checked;
+            settings.UpdateStatsOnGameLaunch = updateStatsOnLaunch.Checked;
+            settings.IsAdmin = isAdmin.Checked;
+            settings.AutoSyncIntervalDays = (int)nudAutoSyncInterval.Value;
+            settings.LogRetentionDays = (int)nudLogRetention.Value;
+            settings.SaveBatchSize = (int)nudSaveBatchSize.Value;
+
+            if (cmbLanguage.SelectedItem is KeyValuePair<string, string> selectedLang)
+                settings.Language = selectedLang.Key;
 
             RommPluginStorage.Save(settings);
-            RommLogger.Initialize(settings.SaveLogs);
+            RommLogger.Initialize(settings.SaveLogs, settings.LogRetentionDays);
+
+            var localeFolder = RommPaths.LocalesFolder;
+            try
+            {
+                LocaleManager.Initialize(localeFolder, settings.Language ?? "en");
+            }
+            catch
+            {
+            }
 
             MessageBox.Show(
-                "Settings saved successfully.",
-                "RomM Plugin",
+                LocaleManager.Get("settings.saved"),
+                LocaleManager.Get("settings.title_box"),
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information
             );
@@ -117,7 +197,7 @@ namespace RommPlugin.UI.Forms
         {
             using (var dialog = new FolderBrowserDialog())
             {
-                dialog.Description = "Select the folder where ROMs will be stored";
+                dialog.Description = LocaleManager.Get("settings.roms_folder_desc");
 
                 if (!string.IsNullOrWhiteSpace(txtRomsPath.Text) &&
                     Directory.Exists(txtRomsPath.Text))
@@ -142,7 +222,7 @@ namespace RommPlugin.UI.Forms
         {
             if (string.IsNullOrWhiteSpace(txtBaseUrl.Text))
             {
-                MessageBox.Show("Base URL is required.");
+                MessageBox.Show(LocaleManager.Get("settings.base_url_required"));
                 return;
             }
 
@@ -153,7 +233,7 @@ namespace RommPlugin.UI.Forms
             if (!hasToken && !hasUserPass)
             {
                 MessageBox.Show(
-                    "Provide either a Client API token or a username and password before testing."
+                    LocaleManager.Get("settings.auth_required_test")
                 );
                 return;
             }
@@ -172,15 +252,135 @@ namespace RommPlugin.UI.Forms
 
                 MessageBox.Show(
                     result.Message,
-                    "RomM Plugin",
+                    LocaleManager.Get("settings.title_box"),
                     MessageBoxButtons.OK,
                     result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning
                 );
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    ex.Message,
+                    LocaleManager.Get("update.error_title"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
             }
             finally
             {
                 Cursor = Cursors.Default;
                 btnTestConnection.Enabled = true;
+            }
+        }
+
+        private void LoadIcon()
+        {
+            try
+            {
+                var iconPath = Path.Combine(RommPaths.ImagesFolder, "ico.ico");
+
+                if (!File.Exists(iconPath))
+                {
+                    iconPath = Path.Combine(
+                        AppDomain.CurrentDomain.BaseDirectory,
+                        "Images", "ico.ico");
+                }
+
+                if (File.Exists(iconPath))
+                {
+                    Icon = new System.Drawing.Icon(iconPath);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private async void btnCheckUpdates_Click(object sender, EventArgs e)
+        {
+            btnCheckUpdates.Enabled = false;
+            btnCheckUpdates.Text = "Checking...";
+            Cursor = Cursors.WaitCursor;
+
+            try
+            {
+                var result = await GitHubUpdateService.CheckForUpdateAsync();
+
+                if (!result.UpdateAvailable)
+                {
+                    MessageBox.Show(
+                        string.Format(LocaleManager.Get("update.current_version"), result.CurrentVersion.ToString(3)),
+                        LocaleManager.Get("settings.title_box"),
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    return;
+                }
+
+                var version = result.LatestVersion.ToString(3);
+                var message = string.Format(LocaleManager.Get("update.available"), version, result.CurrentVersion.ToString(3));
+
+                var dialogResult = MessageBox.Show(
+                    message,
+                    LocaleManager.Get("update.title"),
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+
+                if (dialogResult != DialogResult.Yes)
+                    return;
+
+                var asset = result.ZipAsset ?? result.SetupAsset;
+                if (asset == null)
+                {
+                    MessageBox.Show(
+                        LocaleManager.Get("update.no_asset"),
+                        LocaleManager.Get("update.error_title"),
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var downloaded = await GitHubUpdateService.DownloadUpdateAsync(asset, version);
+                if (!downloaded)
+                {
+                    MessageBox.Show(
+                        LocaleManager.Get("update.download_failed"),
+                        LocaleManager.Get("update.error_title"),
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var restartResult = MessageBox.Show(
+                    string.Format(LocaleManager.Get("update.downloaded"), version),
+                    LocaleManager.Get("update.downloaded_title"),
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+
+                if (restartResult == DialogResult.Yes)
+                {
+                    GitHubUpdateService.ApplyPendingUpdate();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    LocaleManager.Get("update.download_failed") + ": " + ex.Message,
+                    LocaleManager.Get("update.error_title"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+                btnCheckUpdates.Enabled = true;
+                btnCheckUpdates.Text = "Check for Updates";
+            }
+        }
+
+        private void btnAbout_Click(object sender, EventArgs e)
+        {
+            using (var aboutForm = new AboutForm())
+            {
+                aboutForm.ShowDialog(this);
             }
         }
     }

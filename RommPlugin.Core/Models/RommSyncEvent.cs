@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace RommPlugin.Core.Models
 {
@@ -11,4 +11,3 @@ namespace RommPlugin.Core.Models
         public DateTime Timestamp { get; set; }
     }
 }
-

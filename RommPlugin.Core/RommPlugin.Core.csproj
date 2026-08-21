@@ -17,7 +17,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>..\build\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -25,7 +25,7 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>..\build\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -36,6 +36,8 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -46,27 +48,51 @@
   <ItemGroup>
     <Compile Include="Models\PlatformSelection.cs" />
     <Compile Include="Models\RommPluginSettings.cs" />
+    <Compile Include="Helpers\RommHelpers.cs" />
     <Compile Include="Interfaces\IProgressReporter.cs" />
     <Compile Include="Logging\RommLogger.cs" />
-    <Compile Include="Models\LaunchBoxFolderGameConfig.cs" />
-    <Compile Include="Models\RommAdminAccount.cs" />
     <Compile Include="Models\LaunchBoxMetadataModel.cs" />
     <Compile Include="Models\RommUpdateGameRequest.cs" />
     <Compile Include="Models\Statics\GameCustomFields.cs" />
-    <Compile Include="Models\RommAuthResponse.cs" />
+
     <Compile Include="Models\RommGame.cs" />
     <Compile Include="Models\RommGameResponse.cs" />
     <Compile Include="Models\RommPlatform.cs" />
-    <Compile Include="Models\RommSyncEvent.cs" />
+
+
+    <Compile Include="Models\DownloadItem.cs" />
+    <Compile Include="Models\DownloadState.cs" />
+    <Compile Include="Models\GitHubRelease.cs" />
     <Compile Include="Models\RommSyncFile.cs" />
+    <Compile Include="Models\RommSyncEvent.cs" />
+    <Compile Include="Models\LaunchBoxFolderGameConfig.cs" />
+    <Compile Include="Models\ScreenshotUploadResult.cs" />
+    <Compile Include="Models\PlaySessionModels.cs" />
+    <Compile Include="Models\InstalledGamesFile.cs" />
+    <Compile Include="Locale\LocaleManager.cs" />
     <Compile Include="Models\Statics\KnownExtensions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\RommConnectionTester.cs" />
-    <Compile Include="Storage\RommAdminStorage.cs" />
+
+    <Compile Include="Services\DownloadQueueService.cs" />
+    <Compile Include="Services\GitHubUpdateService.cs" />
+    <Compile Include="Services\InstalledGamesService.cs" />
+    <Compile Include="Storage\RommPaths.cs" />
     <Compile Include="Storage\RommPluginStorage.cs" />
+    <Compile Include="Storage\RommSyncInformationStorage.cs" />
+    <Compile Include="Storage\SessionSuppressStorage.cs" />
+    <Compile Include="Models\RommSyncInformation.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Locales\en.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Locales\pt-BR.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

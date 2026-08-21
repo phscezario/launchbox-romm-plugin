@@ -1,13 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Drawing;
 using System.IO;
+using RommPlugin.Core.Storage;
 
 namespace RommPlugin.MenuItems
 {
     public abstract class RommMenuItem
     {
-        private static readonly Dictionary<string, Image> _iconCache = new Dictionary<string, Image>();
+        private static readonly ConcurrentDictionary<string, Image> _iconCache = new ConcurrentDictionary<string, Image>();
 
         protected virtual string IconName => "ico.png";
 
@@ -25,13 +26,7 @@ namespace RommPlugin.MenuItems
                     return img;
                 }
 
-                var path = Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory,
-                    "Plugins",
-                    "RomM LaunchBox Integration",
-                    "Images",
-                    IconName
-                );
+                var path = Path.Combine(RommPaths.ImagesFolder, IconName);
 
                 if (!File.Exists(path))
                 {
@@ -40,7 +35,10 @@ namespace RommPlugin.MenuItems
 
                 using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read))
                 {
-                    img = Image.FromStream(fs);
+                    var ms = new MemoryStream();
+                    fs.CopyTo(ms);
+                    ms.Position = 0;
+                    img = Image.FromStream(ms);
                     _iconCache[IconName] = img;
                 }
 

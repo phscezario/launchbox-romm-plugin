@@ -1,0 +1,46 @@
+name: Tests
+
+on:
+  push:
+    branches: [master, release/*]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore NuGet Packages (main solution)
+        run: nuget restore LaunchBoxRommPlugin.slnx
+
+      - name: Build Solution (Debug)
+        run: msbuild LaunchBoxRommPlugin.slnx /p:Configuration=Debug
+
+      - name: Restore Test Project
+        run: dotnet restore RommPlugin.Tests/RommPlugin.Tests.csproj
+
+      - name: Run Tests
+        run: dotnet test RommPlugin.Tests/RommPlugin.Tests.csproj --configuration Debug --verbosity normal --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: '**/TestResults/*.trx'
+          retention-days: 30

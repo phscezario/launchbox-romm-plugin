@@ -15,7 +15,8 @@ namespace RommPlugin.Core.Models.Statics
             ".nds", ".3ds",
             ".gcz", ".nkit",
             ".xiso", ".xci", ".rvz",
-            ".vpx", ".wad", ".wux"
+            ".vpx", ".wad", ".wux",
+            ".elf", ".prx", ".pkg"
         };
     }
 }

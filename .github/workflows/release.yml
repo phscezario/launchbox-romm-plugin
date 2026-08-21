@@ -31,7 +31,7 @@ jobs:
         run: nuget restore LaunchBoxRommPlugin.slnx
 
       - name: Build Solution (Release)
-        run: msbuild LaunchBoxRommPlugin.slnx /p:Configuration=Release
+        run: msbuild LaunchBoxRommPlugin.slnx /p:Configuration=Release /p:Version=${{ steps.vars.outputs.VERSION }}
 
       - name: Extract version from tag
         id: vars
@@ -54,16 +54,21 @@ jobs:
       - name: Copy required binaries
         shell: cmd
         run: |
-          copy RommPlugin.CLI\bin\Release\Newtonsoft.Json.* "package\RomM LaunchBox Integration\"
-          copy RommPlugin.CLI\bin\Release\RommPlugin.CLI.* "package\RomM LaunchBox Integration\"
-          copy RommPlugin.CLI\bin\Release\RommPlugin.Core.* "package\RomM LaunchBox Integration\"
-          copy RommPlugin.CLI\bin\Release\RommPlugin.* "package\RomM LaunchBox Integration\"
-          copy RommPlugin.CLI\bin\Release\RommPlugin.UI.* "package\RomM LaunchBox Integration\"
+          copy build\Release\Newtonsoft.Json.* "package\RomM LaunchBox Integration\"
+          copy build\Release\RommPlugin.CLI.* "package\RomM LaunchBox Integration\"
+          copy build\Release\RommPlugin.Core.* "package\RomM LaunchBox Integration\"
+          copy build\Release\RommPlugin.* "package\RomM LaunchBox Integration\"
+          copy build\Release\RommPlugin.UI.* "package\RomM LaunchBox Integration\"
 
       - name: Copy Images folder
         shell: cmd
         run: |
           xcopy Images "package\RomM LaunchBox Integration\Images\" /E /I /Y
+
+      - name: Copy Locales folder
+        shell: cmd
+        run: |
+          xcopy build\Release\Locales "package\RomM LaunchBox Integration\Locales\" /E /I /Y
 
       - name: Create ZIP with version
         shell: powershell

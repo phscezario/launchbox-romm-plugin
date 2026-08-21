@@ -19,7 +19,7 @@ namespace RommPlugin.Services
 
                 if (hasAlpha || isIndexed)
                 {
-                    var temp = Path.GetTempFileName() + ".jpg";
+                    var temp = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".jpg");
 
                     using (var src = new Bitmap(img))
                     {

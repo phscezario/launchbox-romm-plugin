@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
+using RommPlugin.Core.Locale;
 
 namespace RommPlugin.Core.Services
 {
@@ -27,7 +28,7 @@ namespace RommPlugin.Core.Services
                 return new ConnectionTestResult
                 {
                     Success = false,
-                    Message = "Base URL is required."
+                    Message = LocaleManager.Get("connection.url_required")
                 };
             }
 
@@ -36,7 +37,7 @@ namespace RommPlugin.Core.Services
                 return new ConnectionTestResult
                 {
                     Success = false,
-                    Message = "Base URL is not a valid absolute URL."
+                    Message = LocaleManager.Get("connection.url_invalid")
                 };
             }
 
@@ -61,39 +62,40 @@ namespace RommPlugin.Core.Services
 
                 try
                 {
-                    var response = await http.GetAsync("/api/platforms");
-
-                    if (response.IsSuccessStatusCode)
+                    using (var response = await http.GetAsync("/api/platforms"))
                     {
-                        return new ConnectionTestResult
+                        if (response.IsSuccessStatusCode)
                         {
-                            Success = true,
-                            Message = "Connection successful."
-                        };
-                    }
+                            return new ConnectionTestResult
+                            {
+                                Success = true,
+                                Message = LocaleManager.Get("connection.success")
+                            };
+                        }
 
-                    if (response.StatusCode == HttpStatusCode.Unauthorized ||
-                        response.StatusCode == HttpStatusCode.Forbidden)
-                    {
+                        if (response.StatusCode == HttpStatusCode.Unauthorized ||
+                            response.StatusCode == HttpStatusCode.Forbidden)
+                        {
+                            return new ConnectionTestResult
+                            {
+                                Success = false,
+                                Message = LocaleManager.Get("connection.auth_failed")
+                            };
+                        }
+
                         return new ConnectionTestResult
                         {
                             Success = false,
-                            Message = "Authentication failed - check your token or username/password."
+                            Message = LocaleManager.Get("connection.server_error", ((int)response.StatusCode).ToString(), response.ReasonPhrase ?? "")
                         };
                     }
-
-                    return new ConnectionTestResult
-                    {
-                        Success = false,
-                        Message = $"Server returned {(int)response.StatusCode} ({response.ReasonPhrase})."
-                    };
                 }
                 catch (Exception ex)
                 {
                     return new ConnectionTestResult
                     {
                         Success = false,
-                        Message = "Could not reach the server: " + ex.Message
+                        Message = LocaleManager.Get("connection.unreachable") + " " + ex.Message
                     };
                 }
             }

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace RommPlugin.Core.Models
 {
@@ -9,4 +9,3 @@ namespace RommPlugin.Core.Models
         public List<RommSyncEvent> Events { get; set; } = new List<RommSyncEvent>();
     }
 }
-
