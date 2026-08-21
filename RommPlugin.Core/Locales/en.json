@@ -97,6 +97,7 @@
 
     "sync.starting": "Starting sync...",
     "sync.completed": "RomM sync completed successfully.\n\nYou may need to restart LaunchBox to apply menu organization changes.",
+    "sync.already_running": "Sync is already in progress. Please wait.",
     "sync.new_platforms": "RomM new platforms detected:\n\n{0}\n\nYou can sync them later.",
     "sync.no_platforms": "No RomM platforms available.",
     "sync.no_games": "No RomM games available.",

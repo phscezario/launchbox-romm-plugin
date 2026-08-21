@@ -24,6 +24,7 @@ namespace RommPlugin.Services
     public class RommSyncService
     {
         private RommApiClient _api;
+        private static int _isRunning = 0;
 
         public RommApiClient Api => _api;
 
@@ -34,10 +35,24 @@ namespace RommPlugin.Services
 
         public async Task SyncAsync(bool headless = false)
         {
-            await ProgressRunner.RunAsync(
-                "Starting sync from RomM...",
-                async progress =>
+            if (Interlocked.CompareExchange(ref _isRunning, 1, 0) != 0)
+            {
+                RommLogger.Log("[DIAG] Sync already running, skipping");
+                if (!headless)
                 {
+                    MessageBox.Show(
+                        LocaleManager.Get("sync.already_running"),
+                        "RomM");
+                }
+                return;
+            }
+
+            try
+            {
+                await ProgressRunner.RunAsync(
+                    "Starting sync from RomM...",
+                    async progress =>
+                    {
                     var settings = RommPluginStorage.Load();
 
                     _api.ApplyAuthentication(settings);
@@ -435,7 +450,16 @@ namespace RommPlugin.Services
                         MessageBox.Show(LocaleManager.Get("sync.completed"));
                     }
                 }
-            );
+                );
+            }
+            catch (Exception ex)
+            {
+                RommLogger.LogError($"Sync error: {ex}");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _isRunning, 0);
+            }
         }
 
         private string NormalizeGameTitle(string name)

@@ -97,6 +97,7 @@
 
     "sync.starting": "Iniciando sincronização...",
     "sync.completed": "Sincronização concluída com sucesso.\n\nPode ser necessário reiniciar o LaunchBox para aplicar a organização dos menus.",
+    "sync.already_running": "Sincronização já está em andamento. Aguarde.",
     "sync.new_platforms": "Novas plataformas RomM detectadas:\n\n{0}\n\nVocê pode sincronizá-las depois.",
     "sync.no_platforms": "Nenhuma plataforma RomM disponível.",
     "sync.no_games": "Nenhum jogo RomM disponível.",

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Windows.Forms;
 using RommPlugin.ApiClient;
 using RommPlugin.Core.Locale;
@@ -13,49 +14,66 @@ namespace RommPlugin.MenuItems.Buttons
     public class RommResetServerMenuMenuItem : RommMenuItem, ISystemMenuItemPlugin
     {
         private static readonly RommResetServerService sync = new RommResetServerService();
+        private static int _isRunning = 0;
 
         public override string Caption => LocaleManager.Get("menu.reset_server");
 
         public override async void OnSelected()
         {
-            RommLogger.Log("[DIAG] RommResetServerMenuMenuItem.OnSelected: clicked");
-            var settings = RommPluginStorage.Load();
-
-            if (string.IsNullOrWhiteSpace(settings.RommBaseUrl))
+            if (Interlocked.CompareExchange(ref _isRunning, 1, 0) != 0)
             {
-                System.Windows.MessageBox.Show(
-                    LocaleManager.Get("error.not_configured"),
-                    LocaleManager.Get("settings.title_box")
-                );
+                RommLogger.Log("[DIAG] RommResetServerMenuMenuItem: reset already running, skipping");
+                MessageBox.Show(
+                    LocaleManager.Get("sync.already_running"),
+                    "RomM");
                 return;
             }
 
-            using (var api = new RommApiClient(settings.RommBaseUrl))
+            try
             {
-                sync.SetApi(api);
+                RommLogger.Log("[DIAG] RommResetServerMenuMenuItem.OnSelected: clicked");
+                var settings = RommPluginStorage.Load();
 
-                try
+                if (string.IsNullOrWhiteSpace(settings.RommBaseUrl))
                 {
-                    await sync.RemoveAllGamesServerMetadata(
-                        settings.Username,
-                        settings.Password,
-                        settings.ClientApiToken);
+                    System.Windows.MessageBox.Show(
+                        LocaleManager.Get("error.not_configured"),
+                        LocaleManager.Get("settings.title_box")
+                    );
+                    return;
+                }
 
-                    var syncInfo = RommSyncInformationStorage.Load();
-                    syncInfo.SyncInProgress = false;
-                    syncInfo.CompletedPlatformIds.Clear();
-                    syncInfo.CompletedGameIdsByPlatform.Clear();
-                    RommSyncInformationStorage.Save(syncInfo);
-                }
-                catch (Exception ex)
+                using (var api = new RommApiClient(settings.RommBaseUrl))
                 {
-                    RommLogger.LogError("[RommPlugin] reset server error: " + ex);
-                    MessageBox.Show(
-                        ex.Message,
-                        LocaleManager.Get("settings.title_box"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
+                    sync.SetApi(api);
+
+                    try
+                    {
+                        await sync.RemoveAllGamesServerMetadata(
+                            settings.Username,
+                            settings.Password,
+                            settings.ClientApiToken);
+
+                        var syncInfo = RommSyncInformationStorage.Load();
+                        syncInfo.SyncInProgress = false;
+                        syncInfo.CompletedPlatformIds.Clear();
+                        syncInfo.CompletedGameIdsByPlatform.Clear();
+                        RommSyncInformationStorage.Save(syncInfo);
+                    }
+                    catch (Exception ex)
+                    {
+                        RommLogger.LogError("[RommPlugin] reset server error: " + ex);
+                        MessageBox.Show(
+                            ex.Message,
+                            LocaleManager.Get("settings.title_box"),
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning);
+                    }
                 }
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _isRunning, 0);
             }
         }
     }
