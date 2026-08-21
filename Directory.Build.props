@@ -2,5 +2,6 @@
   <PropertyGroup>
     <OutputPath>$(SolutionDir)build\$(Configuration)\</OutputPath>
     <IntermediateOutputPath>$(SolutionDir)obj\$(MSBuildProjectName)\$(Configuration)\</IntermediateOutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
 </Project>
