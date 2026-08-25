@@ -73,6 +73,8 @@
     "settings.save_batch_size_hint": "Lower = safer on cancel, higher = faster sync. Default: 50.",
     "settings.is_admin": "Admin (bidirectional sync)?",
     "settings.is_admin_hint": "If enabled, sync will also push local changes to server.",
+    "settings.force_push_to_server": "Force push local data to server?",
+    "settings.force_push_to_server_hint": "Admin only. Pushes all local metadata, artwork and screenshots to server, overwriting remote data. Use when server images are corrupted.",
     "settings.behavior": "Behavior:",
     "settings.auto_sync_interval": "Auto sync interval (days):",
     "settings.auto_sync_interval_hint": "Interval in days.\n-1 = disabled\n0 = sync every time LaunchBox starts\n>0 = sync every N days",

@@ -39,6 +39,8 @@ namespace RommPlugin.UI.Forms
             publicScreenshots.Text = LocaleManager.Get("settings.public_screenshots");
             updateStatsOnLaunch.Text = LocaleManager.Get("settings.update_stats_on_launch");
             isAdmin.Text = LocaleManager.Get("settings.is_admin");
+            forcePushToServer.Text = LocaleManager.Get("settings.force_push_to_server");
+            forcePushToServer.AccessibleDescription = LocaleManager.Get("settings.force_push_to_server_hint");
             lblBehavior.Text = LocaleManager.Get("settings.behavior");
             lblAutoSyncInterval.Text = LocaleManager.Get("settings.auto_sync_interval");
             lblAutoSyncIntervalHint.Text = LocaleManager.Get("settings.auto_sync_interval_hint");
@@ -80,6 +82,7 @@ namespace RommPlugin.UI.Forms
             publicScreenshots.Checked = settings.PublicScreenshots;
             updateStatsOnLaunch.Checked = settings.UpdateStatsOnGameLaunch;
             isAdmin.Checked = settings.IsAdmin;
+            forcePushToServer.Checked = settings.ForcePushToServer;
             nudAutoSyncInterval.Value = Math.Max(-1, Math.Min(365, settings.AutoSyncIntervalDays));
             nudLogRetention.Value = Math.Max(1, Math.Min(365, settings.LogRetentionDays));
             nudSaveBatchSize.Value = Math.Max(1, Math.Min(500, settings.SaveBatchSize));
@@ -164,6 +167,7 @@ namespace RommPlugin.UI.Forms
             settings.PublicScreenshots = publicScreenshots.Checked;
             settings.UpdateStatsOnGameLaunch = updateStatsOnLaunch.Checked;
             settings.IsAdmin = isAdmin.Checked;
+            settings.ForcePushToServer = forcePushToServer.Checked;
             settings.AutoSyncIntervalDays = (int)nudAutoSyncInterval.Value;
             settings.LogRetentionDays = (int)nudLogRetention.Value;
             settings.SaveBatchSize = (int)nudSaveBatchSize.Value;

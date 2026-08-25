@@ -17,6 +17,7 @@
   "UpdateStatsOnGameLaunch": false,
   "DetailedSyncLogs": false,
   "IsAdmin": false,
+  "ForcePushToServer": false,
   "AutoSyncEnabled": false,
   "AutoSyncIntervalDays": 0
 }

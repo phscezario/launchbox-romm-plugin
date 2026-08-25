@@ -73,6 +73,8 @@
     "settings.save_batch_size_hint": "Menor = mais seguro ao cancelar, maior = sync mais rápido. Padrão: 50.",
     "settings.is_admin": "Admin (sync bidirecional)?",
     "settings.is_admin_hint": "Se habilitado, o sync também enviará alterações locais ao servidor.",
+    "settings.force_push_to_server": "Forçar envio de dados locais ao servidor?",
+    "settings.force_push_to_server_hint": "Somente admin. Envia todas as metadata, artwork e screenshots locais ao servidor, sobrescrevendo dados remotos. Use quando imagens do servidor estão corrompidas.",
     "settings.behavior": "Comportamento:",
     "settings.auto_sync_interval": "Intervalo do auto sync (dias):",
     "settings.auto_sync_interval_hint": "Intervalo em dias.\n-1 = desativado\n0 = sincroniza cada vez que o LaunchBox inicia\n>0 = sincroniza a cada N dias",

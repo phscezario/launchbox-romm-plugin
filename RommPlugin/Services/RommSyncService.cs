@@ -276,7 +276,7 @@ namespace RommPlugin.Services
 
                                 RommLogger.Log($"[HASH-COMPARE] Game {rommGame.Id} '{rommGame.Name}': localHash={localHash} savedLocalHash={savedLocalHash ?? "null"} savedRemoteHash={savedRemoteHash ?? "null"} remoteHash={remoteHash} localMatch={localHash == savedLocalHash} remoteMatch={remoteHash == savedRemoteHash}");
 
-                                if (!settings.ForceFullResync && localHash == savedLocalHash && remoteHash == savedRemoteHash)
+                                if (!settings.ForceFullResync && !settings.ForcePushToServer && localHash == savedLocalHash && remoteHash == savedRemoteHash)
                                 {
                                     completedGames++;
                                     continue;
@@ -289,7 +289,25 @@ namespace RommPlugin.Services
                                     continue;
                                 }
 
-                                if (settings.KeepLocalData)
+                                if (settings.ForcePushToServer && settings.IsAdmin)
+                                {
+                                    try
+                                    {
+                                        RommLogger.Log($"[FORCE-PUSH] Game {rommGame.Id}: ForcePushToServer active, pushing local to server");
+                                        await PushGameMetadataAsync(existingGame, remoteFull, settings);
+                                        hasChanges = true;
+
+                                        SetCustomField(existingGame, GameCustomFields.LastSyncedAt, DateTime.UtcNow.ToString("o"));
+                                        SetCustomField(existingGame, GameCustomFields.LocalMetadataHash,
+                                            RommMetadataComparer.ComputeLocalMetadataHash(existingGame));
+                                        SetCustomField(existingGame, GameCustomFields.RemoteMetadataHash, remoteHash);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        RommLogger.LogError($"Failed to force push metadata for game {rommGame.Id}: {ex.Message}");
+                                    }
+                                }
+                                else if (settings.KeepLocalData)
                                 {
                                     if (settings.IsAdmin)
                                     {
@@ -458,6 +476,12 @@ namespace RommPlugin.Services
                     if (settings.ForceFullResync)
                     {
                         settings.ForceFullResync = false;
+                        RommPluginStorage.Save(settings);
+                    }
+
+                    if (settings.ForcePushToServer)
+                    {
+                        settings.ForcePushToServer = false;
                         RommPluginStorage.Save(settings);
                     }
 

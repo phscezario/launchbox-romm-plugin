@@ -47,6 +47,7 @@
             this.cmbLanguage = new System.Windows.Forms.ComboBox();
             this.lblLanguage = new System.Windows.Forms.Label();
             this.isAdmin = new System.Windows.Forms.CheckBox();
+            this.forcePushToServer = new System.Windows.Forms.CheckBox();
             this.lblAutoSyncInterval = new System.Windows.Forms.Label();
             this.nudAutoSyncInterval = new System.Windows.Forms.NumericUpDown();
             this.lblAutoSyncIntervalHint = new System.Windows.Forms.Label();
@@ -451,6 +452,19 @@
             this.isAdmin.Text = "Admin (bidirectional sync)?";
             this.isAdmin.UseVisualStyleBackColor = true;
             // 
+            // forcePushToServer
+            // 
+            this.forcePushToServer.AutoSize = true;
+            this.forcePushToServer.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F);
+            this.forcePushToServer.ForeColor = System.Drawing.Color.Orange;
+            this.forcePushToServer.Location = new System.Drawing.Point(325, 415);
+            this.forcePushToServer.Margin = new System.Windows.Forms.Padding(2);
+            this.forcePushToServer.Name = "forcePushToServer";
+            this.forcePushToServer.Size = new System.Drawing.Size(220, 19);
+            this.forcePushToServer.TabIndex = 42;
+            this.forcePushToServer.Text = "Force push local data to server?";
+            this.forcePushToServer.UseVisualStyleBackColor = true;
+            // 
             // lblAutoSyncInterval
             // 
             this.lblAutoSyncInterval.AutoSize = true;
@@ -539,6 +553,7 @@
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(30)))), ((int)(((byte)(30)))));
             this.ClientSize = new System.Drawing.Size(620, 667);
             this.Controls.Add(this.isAdmin);
+            this.Controls.Add(this.forcePushToServer);
             this.Controls.Add(this.lblAutoSyncInterval);
             this.Controls.Add(this.nudAutoSyncInterval);
             this.Controls.Add(this.lblAutoSyncIntervalHint);
@@ -617,6 +632,7 @@
         private System.Windows.Forms.ComboBox cmbLanguage;
         private System.Windows.Forms.Label lblLanguage;
         private System.Windows.Forms.CheckBox isAdmin;
+        private System.Windows.Forms.CheckBox forcePushToServer;
         private System.Windows.Forms.Label lblBehavior;
         private System.Windows.Forms.Button btnCheckUpdates;
         private System.Windows.Forms.Button btnAbout;

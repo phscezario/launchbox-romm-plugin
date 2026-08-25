@@ -523,6 +523,7 @@ LaunchBox
 | `DetailedSyncLogs` | `true` = log detailed timing for each sync operation (default: `false`) |
 | `LogRetentionDays` | Number of days to keep log files before automatic deletion (default: `7`) |
 | `IsAdmin` | `true` = enable bidirectional sync: pull from RomM + push local metadata to server (default: `false`) |
+| `ForcePushToServer` | `true` = admin only. Push all local metadata, artwork and screenshots to server, overwriting remote data (default: `false`) |
 
 You can configure via `settings.json` or the LaunchBox plugin settings UI.
 
@@ -1027,6 +1028,7 @@ LaunchBox/Plugins/RomM LaunchBox Integration
 | `DetailedSyncLogs` | `true` = log detalhado de tempos de cada operação de sync (padrão: `false`) |
 | `LogRetentionDays` | Número de dias para manter arquivos de log antes da exclusão automática (padrão: `7`) |
 | `IsAdmin` | `true` = habilita sync bidirecional: pull do RomM + envia metadados locais ao servidor (padrão: `false`) |
+| `ForcePushToServer` | `true` = somente admin. Envia todas as metadata, artwork e screenshots locais ao servidor, sobrescrevendo dados remotos (padrão: `false`) |
 
 #### Autenticação: token de API vs usuário/senha
 

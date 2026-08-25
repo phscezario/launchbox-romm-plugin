@@ -31,6 +31,8 @@ namespace RommPlugin.Core.Models
 
         public bool ForceFullResync { get; set; }
 
+        public bool ForcePushToServer { get; set; }
+
         public int LogRetentionDays { get; set; } = 7;
 
         public bool PublicScreenshots { get; set; } = true;

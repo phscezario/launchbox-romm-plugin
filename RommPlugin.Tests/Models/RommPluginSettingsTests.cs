@@ -16,6 +16,7 @@ namespace RommPlugin.Tests.Models
             Assert.True(settings.ProcessPendingOnStartup);
             Assert.Equal("en", settings.Language);
             Assert.False(settings.ForceFullResync);
+            Assert.False(settings.ForcePushToServer);
         }
 
         [Fact]
@@ -33,6 +34,7 @@ namespace RommPlugin.Tests.Models
                 ProcessPendingOnStartup = false,
                 Language = "pt-BR",
                 ForceFullResync = true,
+                ForcePushToServer = true,
             };
 
             var json = JsonConvert.SerializeObject(settings);
@@ -48,6 +50,7 @@ namespace RommPlugin.Tests.Models
             Assert.False(deserialized.ProcessPendingOnStartup);
             Assert.Equal("pt-BR", deserialized.Language);
             Assert.True(deserialized.ForceFullResync);
+            Assert.True(deserialized.ForcePushToServer);
         }
 
         [Fact]
