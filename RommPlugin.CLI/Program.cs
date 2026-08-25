@@ -31,13 +31,15 @@ namespace RommPlugin.CLI
             if (args.Length < 1)
             {
                 Console.Error.WriteLine("Usage: RommPlugin.CLI.exe <pending_hierarchy.json>");
-                Console.Error.WriteLine("       RommPlugin.CLI.exe --remove-all <dataDir>");
+                Console.Error.WriteLine("       RommPlugin.CLI.exe --remove-all <dataDir> [--restart <launchBoxExe>]");
                 return 1;
             }
 
             if (args[0] == "--remove-all" && args.Length >= 2)
             {
-                return RemoveAllRomm(args[1]);
+                var restart = args.Contains("--restart");
+                var launchBoxExe = restart && args.Length >= 4 ? args[3] : null;
+                return RemoveAllRommFull(args[1], restart, launchBoxExe);
             }
 
             var jsonPath = args[0];
@@ -225,6 +227,38 @@ namespace RommPlugin.CLI
             {
                 Console.Error.WriteLine($"Error: {ex.Message}");
                 LogToFile($"RemoveAllRomm error: {ex}");
+                return 99;
+            }
+        }
+
+        static int RemoveAllRommFull(string dataDir, bool restart, string launchBoxExe)
+        {
+            try
+            {
+                Console.WriteLine("=== Remove All RomM (Full) ===");
+                LogToFile("RemoveAllRommFull started");
+
+                var baseResult = RemoveAllRomm(dataDir);
+                if (baseResult != 0) return baseResult;
+
+                RemovePlatformFiles(dataDir);
+                RemovePluginStorageFiles();
+                ClearSettingsPlatforms();
+
+                Console.WriteLine("=== Remove All RomM (Full) completed ===");
+                LogToFile("RemoveAllRommFull completed");
+
+                if (restart && !string.IsNullOrEmpty(launchBoxExe) && File.Exists(launchBoxExe))
+                {
+                    RestartLaunchBox(launchBoxExe);
+                }
+
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Error: {ex.Message}");
+                LogToFile($"RemoveAllRommFull error: {ex}");
                 return 99;
             }
         }
@@ -930,6 +964,76 @@ namespace RommPlugin.CLI
                 {
                     Console.WriteLine($"Warning: could not validate playlist '{Path.GetFileName(file)}': {ex.Message}");
                 }
+            }
+        }
+
+        static void RemovePlatformFiles(string dataDir)
+        {
+            var platformsDir = Path.Combine(dataDir, "Platforms");
+            if (!Directory.Exists(platformsDir)) return;
+
+            var files = Directory.GetFiles(platformsDir, "RomM _ *.xml");
+            foreach (var file in files)
+            {
+                try
+                {
+                    File.Delete(file);
+                    Console.WriteLine($"Deleted platform file: {Path.GetFileName(file)}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Warning: could not delete {Path.GetFileName(file)}: {ex.Message}");
+                }
+            }
+            LogToFile($"RemoveAllRommFull: deleted {files.Length} platform files");
+        }
+
+        static void RemovePluginStorageFiles()
+        {
+            var pluginDir = AppDomain.CurrentDomain.BaseDirectory;
+            var filesToDelete = new[] { "installed-games.json", "download-state.json", "sync_information.json" };
+            foreach (var fileName in filesToDelete)
+            {
+                var path = Path.Combine(pluginDir, fileName);
+                if (File.Exists(path))
+                {
+                    try
+                    {
+                        File.Delete(path);
+                        Console.WriteLine($"Deleted plugin file: {fileName}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Warning: could not delete {fileName}: {ex.Message}");
+                    }
+                }
+            }
+            LogToFile("RemoveAllRommFull: cleaned plugin storage files");
+        }
+
+        static void ClearSettingsPlatforms()
+        {
+            var pluginDir = AppDomain.CurrentDomain.BaseDirectory;
+            var settingsPath = Path.Combine(pluginDir, "settings.json");
+            if (!File.Exists(settingsPath)) return;
+
+            try
+            {
+                var json = File.ReadAllText(settingsPath);
+                var settings = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
+                if (settings == null) return;
+
+                settings["CurrentPlatforms"] = new List<object>();
+                settings["LastSelectedPlatformIds"] = new List<object>();
+
+                var output = JsonConvert.SerializeObject(settings, Formatting.Indented);
+                File.WriteAllText(settingsPath, output);
+                Console.WriteLine("Cleared platforms from settings.json");
+                LogToFile("RemoveAllRommFull: cleared CurrentPlatforms and LastSelectedPlatformIds");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: could not clear settings: {ex.Message}");
             }
         }
 

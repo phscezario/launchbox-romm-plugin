@@ -36,6 +36,7 @@ namespace RommPlugin.UI.Forms
         {
             Text = LocaleManager.Get("confirm.title");
             btnOk.Text = LocaleManager.Get("confirm.ok");
+            btnCancel.Text = LocaleManager.Get("confirm.cancel");
         }
 
         private void AutoSizeForm(string message)

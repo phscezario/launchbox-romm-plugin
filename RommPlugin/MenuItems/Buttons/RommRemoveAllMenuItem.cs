@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using RommPlugin.Core.Locale;
 using RommPlugin.Core.Logging;
@@ -14,7 +16,7 @@ namespace RommPlugin.MenuItems.Buttons
     {
         public override string Caption => LocaleManager.Get("menu.remove_all");
 
-        public override void OnSelected()
+        public override async void OnSelected()
         {
             RommLogger.Log("[DIAG] RommRemoveAllMenuItem.OnSelected: clicked");
 
@@ -29,10 +31,10 @@ namespace RommPlugin.MenuItems.Buttons
 
             try
             {
-                var settings = RommPluginStorage.Load();
                 var baseDir = RommPaths.PluginFolder;
                 var dataDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "Data"));
                 var cliPath = Path.Combine(baseDir, "RommPlugin.CLI.exe");
+                var launchBoxExe = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "LaunchBox.exe"));
 
                 if (!File.Exists(cliPath))
                 {
@@ -41,52 +43,51 @@ namespace RommPlugin.MenuItems.Buttons
                     return;
                 }
 
-                RommLogger.Log($"[DIAG] RemoveAllRomm: launching CLI with --remove-all {dataDir}");
+                RommLogger.Log($"[DIAG] RemoveAllRomm: launching CLI with --remove-all {dataDir} --restart {launchBoxExe}");
                 var psi = new ProcessStartInfo
                 {
                     FileName = cliPath,
-                    Arguments = $"--remove-all \"{dataDir}\"",
+                    Arguments = $"--remove-all \"{dataDir}\" --restart \"{launchBoxExe}\"",
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true
                 };
 
-                using (var process = Process.Start(psi))
+                using (var process = new Process { StartInfo = psi, EnableRaisingEvents = true })
                 {
-                    var output = process.StandardOutput.ReadToEnd();
-                    var error = process.StandardError.ReadToEnd();
-                    process.WaitForExit();
+                    var output = new StringBuilder();
+                    var error = new StringBuilder();
+                    var tcs = new TaskCompletionSource<bool>();
+
+                    process.OutputDataReceived += (s, e) =>
+                    {
+                        if (e.Data != null) output.AppendLine(e.Data);
+                    };
+                    process.ErrorDataReceived += (s, e) =>
+                    {
+                        if (e.Data != null) error.AppendLine(e.Data);
+                    };
+                    process.Exited += (s, e) => tcs.TrySetResult(true);
+
+                    process.Start();
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
+
+                    await tcs.Task;
 
                     RommLogger.Log($"[DIAG] RemoveAllRomm CLI output: {output}");
-                    if (!string.IsNullOrEmpty(error))
+                    if (error.Length > 0)
                         RommLogger.Log($"[DIAG] RemoveAllRomm CLI error: {error}");
 
                     if (process.ExitCode == 0)
                     {
-                        settings.CurrentPlatforms.Clear();
-                        RommPluginStorage.Save(settings);
-
-                        var restartResult = MessageBox.Show(
-                            LocaleManager.Get("restart.message"),
-                            LocaleManager.Get("restart.title"),
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Question);
-
-                        if (restartResult == DialogResult.Yes)
-                        {
-                            var launchBoxExe = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "LaunchBox.exe"));
-                            if (File.Exists(launchBoxExe))
-                            {
-                                Process.Start(launchBoxExe);
-                                Application.Exit();
-                            }
-                        }
+                        Environment.Exit(0);
                     }
                     else
                     {
                         MessageBox.Show(
-                            $"CLI exited with code {process.ExitCode}\n{error}",
+                            $"CLI exited with code {process.ExitCode}\n{error.ToString()}",
                             "RomM",
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Error);

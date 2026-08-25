@@ -5,8 +5,8 @@
     "menu.settings": "RomM: Settings",
     "menu.game_manager": "RomM: Game Manager",
     "menu.reset_server": "RomM: Reset Server",
-    "menu.remove_all": "RomM: Remove All",
-    "remove_all.confirm": "Are you sure you want to remove ALL RomM platforms, categories, and playlists from LaunchBox? This action creates a backup before removing.",
+    "menu.remove_all": "RomM: Remove All Games",
+    "remove_all.confirm": "Are you sure you want to remove ALL RomM platforms, categories, and playlists from LaunchBox? A backup will be created before removing. LaunchBox will restart automatically.",
 
     "gm.title": "RomM Game Manager",
     "gm.uninstall": "Uninstall",
@@ -128,6 +128,7 @@
     "platform_selector.window_title": "RomM Platform Selector",
 
     "confirm.ok": "OK",
+    "confirm.cancel": "Cancel",
     "confirm.title": "RomM Plugin",
 
     "progress.loading": "Loading...",

@@ -20,6 +20,7 @@ namespace RommPlugin.UI.Forms
             this.txtMessage = new System.Windows.Forms.TextBox();
             this.chkSuppress = new System.Windows.Forms.CheckBox();
             this.btnOk = new System.Windows.Forms.Button();
+            this.btnCancel = new System.Windows.Forms.Button();
             this.SuspendLayout();
             //
             // txtMessage
@@ -33,9 +34,8 @@ namespace RommPlugin.UI.Forms
             this.txtMessage.Multiline = true;
             this.txtMessage.Name = "txtMessage";
             this.txtMessage.ReadOnly = true;
-            this.txtMessage.ScrollBars = System.Windows.Forms.ScrollBars.Both;
-            this.txtMessage.WordWrap = false;
-
+            this.txtMessage.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
+            this.txtMessage.WordWrap = true;
             this.txtMessage.Size = new System.Drawing.Size(420, 120);
             this.txtMessage.TabIndex = 0;
             //
@@ -56,7 +56,7 @@ namespace RommPlugin.UI.Forms
             this.btnOk.BackColor = System.Drawing.Color.FromArgb(60, 60, 60);
             this.btnOk.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnOk.ForeColor = System.Drawing.Color.White;
-            this.btnOk.Location = new System.Drawing.Point(280, 185);
+            this.btnOk.Location = new System.Drawing.Point(195, 185);
             this.btnOk.Name = "btnOk";
             this.btnOk.Size = new System.Drawing.Size(90, 30);
             this.btnOk.TabIndex = 2;
@@ -64,16 +64,32 @@ namespace RommPlugin.UI.Forms
             this.btnOk.UseVisualStyleBackColor = false;
             this.btnOk.Click += new System.EventHandler(this.btnOk_Click);
             //
+            // btnCancel
+            //
+            this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnCancel.BackColor = System.Drawing.Color.FromArgb(60, 60, 60);
+            this.btnCancel.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnCancel.ForeColor = System.Drawing.Color.White;
+            this.btnCancel.Location = new System.Drawing.Point(295, 185);
+            this.btnCancel.Name = "btnCancel";
+            this.btnCancel.Size = new System.Drawing.Size(90, 30);
+            this.btnCancel.TabIndex = 3;
+            this.btnCancel.Text = "Cancel";
+            this.btnCancel.UseVisualStyleBackColor = false;
+            this.btnCancel.Click += new System.EventHandler(this.btnCancel_Click);
+            //
             // ConfirmForm
             //
             this.AcceptButton = this.btnOk;
+            this.CancelButton = this.btnCancel;
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(30, 30, 30);
-            this.ClientSize = new System.Drawing.Size(390, 230);
+            this.ClientSize = new System.Drawing.Size(420, 230);
             this.Controls.Add(this.txtMessage);
             this.Controls.Add(this.chkSuppress);
             this.Controls.Add(this.btnOk);
+            this.Controls.Add(this.btnCancel);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -88,10 +104,17 @@ namespace RommPlugin.UI.Forms
         private System.Windows.Forms.TextBox txtMessage;
         private System.Windows.Forms.CheckBox chkSuppress;
         private System.Windows.Forms.Button btnOk;
+        private System.Windows.Forms.Button btnCancel;
 
         private void btnOk_Click(object sender, System.EventArgs e)
         {
             DialogResult = System.Windows.Forms.DialogResult.OK;
+            Close();
+        }
+
+        private void btnCancel_Click(object sender, System.EventArgs e)
+        {
+            DialogResult = System.Windows.Forms.DialogResult.Cancel;
             Close();
         }
     }
