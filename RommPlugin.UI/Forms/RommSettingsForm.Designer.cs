@@ -473,10 +473,10 @@
             0,
             0});
             this.nudAutoSyncInterval.Minimum = new decimal(new int[] {
+            1,
             0,
             0,
-            0,
-            0});
+            -2147483648});
             this.nudAutoSyncInterval.Name = "nudAutoSyncInterval";
             this.nudAutoSyncInterval.Size = new System.Drawing.Size(60, 20);
             this.nudAutoSyncInterval.TabIndex = 38;

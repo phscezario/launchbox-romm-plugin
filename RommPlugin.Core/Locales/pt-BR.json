@@ -5,6 +5,8 @@
     "menu.settings": "RomM: Configurações",
     "menu.game_manager": "RomM: Gerenciador de Jogos",
     "menu.reset_server": "RomM: Redefinir Servidor",
+    "menu.remove_all": "RomM: Remover Tudo",
+    "remove_all.confirm": "Tem certeza que deseja remover TODAS as plataformas, categorias e playlists do RomM do LaunchBox? Uma cópia de segurança será criada antes da remoção.",
 
     "gm.title": "RomM Gerenciador de Jogos",
     "gm.uninstall": "Desinstalar",
@@ -73,7 +75,7 @@
     "settings.is_admin_hint": "Se habilitado, o sync também enviará alterações locais ao servidor.",
     "settings.behavior": "Comportamento:",
     "settings.auto_sync_interval": "Intervalo do auto sync (dias):",
-    "settings.auto_sync_interval_hint": "Intervalo em dias. 0 = sincroniza\na cada vez que o LaunchBox inicia.",
+    "settings.auto_sync_interval_hint": "Intervalo em dias.\n-1 = desativado\n0 = sincroniza cada vez que o LaunchBox inicia\n>0 = sincroniza a cada N dias",
     "settings.language": "Idioma:",
     "settings.save": "Salvar",
     "settings.cancel": "Cancelar",
@@ -98,7 +100,7 @@
     "sync.starting": "Iniciando sincronização...",
     "sync.completed": "Sincronização concluída com sucesso.\n\nPode ser necessário reiniciar o LaunchBox para aplicar a organização dos menus.",
     "sync.already_running": "Sincronização já está em andamento. Aguarde.",
-    "sync.new_platforms": "Novas plataformas RomM detectadas:\n\n{0}\n\nVocê pode sincronizá-las depois.",
+    "sync.new_platforms": "Novas plataformas RomM detectadas:\r\n\r\n{0}\r\n\r\nVocê pode sincronizá-las depois.",
     "sync.no_platforms": "Nenhuma plataforma RomM disponível.",
     "sync.no_games": "Nenhum jogo RomM disponível.",
     "sync.all_metadata_updated": "Todos os metadados no servidor foram atualizados com os metadados locais",
@@ -189,6 +191,11 @@
     "update.pending_title": "RomM Plugin - Atualização Pendente",
     "update.pending_message": "Uma atualização ({0}) está pendente.\n\nO LaunchBox precisa ser reiniciado para aplicar a atualização.\nDeseja reiniciar agora?",
     "update.no_asset": "Nenhum asset disponível para download",
-    "update.current_version": "Você já está na versão mais recente ({0})!"
+    "update.current_version": "Você já está na versão mais recente ({0})!",
+
+    "restart.title": "Plugin RomM - Reinicialização Necessária",
+    "restart.message": "O LaunchBox precisa ser reiniciado para aplicar as alterações de hierarquia e playlists.\nDeseja reiniciar agora?",
+    "restart.now": "Reiniciar Agora",
+    "restart.later": "Reiniciar Depois"
   }
 }

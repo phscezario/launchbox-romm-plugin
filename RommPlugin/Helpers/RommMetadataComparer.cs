@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using RommPlugin.Core.Models;
 using Unbroken.LaunchBox.Plugins.Data;
 
@@ -165,9 +166,11 @@ namespace RommPlugin.Helpers
             return new MetadataSnapshot
             {
                 Name = game.Title ?? "",
-                Notes = game.Notes ?? "",
+                Notes = StripHtmlTags(game.Notes ?? ""),
                 ReleaseDate = game.ReleaseDate.HasValue
-                    ? new DateTimeOffset(game.ReleaseDate.Value).ToUnixTimeSeconds()
+                    ? (long?)new DateTimeOffset(
+                        DateTime.SpecifyKind(game.ReleaseDate.Value, DateTimeKind.Utc)
+                    ).ToUnixTimeSeconds()
                     : (long?)null,
                 MaxPlayers = game.MaxPlayers,
                 ReleaseType = game.ReleaseType ?? "",
@@ -278,6 +281,12 @@ namespace RommPlugin.Helpers
         {
             var idx = url.IndexOf('?');
             return idx >= 0 ? url.Substring(0, idx) : url;
+        }
+
+        private static string StripHtmlTags(string html)
+        {
+            if (string.IsNullOrEmpty(html)) return html;
+            return Regex.Replace(html, "<[^>]+>", "").Trim();
         }
 
         public static string ComputeLocalMetadataHash(IGame game, string screenshotFingerprints = "")

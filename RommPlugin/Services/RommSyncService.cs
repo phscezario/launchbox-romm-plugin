@@ -1,7 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using Newtonsoft.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -40,9 +42,10 @@ namespace RommPlugin.Services
                 RommLogger.Log("[DIAG] Sync already running, skipping");
                 if (!headless)
                 {
-                    MessageBox.Show(
-                        LocaleManager.Get("sync.already_running"),
-                        "RomM");
+                    using (var form = new ConfirmForm(LocaleManager.Get("sync.already_running")))
+                    {
+                        form.ShowDialog();
+                    }
                 }
                 return;
             }
@@ -109,6 +112,13 @@ namespace RommPlugin.Services
 
                     RommLogger.Log($"Sync started: {rommPlatforms.Count} platforms to sync, {rommGamesOnly.Count} local RomM games");
 
+                    var platformCategoryMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var rp in allRommPlatforms)
+                    {
+                        var pname = $"RomM | {(string.IsNullOrEmpty(rp.CustomName) ? rp.Name : rp.CustomName)}";
+                        platformCategoryMap[pname] = $"RomM | {ParseCategory(rp.Category)}";
+                    }
+
                     var localGamesById = new Dictionary<int, IGame>();
 
                     foreach (var game in rommGamesOnly)
@@ -120,6 +130,7 @@ namespace RommPlugin.Services
                     }
 
                     var selectedPlatformIds = new HashSet<int>();
+                    var sameSelection = false;
 
                     if (headless)
                     {
@@ -139,6 +150,9 @@ namespace RommPlugin.Services
                             };
                         }).ToList();
 
+                        var initialSelection = new HashSet<int>(
+                            list.Where(p => p.Selected).Select(p => p.Id));
+
                         using (var form = new RommPlatformSelectorForm(list))
                         {
                             if (form.ShowDialog() != System.Windows.Forms.DialogResult.OK)
@@ -150,6 +164,11 @@ namespace RommPlugin.Services
                                 .Where(p => p.Selected)
                                 .Select(p => p.Id)
                                 .ToHashSet();
+
+                            sameSelection = selectedPlatformIds.SetEquals(initialSelection);
+
+                            settings.LastSelectedPlatformIds = selectedPlatformIds.OrderBy(id => id).ToList();
+                            RommPluginStorage.Save(settings);
                         }
                     }
 
@@ -161,22 +180,21 @@ namespace RommPlugin.Services
                     var newPlatforms = new List<string>();
                     var removedGames = new List<IGame>();
 
+                    var rootRommCategory = platformCategories.FirstOrDefault(p => p.Name == "RomM");
+                    if (rootRommCategory == null)
+                    {
+                        try
+                        {
+                            rootRommCategory = dataManager.AddNewPlatformCategory("RomM");
+                            platformCategories.Add(rootRommCategory);
+                            hasChanges = true;
+                            RommLogger.Log("Created root 'RomM' platform category in Platforms.xml");
+                        }
+                        catch { }
+                    }
+
                     foreach (var rommPlatform in rommPlatforms)
                     {
-                        var parsedCategory = ParseCategory(rommPlatform.Category);
-                        var rommCategoryName = $"RomM | {parsedCategory}";
-
-                        var rommCategory = platformCategories
-                            .FirstOrDefault(p => p.Name == rommCategoryName);
-
-                        if (rommCategory == null)
-                        {
-                            rommCategory = dataManager.AddNewPlatformCategory(rommCategoryName);
-                            platformCategories.Add(rommCategory);
-                            hasChanges = true;
-
-                        }
-
                         var name = !string.IsNullOrWhiteSpace(rommPlatform.CustomName)
                             ? rommPlatform.CustomName
                             : rommPlatform.Name;
@@ -184,21 +202,27 @@ namespace RommPlugin.Services
                         var platformName = $"RomM | {name}";
 
                         var platform = platforms
-                            .FirstOrDefault(p => p.Name == platformName);
+                            .FirstOrDefault(p => string.Equals(p.Name, platformName, StringComparison.OrdinalIgnoreCase));
 
                         if (platform == null)
                         {
+                            var parsedCategory = ParseCategory(rommPlatform.Category);
+                            var rommCategoryName = $"RomM | {parsedCategory}";
+
+                            var rommCategory = platformCategories
+                                .FirstOrDefault(p => p.Name == rommCategoryName);
+
+                            if (rommCategory == null)
+                            {
+                                rommCategory = dataManager.AddNewPlatformCategory(rommCategoryName);
+                                platformCategories.Add(rommCategory);
+                                hasChanges = true;
+                            }
+
                             platform = dataManager.AddNewPlatform(platformName);
                             platform.Category = rommCategoryName;
                             platforms.Add(platform);
                             hasChanges = true;
-
-
-                            settings.CurrentPlatforms.Add(new RommCurrentPlatform
-                            {
-                                Id = rommPlatform.Id,
-                                Name = platformName
-                            });
 
                             newPlatforms.Add(platformName);
                         }
@@ -407,14 +431,23 @@ namespace RommPlugin.Services
                     {
                         if (!headless)
                         {
-                            MessageBox.Show(
-                                string.Format(LocaleManager.Get("sync.new_platforms"), string.Join("\n", newPlatforms))
-                            );
+                            using (var form = new ConfirmForm(
+                                string.Format(LocaleManager.Get("sync.new_platforms"), string.Join("\r\n", newPlatforms))))
+                            {
+                                var result = form.ShowDialog();
+                                if (result != System.Windows.Forms.DialogResult.OK)
+                                {
+                                    newPlatforms.Clear();
+                                    hasChanges = false;
+                                    RommLogger.Log($"[DIAG] User cancelled new platforms. Skipping restart.");
+                                }
+                            }
                         }
                     }
 
                     if (hasChanges)
                     {
+                        BackupXml("Platforms.xml");
                         dataManager.Save();
                         hasChanges = false;
                     }
@@ -427,9 +460,57 @@ namespace RommPlugin.Services
 
                     CheckAndSavePlatforms(rommPlatforms, platforms);
 
-                    EnsureParentHierarchy(platforms);
+                    rommGamesOnly = dataManager.GetAllGames()
+                        .Where(g => g.Platform != null && g.Platform.StartsWith("RomM | "))
+                        .ToList();
 
-                    EnsurePlaylists(platforms);
+                    if (newPlatforms.Count > 0)
+                    {
+                        LaunchHierarchyCli(platforms, rommGamesOnly, platformCategoryMap, false);
+
+                        // Limpar categorias RomM sem jogos (baseado nos XML files, não HasGames)
+                        try
+                        {
+                            var baseDirForCleanup = RommPaths.PluginFolder;
+                            var platformsDirForCleanup = Path.GetFullPath(Path.Combine(baseDirForCleanup, "..", "..", "Data", "Platforms"));
+                            var categoriesWithGamesFromXml = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                            if (Directory.Exists(platformsDirForCleanup))
+                            {
+                                foreach (var file in Directory.GetFiles(platformsDirForCleanup, "RomM _ *.xml"))
+                                {
+                                    try
+                                    {
+                                        var platformName = "RomM | " + Path.GetFileNameWithoutExtension(file).Substring("RomM _ ".Length);
+                                        var doc = XDocument.Load(file);
+                                        if (doc.Root?.Elements("Game").Any() == true)
+                                        {
+                                            if (platformCategoryMap.TryGetValue(platformName, out var cat))
+                                                categoriesWithGamesFromXml.Add(cat);
+                                        }
+                                    }
+                                    catch { }
+                                }
+                            }
+
+                            var rommCategories = dataManager.GetAllPlatformCategories()
+                                .Where(c => c.Name != null && c.Name.StartsWith("RomM | ") && c.Name != "RomM")
+                                .ToList();
+
+                            foreach (var cat in rommCategories)
+                            {
+                                if (!categoriesWithGamesFromXml.Contains(cat.Name))
+                                {
+                                    dataManager.TryRemovePlatformCategory(cat);
+                                    RommLogger.Log($"Removed empty RomM category: {cat.Name}");
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            RommLogger.Log($"Category cleanup error: {ex.Message}");
+                        }
+                    }
 
                     foreach (var removedGame in removedGames)
                     {
@@ -445,9 +526,23 @@ namespace RommPlugin.Services
 
                     RommLogger.Log($"Sync completed. Changes saved: {hasChanges}");
 
-                    if (!headless)
+                    if (!headless && newPlatforms.Count > 0 && !sameSelection)
                     {
-                        MessageBox.Show(LocaleManager.Get("sync.completed"));
+                        RommLogger.Log($"[DIAG] Showing RestartConfirmForm...");
+                        using (var form = new RestartConfirmForm())
+                        {
+                            var result = form.ShowDialog();
+                            RommLogger.Log($"[DIAG] RestartConfirmForm result: {result}");
+                            if (result == System.Windows.Forms.DialogResult.Yes)
+                            {
+                                RommLogger.Log($"[DIAG] User chose restart. Calling LaunchHierarchyCli with restart=true");
+                                LaunchHierarchyCli(platforms, rommGamesOnly, platformCategoryMap, true);
+                            }
+                            else
+                            {
+                                RommLogger.Log($"[DIAG] User chose later (or closed form)");
+                            }
+                        }
                     }
                 }
                 );
@@ -502,451 +597,124 @@ namespace RommPlugin.Services
             }
         }
 
-        private void EnsureParentHierarchy(List<IPlatform> platforms)
+        private void LaunchHierarchyCli(List<IPlatform> platforms, List<IGame> rommGamesOnly, Dictionary<string, string> platformCategoryMap, bool restartLaunchBox = false)
         {
-            var categories = platforms
-                .Select(p => p.Category)
-                .Where(c => c != null && c.StartsWith("RomM | "))
-                .Distinct()
+            var baseDir = RommPaths.PluginFolder;
+            var platformsDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "Data", "Platforms"));
+
+            var platformsWithGames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var categoryPlatforms = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+            if (Directory.Exists(platformsDir))
+            {
+                foreach (var file in Directory.GetFiles(platformsDir, "RomM _ *.xml"))
+                {
+                    try
+                    {
+                        var platformName = "RomM | " + Path.GetFileNameWithoutExtension(file)
+                            .Substring("RomM _ ".Length);
+
+                        var doc = XDocument.Load(file);
+                        var gameCount = doc.Root?.Elements("Game").Count() ?? 0;
+
+                        if (gameCount > 0)
+                            platformsWithGames.Add(platformName);
+
+                        if (platformCategoryMap.TryGetValue(platformName, out var category))
+                        {
+                            if (!categoryPlatforms.ContainsKey(category))
+                                categoryPlatforms[category] = new List<string>();
+                            categoryPlatforms[category].Add(platformName);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        RommLogger.Log($"Hierarchy CLI: failed to read platform file '{Path.GetFileName(file)}': {ex.Message}");
+                    }
+                }
+            }
+
+            if (categoryPlatforms.Count == 0)
+            {
+                RommLogger.Log($"[DIAG] LaunchHierarchyCli: EARLY RETURN - no RomM platforms found");
+                return;
+            }
+
+            var allCategories = platformCategoryMap.Values.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var categoriesWithGames = categoryPlatforms
+                .Where(kv => kv.Value.Any(p => platformsWithGames.Contains(p)))
+                .Select(kv => kv.Key)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            if (categories.Count == 0)
-                return;
+            RommLogger.Log($"[DIAG] LaunchHierarchyCli: platformsWithGames={platformsWithGames.Count}, allCategories={allCategories.Count}, categoriesWithGames={categoriesWithGames.Count}, categoryPlatformsKeys={categoryPlatforms.Count}, restart={restartLaunchBox}");
+            foreach (var ps in platformsWithGames)
+                RommLogger.Log($"[DIAG]   platformWithGame: '{ps}'");
+            foreach (var kv in categoryPlatforms)
+                RommLogger.Log($"[DIAG]   categoryPlatform: '{kv.Key}' -> [{string.Join(", ", kv.Value)}]");
+            foreach (var c in allCategories)
+                RommLogger.Log($"[DIAG]   allCategory: '{c}'");
+            foreach (var c in categoriesWithGames)
+                RommLogger.Log($"[DIAG]   categoriesWithGames: '{c}'");
 
-            var dataDir = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Data"));
-            var parentsXmlPath = Path.Combine(dataDir, "Parents.xml");
-
-            if (!File.Exists(parentsXmlPath))
+            var launchBoxExe = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "LaunchBox.exe"));
+            var request = new
             {
-                RommLogger.Log($"Parents.xml not found at {parentsXmlPath}, skipping hierarchy setup");
-                return;
-            }
+                PlatformCategoryMap = platformCategoryMap,
+                AllCategories = allCategories,
+                CategoriesWithGames = categoriesWithGames,
+                CategoryPlatforms = categoryPlatforms,
+                RestartLaunchBox = restartLaunchBox,
+                LaunchBoxExe = launchBoxExe
+            };
 
-            var backupPath = parentsXmlPath + ".bak";
-            File.Copy(parentsXmlPath, backupPath, true);
+            var json = JsonConvert.SerializeObject(request, Formatting.Indented);
+            var pendingPath = Path.Combine(baseDir, "pending_hierarchy.json");
 
-            var doc = XDocument.Load(parentsXmlPath);
-            var root = doc.Root;
-            if (root == null)
-                return;
+            File.WriteAllText(pendingPath, json);
+            RommLogger.Log($"Hierarchy CLI: wrote pending file with {allCategories.Count} allCategories, {categoriesWithGames.Count} categoriesWithGames, {categoryPlatforms.Values.Sum(l => l.Count)} platforms, restart={restartLaunchBox}");
 
-            var changed = false;
-
-            var rootEntry = root.Elements("Parent")
-                .FirstOrDefault(p => (string)p.Element("PlatformCategoryName") == "RomM");
-
-            if (rootEntry != null)
+            var cliPath = Path.Combine(baseDir, "RommPlugin.CLI.exe");
+            if (!File.Exists(cliPath))
             {
-                EnsureParentElement(rootEntry, "PlatformName");
-                EnsureParentElement(rootEntry, "PlaylistId");
-                EnsureParentElement(rootEntry, "ParentPlatformName");
-                EnsureParentElement(rootEntry, "ParentPlaylistId");
-                EnsureParentElement(rootEntry, "ParentPlatformCategoryName");
-            }
-            else
-            {
-                root.Add(new XElement("Parent",
-                    new XElement("PlatformName"),
-                    new XElement("PlaylistId"),
-                    new XElement("PlatformCategoryName", "RomM"),
-                    new XElement("ParentPlatformName"),
-                    new XElement("ParentPlaylistId"),
-                    new XElement("ParentPlatformCategoryName")
-                ));
-                changed = true;
-                RommLogger.Log("Created root 'RomM' category in Parents.xml");
-            }
-
-            foreach (var category in categories)
-            {
-                var existingEntry = root.Elements("Parent")
-                    .FirstOrDefault(p => (string)p.Element("PlatformCategoryName") == category);
-
-                if (existingEntry != null)
-                {
-                    var parentEl = existingEntry.Element("ParentPlatformCategoryName");
-                    if (parentEl == null)
-                    {
-                        existingEntry.Add(new XElement("ParentPlatformCategoryName", "RomM"));
-                        changed = true;
-                    }
-                    else if (parentEl.Value != "RomM")
-                    {
-                        parentEl.Value = "RomM";
-                        changed = true;
-                    }
-
-                    EnsureParentElement(existingEntry, "PlatformName");
-                    EnsureParentElement(existingEntry, "PlaylistId");
-                    EnsureParentElement(existingEntry, "ParentPlatformName");
-                    EnsureParentElement(existingEntry, "ParentPlaylistId");
-
-                    if (!changed)
-                    {
-                        RommLogger.Log($"Category '{category}' already linked to 'RomM'");
-                    }
-                    else
-                    {
-                        RommLogger.Log($"Updated category '{category}' -> 'RomM' in Parents.xml");
-                    }
-                }
-                else
-                {
-                    root.Add(new XElement("Parent",
-                        new XElement("PlatformName"),
-                        new XElement("PlaylistId"),
-                        new XElement("PlatformCategoryName", category),
-                        new XElement("ParentPlatformName"),
-                        new XElement("ParentPlaylistId"),
-                        new XElement("ParentPlatformCategoryName", "RomM")
-                    ));
-                    changed = true;
-                    RommLogger.Log($"Created parent link '{category}' -> 'RomM' in Parents.xml");
-                }
-            }
-
-            var seen = new HashSet<string>();
-            var duplicates = root.Elements("Parent")
-                .Where(p =>
-                {
-                    var name = (string)p.Element("PlatformCategoryName") ?? "";
-                    if (!name.StartsWith("RomM")) return false;
-                    return !seen.Add(name);
-                })
-                .ToList();
-
-            foreach (var dup in duplicates)
-            {
-                dup.Remove();
-                changed = true;
-                RommLogger.Log($"Removed duplicate entry for '{(string)dup.Element("PlatformCategoryName")}'");
-            }
-
-            if (changed)
-            {
-                doc.Save(parentsXmlPath);
-                RommLogger.Log("Parents.xml hierarchy updated successfully");
-            }
-        }
-
-        private void EnsureParentElement(XElement parent, string elementName)
-        {
-            if (parent.Element(elementName) == null)
-            {
-                parent.Add(new XElement(elementName));
-            }
-        }
-
-        private void EnsurePlaylists(List<IPlatform> platforms)
-        {
-            var categories = platforms
-                .Select(p => p.Category)
-                .Where(c => c != null && c.StartsWith("RomM | "))
-                .Distinct()
-                .ToList();
-
-            if (categories.Count == 0)
-                return;
-
-            var dataDir = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Data"));
-            var playlistsDir = Path.Combine(dataDir, "Playlists");
-            var parentsXmlPath = Path.Combine(dataDir, "Parents.xml");
-
-            if (!Directory.Exists(playlistsDir))
-            {
-                Directory.CreateDirectory(playlistsDir);
-            }
-
-            if (!File.Exists(parentsXmlPath))
-            {
-                RommLogger.Log("Parents.xml not found, skipping playlist setup");
+                RommLogger.LogError($"CLI not found at {cliPath}");
                 return;
             }
 
-            var parentsDoc = XDocument.Load(parentsXmlPath);
-            var parentsRoot = parentsDoc.Root;
-            if (parentsRoot == null)
-                return;
-
-            var parentsChanged = false;
-
-            var categoryPlatforms = platforms
-                .Where(p => p.Category != null && p.Category.StartsWith("RomM | "))
-                .GroupBy(p => p.Category)
-                .ToDictionary(g => g.Key, g => g.Select(p => p.Name).ToList());
-
-            foreach (var category in categories)
+            try
             {
-                var shortCategory = category.Substring("RomM | ".Length);
-                var playlistName = $"RomM | {shortCategory} Installed";
-                var playlistFileName = $"RomM _ {shortCategory} Installed.xml";
-                var playlistFilePath = Path.Combine(playlistsDir, playlistFileName);
-
-                string playlistId;
-
-                if (File.Exists(playlistFilePath))
+                var psi = new ProcessStartInfo
                 {
-                    var existingDoc = XDocument.Load(playlistFilePath);
-                    playlistId = (string)existingDoc.Root?.Element("Playlist")?.Element("PlaylistId");
+                    FileName = cliPath,
+                    Arguments = $"\"{pendingPath}\"",
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
 
-                    if (string.IsNullOrEmpty(playlistId))
-                    {
-                        playlistId = Guid.NewGuid().ToString();
-                    }
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
 
-                    var platformNames = categoryPlatforms.ContainsKey(category)
-                        ? categoryPlatforms[category]
-                        : new List<string>();
+                var proc = Process.Start(psi);
 
-                    UpdateCategoryPlaylistFilters(existingDoc, playlistId, playlistName, platformNames);
-                    existingDoc.Save(playlistFilePath);
-                    RommLogger.Log($"Updated playlist '{playlistName}' with {platformNames.Count} platforms");
-                }
-                else
-                {
-                    playlistId = Guid.NewGuid().ToString();
+                var stdout = proc.StandardOutput.ReadToEnd();
+                var stderr = proc.StandardError.ReadToEnd();
+                proc.WaitForExit();
 
-                    var platformNames = categoryPlatforms.ContainsKey(category)
-                        ? categoryPlatforms[category]
-                        : new List<string>();
+                foreach (var line in stdout.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                    RommLogger.Log($"CLI: {line}");
 
-                    var doc = CreateCategoryPlaylist(playlistId, playlistName, platformNames);
-                    doc.Save(playlistFilePath);
-                    RommLogger.Log($"Created playlist '{playlistName}' with {platformNames.Count} platforms");
-                }
+                if (!string.IsNullOrEmpty(stderr))
+                    RommLogger.LogError($"CLI errors: {stderr}");
 
-                EnsurePlaylistParentLink(parentsRoot, playlistId, category, ref parentsChanged);
+                if (proc.ExitCode != 0)
+                    RommLogger.LogError($"CLI exited with code {proc.ExitCode}");
+
+                RommLogger.Log($"Hierarchy CLI completed (restart={restartLaunchBox})");
             }
-
-            var allInstalledFileName = "RomM _ Installed Games.xml";
-            var allInstalledFilePath = Path.Combine(playlistsDir, allInstalledFileName);
-
-            string allInstalledId;
-
-            if (File.Exists(allInstalledFilePath))
+            catch (Exception ex)
             {
-                var existingDoc = XDocument.Load(allInstalledFilePath);
-                allInstalledId = (string)existingDoc.Root?.Element("Playlist")?.Element("PlaylistId");
-
-                if (string.IsNullOrEmpty(allInstalledId))
-                {
-                    allInstalledId = Guid.NewGuid().ToString();
-                }
-            }
-            else
-            {
-                allInstalledId = Guid.NewGuid().ToString();
-
-                var doc = CreateAllInstalledPlaylist(allInstalledId);
-                doc.Save(allInstalledFilePath);
-                RommLogger.Log("Created playlist 'RomM | Installed Games'");
-            }
-
-            EnsurePlaylistParentLink(parentsRoot, allInstalledId, "RomM", ref parentsChanged);
-
-            if (parentsChanged)
-            {
-                parentsDoc.Save(parentsXmlPath);
-                RommLogger.Log("Parents.xml playlist links updated successfully");
-            }
-        }
-
-        private XDocument CreateCategoryPlaylist(string id, string name, List<string> platformNames)
-        {
-            var doc = new XDocument(
-                new XElement("LaunchBox",
-                    new XElement("Playlist",
-                        new XElement("PlaylistId", id),
-                        new XElement("Name", name),
-                        new XElement("NestedName", "Installed"),
-                        new XElement("SortBy", "Default"),
-                        new XElement("Notes"),
-                        new XElement("VideoPath"),
-                        new XElement("ImageType"),
-                        new XElement("Category"),
-                        new XElement("LastGameId"),
-                        new XElement("BigBoxView"),
-                        new XElement("BigBoxTheme"),
-                        new XElement("IncludeWithPlatforms", "false"),
-                        new XElement("AutoPopulate", "true"),
-                        new XElement("SortTitle"),
-                        new XElement("IsAutogenerated", "false"),
-                        new XElement("LocalDbParsed", "false"),
-                        new XElement("LastSelectedChild"),
-                        new XElement("Developer"),
-                        new XElement("Manufacturer"),
-                        new XElement("Cpu"),
-                        new XElement("Memory"),
-                        new XElement("Graphics"),
-                        new XElement("Sound"),
-                        new XElement("Display"),
-                        new XElement("Media"),
-                        new XElement("MaxControllers"),
-                        new XElement("Folder"),
-                        new XElement("VideosFolder"),
-                        new XElement("FrontImagesFolder"),
-                        new XElement("BackImagesFolder"),
-                        new XElement("ClearLogoImagesFolder"),
-                        new XElement("FanartImagesFolder"),
-                        new XElement("ScreenshotImagesFolder"),
-                        new XElement("BannerImagesFolder"),
-                        new XElement("SteamBannerImagesFolder"),
-                        new XElement("ManualsFolder"),
-                        new XElement("MusicFolder"),
-                        new XElement("ScrapeAs"),
-                        new XElement("AndroidThemeVideoPath"),
-                        new XElement("HideInBigBox", "false"),
-                        new XElement("DisableAutoImport", "false")
-                    ),
-                    new XElement("PlaylistFilter",
-                        new XElement("Value", "(Not Used)"),
-                        new XElement("FieldKey", "Installed"),
-                        new XElement("ComparisonTypeKey", "IsTrue")
-                    )
-                )
-            );
-
-            var launchBox = doc.Root;
-            foreach (var platformName in platformNames)
-            {
-                launchBox.Add(new XElement("PlaylistFilter",
-                    new XElement("Value", platformName),
-                    new XElement("FieldKey", "Platform"),
-                    new XElement("ComparisonTypeKey", "EqualTo")
-                ));
-            }
-
-            return doc;
-        }
-
-        private void UpdateCategoryPlaylistFilters(XDocument doc, string id, string name, List<string> platformNames)
-        {
-            var launchBox = doc.Root;
-            if (launchBox == null)
-                return;
-
-            var playlist = launchBox.Element("Playlist");
-            if (playlist != null)
-            {
-                playlist.Element("Name").Value = name;
-            }
-
-            var existingFilters = launchBox.Elements("PlaylistFilter").ToList();
-            foreach (var filter in existingFilters)
-            {
-                filter.Remove();
-            }
-
-            launchBox.Add(new XElement("PlaylistFilter",
-                new XElement("Value", "(Not Used)"),
-                new XElement("FieldKey", "Installed"),
-                new XElement("ComparisonTypeKey", "IsTrue")
-            ));
-
-            foreach (var platformName in platformNames)
-            {
-                launchBox.Add(new XElement("PlaylistFilter",
-                    new XElement("Value", platformName),
-                    new XElement("FieldKey", "Platform"),
-                    new XElement("ComparisonTypeKey", "EqualTo")
-                ));
-            }
-        }
-
-        private XDocument CreateAllInstalledPlaylist(string id)
-        {
-            return new XDocument(
-                new XElement("LaunchBox",
-                    new XElement("Playlist",
-                        new XElement("PlaylistId", id),
-                        new XElement("Name", "RomM | Installed Games"),
-                        new XElement("NestedName", "Installed Games"),
-                        new XElement("SortBy", "Default"),
-                        new XElement("Notes"),
-                        new XElement("VideoPath"),
-                        new XElement("ImageType"),
-                        new XElement("Category"),
-                        new XElement("LastGameId"),
-                        new XElement("BigBoxView"),
-                        new XElement("BigBoxTheme"),
-                        new XElement("IncludeWithPlatforms", "false"),
-                        new XElement("AutoPopulate", "true"),
-                        new XElement("SortTitle"),
-                        new XElement("IsAutogenerated", "false"),
-                        new XElement("LocalDbParsed", "false"),
-                        new XElement("LastSelectedChild"),
-                        new XElement("Developer"),
-                        new XElement("Manufacturer"),
-                        new XElement("Cpu"),
-                        new XElement("Memory"),
-                        new XElement("Graphics"),
-                        new XElement("Sound"),
-                        new XElement("Display"),
-                        new XElement("Media"),
-                        new XElement("MaxControllers"),
-                        new XElement("Folder"),
-                        new XElement("VideosFolder"),
-                        new XElement("FrontImagesFolder"),
-                        new XElement("BackImagesFolder"),
-                        new XElement("ClearLogoImagesFolder"),
-                        new XElement("FanartImagesFolder"),
-                        new XElement("ScreenshotImagesFolder"),
-                        new XElement("BannerImagesFolder"),
-                        new XElement("SteamBannerImagesFolder"),
-                        new XElement("ManualsFolder"),
-                        new XElement("MusicFolder"),
-                        new XElement("ScrapeAs"),
-                        new XElement("AndroidThemeVideoPath"),
-                        new XElement("HideInBigBox", "false"),
-                        new XElement("DisableAutoImport", "false")
-                    ),
-                    new XElement("PlaylistFilter",
-                        new XElement("Value", "(Not Used)"),
-                        new XElement("FieldKey", "Installed"),
-                        new XElement("ComparisonTypeKey", "IsTrue")
-                    ),
-                    new XElement("PlaylistFilter",
-                        new XElement("Value", "RomM |"),
-                        new XElement("FieldKey", "Platform"),
-                        new XElement("ComparisonTypeKey", "Contains")
-                    )
-                )
-            );
-        }
-
-        private void EnsurePlaylistParentLink(XElement parentsRoot, string playlistId, string parentCategory, ref bool changed)
-        {
-            var existingEntry = parentsRoot.Elements("Parent")
-                .FirstOrDefault(p => (string)p.Element("PlaylistId") == playlistId);
-
-            if (existingEntry != null)
-            {
-                var parentEl = existingEntry.Element("ParentPlatformCategoryName");
-                if (parentEl == null)
-                {
-                    existingEntry.Add(new XElement("ParentPlatformCategoryName", parentCategory));
-                    changed = true;
-                    RommLogger.Log($"Updated playlist '{playlistId}' parent to '{parentCategory}' in Parents.xml");
-                }
-                else if (parentEl.Value != parentCategory)
-                {
-                    parentEl.Value = parentCategory;
-                    changed = true;
-                    RommLogger.Log($"Updated playlist '{playlistId}' parent to '{parentCategory}' in Parents.xml");
-                }
-            }
-            else
-            {
-                parentsRoot.Add(new XElement("Parent",
-                    new XElement("PlatformName"),
-                    new XElement("PlaylistId", playlistId),
-                    new XElement("PlatformCategoryName"),
-                    new XElement("ParentPlatformName"),
-                    new XElement("ParentPlaylistId"),
-                    new XElement("ParentPlatformCategoryName", parentCategory)
-                ));
-                changed = true;
-                RommLogger.Log($"Created playlist link '{playlistId}' -> '{parentCategory}' in Parents.xml");
+                RommLogger.LogError($"Failed to launch hierarchy CLI: {ex.Message}");
             }
         }
 
@@ -1049,7 +817,10 @@ namespace RommPlugin.Services
 
                     if (settings.CurrentPlatforms == null || settings.CurrentPlatforms.Count == 0)
                     {
-                        MessageBox.Show("No RomM platforms available.");
+                        using (var form = new ConfirmForm(LocaleManager.Get("sync.no_platforms")))
+                        {
+                            form.ShowDialog();
+                        }
                         return;
                     }
 
@@ -1081,7 +852,10 @@ namespace RommPlugin.Services
 
                     if (rommGamesOnly == null || rommGamesOnly.Count == 0)
                     {
-                        MessageBox.Show("No RomM games available.");
+                        using (var form = new ConfirmForm(LocaleManager.Get("sync.no_games")))
+                        {
+                            form.ShowDialog();
+                        }
                         return;
                     }
 
@@ -1166,16 +940,18 @@ namespace RommPlugin.Services
                     if (failedGames.Count > 0)
                     {
                         RommLogger.LogError($"Update failed for {failedGames.Count} game(s). Check the log file for details.");
-                        MessageBox.Show(
-                            string.Format(LocaleManager.Get("sync.failed"), failedGames.Count),
-                            LocaleManager.Get("sync.failed_title"),
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Warning
-                        );
+                        using (var form = new ConfirmForm(
+                            string.Format(LocaleManager.Get("sync.failed"), failedGames.Count)))
+                        {
+                            form.ShowDialog();
+                        }
                     }
                     else
                     {
-                        MessageBox.Show(LocaleManager.Get("sync.all_metadata_updated"));
+                        using (var form = new ConfirmForm(LocaleManager.Get("sync.all_metadata_updated")))
+                        {
+                            form.ShowDialog();
+                        }
                     }
                 }
             );
@@ -1502,6 +1278,43 @@ namespace RommPlugin.Services
             var invalid = Path.GetInvalidFileNameChars();
             var sanitized = new string(name.Where(c => !invalid.Contains(c)).ToArray());
             return sanitized.Trim();
+        }
+
+        private void BackupXml(string fileName)
+        {
+            try
+            {
+                var dataDir = Path.GetFullPath(Path.Combine(RommPaths.PluginFolder, "..", "..", "Data"));
+                var backupDir = Path.Combine(dataDir, "RomM_Backups");
+                if (!Directory.Exists(backupDir))
+                    Directory.CreateDirectory(backupDir);
+
+                var sourcePath = Path.Combine(dataDir, fileName);
+                if (!File.Exists(sourcePath))
+                    return;
+
+                var baseName = Path.GetFileNameWithoutExtension(fileName);
+                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                var backupPath = Path.Combine(backupDir, $"{baseName}_{timestamp}.xml");
+
+                File.Copy(sourcePath, backupPath, true);
+                RommLogger.Log($"Backup created: {Path.GetFileName(backupPath)}");
+
+                var backups = Directory.GetFiles(backupDir, baseName + "_*.xml")
+                    .OrderByDescending(f => File.GetLastWriteTime(f))
+                    .ToList();
+
+                while (backups.Count >= 5)
+                {
+                    var oldest = backups.Last();
+                    backups.RemoveAt(backups.Count - 1);
+                    try { File.Delete(oldest); } catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                RommLogger.Log($"Backup warning for {fileName}: {ex.Message}");
+            }
         }
 
         public async Task<RommStats> FetchLatestStatsFromRomm(int romId)

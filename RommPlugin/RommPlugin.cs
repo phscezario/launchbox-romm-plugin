@@ -100,6 +100,13 @@ namespace RommPlugin
                 {
                     var lastAutoSync = GetLastAutoSyncAt();
                     RommLogger.Log($"[DIAG] Last auto sync: {lastAutoSync}, interval days: {settings.AutoSyncIntervalDays}");
+
+                    if (settings.AutoSyncIntervalDays == -1)
+                    {
+                        RommLogger.Log("Auto sync disabled (interval = -1)");
+                    }
+                    else
+                    {
                     var shouldSync = settings.AutoSyncIntervalDays == 0
                         || lastAutoSync == null
                         || (DateTime.UtcNow - lastAutoSync.Value).TotalDays >= settings.AutoSyncIntervalDays;
@@ -123,6 +130,7 @@ namespace RommPlugin
                             SaveLastAutoSyncAt(DateTime.UtcNow);
                         }
                         }
+                    }
                     }
                 }
                 catch (Exception ex)

@@ -69,6 +69,7 @@
     <Compile Include="MenuItems\Buttons\RommInstallMenuItem.cs" />
     <Compile Include="MenuItems\Buttons\RommUninstallMenuItem.cs" />
     <Compile Include="MenuItems\Buttons\RommUpdateMenuItem.cs" />
+    <Compile Include="MenuItems\Buttons\RommRemoveAllMenuItem.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ApiClient\RommApiClient.cs" />
     <Compile Include="MenuItems\RommMenuItem.cs" />

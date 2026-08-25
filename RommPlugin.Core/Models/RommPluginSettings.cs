@@ -46,6 +46,8 @@ namespace RommPlugin.Core.Models
         public int SaveBatchSize { get; set; } = 50;
 
         public List<RommCurrentPlatform> CurrentPlatforms { get; set; } = new List<RommCurrentPlatform>();
+
+        public List<int> LastSelectedPlatformIds { get; set; } = new List<int>();
     }
 
     public class RommCurrentPlatform

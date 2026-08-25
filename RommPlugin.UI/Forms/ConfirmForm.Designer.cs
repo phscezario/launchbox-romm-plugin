@@ -17,28 +17,34 @@ namespace RommPlugin.UI.Forms
 
         private void InitializeComponent()
         {
-            this.lblMessage = new System.Windows.Forms.Label();
+            this.txtMessage = new System.Windows.Forms.TextBox();
             this.chkSuppress = new System.Windows.Forms.CheckBox();
             this.btnOk = new System.Windows.Forms.Button();
             this.SuspendLayout();
             //
-            // lblMessage
+            // txtMessage
             //
-            this.lblMessage.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            this.txtMessage.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.lblMessage.ForeColor = System.Drawing.Color.White;
-            this.lblMessage.Location = new System.Drawing.Point(20, 20);
-            this.lblMessage.Name = "lblMessage";
-            this.lblMessage.Size = new System.Drawing.Size(350, 60);
-            this.lblMessage.TabIndex = 0;
-            this.lblMessage.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.txtMessage.BackColor = System.Drawing.Color.FromArgb(30, 30, 30);
+            this.txtMessage.BorderStyle = System.Windows.Forms.BorderStyle.None;
+            this.txtMessage.ForeColor = System.Drawing.Color.White;
+            this.txtMessage.Location = new System.Drawing.Point(20, 20);
+            this.txtMessage.Multiline = true;
+            this.txtMessage.Name = "txtMessage";
+            this.txtMessage.ReadOnly = true;
+            this.txtMessage.ScrollBars = System.Windows.Forms.ScrollBars.Both;
+            this.txtMessage.WordWrap = false;
+
+            this.txtMessage.Size = new System.Drawing.Size(420, 120);
+            this.txtMessage.TabIndex = 0;
             //
             // chkSuppress
             //
             this.chkSuppress.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
             this.chkSuppress.ForeColor = System.Drawing.Color.LightGray;
-            this.chkSuppress.Location = new System.Drawing.Point(20, 90);
+            this.chkSuppress.Location = new System.Drawing.Point(20, 150);
             this.chkSuppress.Name = "chkSuppress";
             this.chkSuppress.Size = new System.Drawing.Size(350, 24);
             this.chkSuppress.TabIndex = 1;
@@ -50,7 +56,7 @@ namespace RommPlugin.UI.Forms
             this.btnOk.BackColor = System.Drawing.Color.FromArgb(60, 60, 60);
             this.btnOk.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnOk.ForeColor = System.Drawing.Color.White;
-            this.btnOk.Location = new System.Drawing.Point(280, 125);
+            this.btnOk.Location = new System.Drawing.Point(280, 185);
             this.btnOk.Name = "btnOk";
             this.btnOk.Size = new System.Drawing.Size(90, 30);
             this.btnOk.TabIndex = 2;
@@ -64,8 +70,8 @@ namespace RommPlugin.UI.Forms
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(30, 30, 30);
-            this.ClientSize = new System.Drawing.Size(390, 170);
-            this.Controls.Add(this.lblMessage);
+            this.ClientSize = new System.Drawing.Size(390, 230);
+            this.Controls.Add(this.txtMessage);
             this.Controls.Add(this.chkSuppress);
             this.Controls.Add(this.btnOk);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
@@ -79,7 +85,7 @@ namespace RommPlugin.UI.Forms
 
         #endregion
 
-        private System.Windows.Forms.Label lblMessage;
+        private System.Windows.Forms.TextBox txtMessage;
         private System.Windows.Forms.CheckBox chkSuppress;
         private System.Windows.Forms.Button btnOk;
 

@@ -80,7 +80,7 @@ namespace RommPlugin.UI.Forms
             publicScreenshots.Checked = settings.PublicScreenshots;
             updateStatsOnLaunch.Checked = settings.UpdateStatsOnGameLaunch;
             isAdmin.Checked = settings.IsAdmin;
-            nudAutoSyncInterval.Value = Math.Max(0, Math.Min(365, settings.AutoSyncIntervalDays));
+            nudAutoSyncInterval.Value = Math.Max(-1, Math.Min(365, settings.AutoSyncIntervalDays));
             nudLogRetention.Value = Math.Max(1, Math.Min(365, settings.LogRetentionDays));
             nudSaveBatchSize.Value = Math.Max(1, Math.Min(500, settings.SaveBatchSize));
 

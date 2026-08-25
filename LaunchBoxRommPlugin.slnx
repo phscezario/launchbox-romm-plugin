@@ -16,4 +16,5 @@
   <Project Path="RommPlugin.UI/RommPlugin.UI.csproj" Id="2f245f99-b82d-44dc-898d-554d194e55e4" />
   <Project Path="RommPlugin/RommPlugin.csproj" Id="2f182437-32d3-404d-8642-240e4b206d6a" />
   <Project Path="RommPlugin.Tests/RommPlugin.Tests.csproj" Id="a1b2c3d4-e5f6-7890-abcd-ef1234567890" />
+  <Project Path="RommPlugin.CLI/RommPlugin.CLI.csproj" Id="b2c3d4e5-f6a7-8901-bcde-f12345678901" />
 </Solution>

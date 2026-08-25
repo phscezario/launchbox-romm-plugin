@@ -5,6 +5,8 @@
     "menu.settings": "RomM: Settings",
     "menu.game_manager": "RomM: Game Manager",
     "menu.reset_server": "RomM: Reset Server",
+    "menu.remove_all": "RomM: Remove All",
+    "remove_all.confirm": "Are you sure you want to remove ALL RomM platforms, categories, and playlists from LaunchBox? This action creates a backup before removing.",
 
     "gm.title": "RomM Game Manager",
     "gm.uninstall": "Uninstall",
@@ -73,7 +75,7 @@
     "settings.is_admin_hint": "If enabled, sync will also push local changes to server.",
     "settings.behavior": "Behavior:",
     "settings.auto_sync_interval": "Auto sync interval (days):",
-    "settings.auto_sync_interval_hint": "Interval in days. 0 = sync every time\nLaunchBox starts.",
+    "settings.auto_sync_interval_hint": "Interval in days.\n-1 = disabled\n0 = sync every time LaunchBox starts\n>0 = sync every N days",
     "settings.language": "Language:",
     "settings.save": "Save",
     "settings.cancel": "Cancel",
@@ -98,7 +100,7 @@
     "sync.starting": "Starting sync...",
     "sync.completed": "RomM sync completed successfully.\n\nYou may need to restart LaunchBox to apply menu organization changes.",
     "sync.already_running": "Sync is already in progress. Please wait.",
-    "sync.new_platforms": "RomM new platforms detected:\n\n{0}\n\nYou can sync them later.",
+    "sync.new_platforms": "RomM new platforms detected:\r\n\r\n{0}\r\n\r\nYou can sync them later.",
     "sync.no_platforms": "No RomM platforms available.",
     "sync.no_games": "No RomM games available.",
     "sync.all_metadata_updated": "All metadata on server has been updated with local metadata",
@@ -189,6 +191,11 @@
     "update.pending_title": "RomM Plugin - Pending Update",
     "update.pending_message": "An update ({0}) is pending.\n\nLaunchBox needs to be restarted to apply the update.\nDo you want to restart now?",
     "update.no_asset": "No downloadable asset found for update",
-    "update.current_version": "You are on the latest version ({0})!"
+    "update.current_version": "You are on the latest version ({0})!",
+
+    "restart.title": "RomM Plugin - Restart Required",
+    "restart.message": "LaunchBox needs to be restarted to apply hierarchy and playlist changes.\nDo you want to restart now?",
+    "restart.now": "Restart Now",
+    "restart.later": "Restart Later"
   }
 }
