@@ -272,8 +272,11 @@ namespace RommPlugin.Services
                             {
                                 var localHash = RommMetadataComparer.ComputeLocalMetadataHash(existingGame);
                                 var savedLocalHash = GetCustomField(existingGame, GameCustomFields.LocalMetadataHash);
+                                var savedRemoteHash = GetCustomField(existingGame, GameCustomFields.RemoteMetadataHash);
 
-                                if (!settings.ForceFullResync && localHash == savedLocalHash)
+                                RommLogger.Log($"[HASH-COMPARE] Game {rommGame.Id} '{rommGame.Name}': localHash={localHash} savedLocalHash={savedLocalHash ?? "null"} savedRemoteHash={savedRemoteHash ?? "null"} remoteHash={remoteHash} localMatch={localHash == savedLocalHash} remoteMatch={remoteHash == savedRemoteHash}");
+
+                                if (!settings.ForceFullResync && localHash == savedLocalHash && remoteHash == savedRemoteHash)
                                 {
                                     completedGames++;
                                     continue;

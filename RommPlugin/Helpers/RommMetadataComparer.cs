@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 using Unbroken.LaunchBox.Plugins.Data;
 
@@ -169,7 +170,7 @@ namespace RommPlugin.Helpers
                 Notes = StripHtmlTags(game.Notes ?? ""),
                 ReleaseDate = game.ReleaseDate.HasValue
                     ? (long?)new DateTimeOffset(
-                        DateTime.SpecifyKind(game.ReleaseDate.Value, DateTimeKind.Utc)
+                        DateTime.SpecifyKind(game.ReleaseDate.Value.Date, DateTimeKind.Utc)
                     ).ToUnixTimeSeconds()
                     : (long?)null,
                 MaxPlayers = game.MaxPlayers,
@@ -310,11 +311,25 @@ namespace RommPlugin.Helpers
                 string.Join(",", snapshot.Publishers ?? new List<string>()),
                 screenshotFingerprints ?? "");
 
+            RommLogger.Log($"[HASH-DIAG] Game '{game.Title}' Platform='{game.Platform}'");
+            RommLogger.Log($"[HASH-DIAG]   game.ReleaseDate={(game.ReleaseDate.HasValue ? game.ReleaseDate.Value.ToString("o") : "null")} Kind={game.ReleaseDate?.Kind}");
+            RommLogger.Log($"[HASH-DIAG]   snapshot.ReleaseDate={snapshot.ReleaseDate}");
+            RommLogger.Log($"[HASH-DIAG]   game.CommunityStarRating={game.CommunityStarRating} snapshot.F2={snapshot.CommunityRating.ToString("F2")}");
+            RommLogger.Log($"[HASH-DIAG]   game.Notes={(game.Notes != null ? $"len={game.Notes.Length}" : "null")}");
+            RommLogger.Log($"[HASH-DIAG]   game.GenresString='{game.GenresString}'");
+            RommLogger.Log($"[HASH-DIAG]   game.Developer='{game.Developer}'");
+            RommLogger.Log($"[HASH-DIAG]   game.Publisher='{game.Publisher}'");
+            RommLogger.Log($"[HASH-DIAG]   game.ReleaseType='{game.ReleaseType}' game.PlayMode='{game.PlayMode}' game.VideoUrl='{game.VideoUrl}'");
+            RommLogger.Log($"[HASH-DIAG]   game.WikipediaUrl='{game.WikipediaUrl}' game.Rating='{game.Rating}'");
+            RommLogger.Log($"[HASH-DIAG]   payload_first100='{payload.Substring(0, Math.Min(100, payload.Length))}'");
+
             using (var sha256 = System.Security.Cryptography.SHA256.Create())
             {
                 var bytes = System.Text.Encoding.UTF8.GetBytes(payload);
                 var hash = sha256.ComputeHash(bytes);
-                return Convert.ToBase64String(hash);
+                var result = Convert.ToBase64String(hash);
+                RommLogger.Log($"[HASH-DIAG]   => hash={result}");
+                return result;
             }
         }
     }
