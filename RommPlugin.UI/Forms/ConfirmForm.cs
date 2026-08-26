@@ -17,6 +17,7 @@ namespace RommPlugin.UI.Forms
             InitializeComponent();
             LoadIcon();
             ApplyLocale();
+            ActiveControl = btnCancel;
 
             txtMessage.Text = message;
 

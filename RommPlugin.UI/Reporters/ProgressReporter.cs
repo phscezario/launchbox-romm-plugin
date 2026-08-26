@@ -1,4 +1,5 @@
-﻿using RommPlugin.UI.Forms;
+﻿using System.Threading;
+using RommPlugin.UI.Forms;
 using RommPlugin.Core.Interfaces;
 
 namespace RommPlugin.UI.Reporters
@@ -7,10 +8,13 @@ namespace RommPlugin.UI.Reporters
     {
         private readonly ProgressForm _form;
 
-        public ProgressFormReporter(ProgressForm form)
+        public ProgressFormReporter(ProgressForm form, CancellationToken cancellationToken)
         {
             _form = form;
+            CancellationToken = cancellationToken;
         }
+
+        public CancellationToken CancellationToken { get; }
 
         public void SetTitle(string title) => _form.SetTitle(title);
         public void SetStatus(string message) => _form.SetStatus(message);

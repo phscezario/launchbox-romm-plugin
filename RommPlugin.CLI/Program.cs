@@ -238,6 +238,14 @@ namespace RommPlugin.CLI
                 Console.WriteLine("=== Remove All RomM (Full) ===");
                 LogToFile("RemoveAllRommFull started");
 
+                if (restart && !string.IsNullOrEmpty(launchBoxExe) && File.Exists(launchBoxExe))
+                {
+                    Console.WriteLine("Stopping LaunchBox...");
+                    LogToFile("RemoveAllRommFull: killing LaunchBox before cleanup");
+                    KillLaunchBox();
+                    System.Threading.Thread.Sleep(2000);
+                }
+
                 var baseResult = RemoveAllRomm(dataDir);
                 if (baseResult != 0) return baseResult;
 
@@ -250,7 +258,8 @@ namespace RommPlugin.CLI
 
                 if (restart && !string.IsNullOrEmpty(launchBoxExe) && File.Exists(launchBoxExe))
                 {
-                    RestartLaunchBox(launchBoxExe);
+                    Console.WriteLine("Restarting LaunchBox...");
+                    StartLaunchBox(launchBoxExe);
                 }
 
                 return 0;
@@ -1023,13 +1032,12 @@ namespace RommPlugin.CLI
                 var settings = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
                 if (settings == null) return;
 
-                settings["CurrentPlatforms"] = new List<object>();
                 settings["LastSelectedPlatformIds"] = new List<object>();
 
                 var output = JsonConvert.SerializeObject(settings, Formatting.Indented);
                 File.WriteAllText(settingsPath, output);
-                Console.WriteLine("Cleared platforms from settings.json");
-                LogToFile("RemoveAllRommFull: cleared CurrentPlatforms and LastSelectedPlatformIds");
+                Console.WriteLine("Cleared platform selection from settings.json");
+                LogToFile("RemoveAllRommFull: cleared LastSelectedPlatformIds");
             }
             catch (Exception ex)
             {
@@ -1037,25 +1045,29 @@ namespace RommPlugin.CLI
             }
         }
 
-        static void RestartLaunchBox(string launchBoxExe)
+        static void KillLaunchBox()
         {
             var processes = Process.GetProcessesByName("LaunchBox");
+            Console.WriteLine($"Found {processes.Length} LaunchBox process(es)");
             LogToFile($"Found {processes.Length} LaunchBox process(es)");
             foreach (var proc in processes)
             {
                 try
                 {
                     proc.Kill();
+                    Console.WriteLine($"Killed process: {proc.ProcessName} (PID: {proc.Id})");
                     LogToFile($"Killed process: {proc.ProcessName} (PID: {proc.Id})");
                 }
                 catch (Exception ex)
                 {
+                    Console.WriteLine($"Could not kill process {proc.ProcessName}: {ex.Message}");
                     LogToFile($"Could not kill process {proc.ProcessName}: {ex.Message}");
                 }
             }
+        }
 
-            System.Threading.Thread.Sleep(2000);
-
+        static void StartLaunchBox(string launchBoxExe)
+        {
             try
             {
                 Process.Start(new ProcessStartInfo
@@ -1063,12 +1075,21 @@ namespace RommPlugin.CLI
                     FileName = launchBoxExe,
                     WorkingDirectory = Path.GetDirectoryName(launchBoxExe)
                 });
+                Console.WriteLine("LaunchBox restarted successfully");
                 LogToFile("LaunchBox restarted successfully");
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Could not restart LaunchBox: {ex.Message}");
                 LogToFile($"Could not restart LaunchBox: {ex.Message}");
             }
+        }
+
+        static void RestartLaunchBox(string launchBoxExe)
+        {
+            KillLaunchBox();
+            System.Threading.Thread.Sleep(2000);
+            StartLaunchBox(launchBoxExe);
         }
     }
 

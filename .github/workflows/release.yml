@@ -30,9 +30,6 @@ jobs:
       - name: Restore NuGet Packages
         run: nuget restore LaunchBoxRommPlugin.slnx
 
-      - name: Build Solution (Release)
-        run: msbuild LaunchBoxRommPlugin.slnx /p:Configuration=Release /p:Version=${{ steps.vars.outputs.VERSION }}
-
       - name: Extract version from tag
         id: vars
         shell: powershell
@@ -45,6 +42,9 @@ jobs:
           }
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
 
+      - name: Build Solution (Release)
+        run: msbuild LaunchBoxRommPlugin.slnx /p:Configuration=Release /p:Version=${{ steps.vars.outputs.VERSION }}
+
       - name: Create package folder structure
         shell: cmd
         run: |
@@ -54,11 +54,13 @@ jobs:
       - name: Copy required binaries
         shell: cmd
         run: |
-          copy build\Release\Newtonsoft.Json.* "package\RomM LaunchBox Integration\"
-          copy build\Release\RommPlugin.CLI.* "package\RomM LaunchBox Integration\"
-          copy build\Release\RommPlugin.Core.* "package\RomM LaunchBox Integration\"
-          copy build\Release\RommPlugin.* "package\RomM LaunchBox Integration\"
-          copy build\Release\RommPlugin.UI.* "package\RomM LaunchBox Integration\"
+          copy build\Release\Newtonsoft.Json.dll "package\RomM LaunchBox Integration\"
+          copy build\Release\RommPlugin.CLI.exe "package\RomM LaunchBox Integration\"
+          copy build\Release\RommPlugin.CLI.exe.config "package\RomM LaunchBox Integration\"
+          copy build\Release\RommPlugin.Core.dll "package\RomM LaunchBox Integration\"
+          copy build\Release\RommPlugin.dll "package\RomM LaunchBox Integration\"
+          copy build\Release\RommPlugin.dll.config "package\RomM LaunchBox Integration\"
+          copy build\Release\RommPlugin.UI.dll "package\RomM LaunchBox Integration\"
 
       - name: Copy Images folder
         shell: cmd

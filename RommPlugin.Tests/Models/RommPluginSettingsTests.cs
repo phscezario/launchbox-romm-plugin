@@ -17,6 +17,7 @@ namespace RommPlugin.Tests.Models
             Assert.Equal("en", settings.Language);
             Assert.False(settings.ForceFullResync);
             Assert.False(settings.ForcePushToServer);
+            Assert.Null(settings.LastAutoSyncAt);
         }
 
         [Fact]
@@ -78,8 +79,6 @@ namespace RommPlugin.Tests.Models
             Assert.Empty(syncInfo.CompletedGameIdsByPlatform);
             Assert.NotNull(syncInfo.UnselectedPlatformIds);
             Assert.Empty(syncInfo.UnselectedPlatformIds);
-            Assert.NotNull(syncInfo.CurrentPlatforms);
-            Assert.Empty(syncInfo.CurrentPlatforms);
         }
 
         [Fact]
@@ -94,10 +93,6 @@ namespace RommPlugin.Tests.Models
                     { 10, new System.Collections.Generic.List<int> { 100, 200 } }
                 },
                 UnselectedPlatformIds = new System.Collections.Generic.List<int> { 4, 5 },
-                CurrentPlatforms = new System.Collections.Generic.List<RommCurrentPlatform>
-                {
-                    new RommCurrentPlatform { Name = "RomM | NES", Id = 1 }
-                }
             };
 
             var json = JsonConvert.SerializeObject(syncInfo);
@@ -108,9 +103,6 @@ namespace RommPlugin.Tests.Models
             Assert.Single(deserialized.CompletedGameIdsByPlatform);
             Assert.Equal(2, deserialized.CompletedGameIdsByPlatform[10].Count);
             Assert.Equal(2, deserialized.UnselectedPlatformIds.Count);
-            Assert.Single(deserialized.CurrentPlatforms);
-            Assert.Equal("RomM | NES", deserialized.CurrentPlatforms[0].Name);
-            Assert.Equal(1, deserialized.CurrentPlatforms[0].Id);
         }
 
         [Fact]
@@ -126,8 +118,6 @@ namespace RommPlugin.Tests.Models
             Assert.Empty(syncInfo.CompletedGameIdsByPlatform);
             Assert.NotNull(syncInfo.UnselectedPlatformIds);
             Assert.Empty(syncInfo.UnselectedPlatformIds);
-            Assert.NotNull(syncInfo.CurrentPlatforms);
-            Assert.Empty(syncInfo.CurrentPlatforms);
         }
     }
 }

@@ -89,21 +89,31 @@ namespace RommPlugin.Services
 
                     if (headless)
                     {
-                        rommPlatforms = allRommPlatforms
-                            .Where(p =>
-                            {
-                                var name = $"RomM | {(string.IsNullOrEmpty(p.CustomName) ? p.Name : p.CustomName)}";
-                                return localPlatformNames.Contains(name);
-                            })
-                            .ToList();
+                        if (settings.LastSelectedPlatformIds != null && settings.LastSelectedPlatformIds.Count > 0)
+                        {
+                            var selectedIds = new HashSet<int>(settings.LastSelectedPlatformIds);
+                            rommPlatforms = allRommPlatforms
+                                .Where(p => selectedIds.Contains(p.Id))
+                                .ToList();
+                            RommLogger.Log($"Auto-sync: {rommPlatforms.Count} pre-selected platforms to sync (from {allRommPlatforms.Count} on server)");
+                        }
+                        else
+                        {
+                            rommPlatforms = allRommPlatforms
+                                .Where(p =>
+                                {
+                                    var name = $"RomM | {(string.IsNullOrEmpty(p.CustomName) ? p.Name : p.CustomName)}";
+                                    return localPlatformNames.Contains(name);
+                                })
+                                .ToList();
+                            RommLogger.Log($"Auto-sync: {rommPlatforms.Count} already-synced platforms to sync (from {allRommPlatforms.Count} on server)");
+                        }
 
                         if (rommPlatforms.Count == 0)
                         {
-                            RommLogger.Log("No already-synced platforms found on RomM server. Sync skipped.");
+                            RommLogger.Log("No platforms to sync. Sync skipped.");
                             return;
                         }
-
-                        RommLogger.Log($"Auto-sync: {rommPlatforms.Count} platforms to sync (from {allRommPlatforms.Count} on server)");
                     }
                     else
                     {
@@ -195,6 +205,8 @@ namespace RommPlugin.Services
 
                     foreach (var rommPlatform in rommPlatforms)
                     {
+                        progress.CancellationToken.ThrowIfCancellationRequested();
+
                         var name = !string.IsNullOrWhiteSpace(rommPlatform.CustomName)
                             ? rommPlatform.CustomName
                             : rommPlatform.Name;
@@ -255,6 +267,8 @@ namespace RommPlugin.Services
 
                         foreach (var rommGame in rommGames)
                         {
+                            progress.CancellationToken.ThrowIfCancellationRequested();
+
                             if (!platformProgress)
                             {
                                 progress.SetIndeterminate(false);
@@ -484,8 +498,6 @@ namespace RommPlugin.Services
                         settings.ForcePushToServer = false;
                         RommPluginStorage.Save(settings);
                     }
-
-                    CheckAndSavePlatforms(rommPlatforms, platforms);
 
                     rommGamesOnly = dataManager.GetAllGames()
                         .Where(g => g.Platform != null && g.Platform.StartsWith("RomM | "))
@@ -772,58 +784,6 @@ namespace RommPlugin.Services
             return game.GetAllCustomFields().FirstOrDefault(f => f.Name == name)?.Value;
         }
 
-        private void CheckAndSavePlatforms(List<RommPlatform> rommPlatforms, List<IPlatform> launchboxPlatforms)
-        {
-            var settings = RommPluginStorage.Load();
-            var manager = PluginHelper.DataManager;
-            var serverIds = new HashSet<int>(rommPlatforms.Select(p => p.Id));
-
-            foreach (var rommPlatform in rommPlatforms)
-            {
-                var name = !string.IsNullOrWhiteSpace(rommPlatform.CustomName)
-                    ? rommPlatform.CustomName
-                    : rommPlatform.Name;
-
-                var platformName = $"RomM | {name}";
-
-                var existing = settings.CurrentPlatforms
-                    .FirstOrDefault(p => p.Id == rommPlatform.Id);
-
-                if (existing == null)
-                {
-                    settings.CurrentPlatforms.Add(new RommCurrentPlatform
-                    {
-                        Id = rommPlatform.Id,
-                        Name = platformName
-                    });
-                }
-                else
-                {
-                    existing.Name = platformName;
-                }
-            }
-
-            var removedPlatforms = settings.CurrentPlatforms
-                .Where(p => !serverIds.Contains(p.Id))
-                .ToList();
-
-            foreach (var removed in removedPlatforms)
-            {
-                var platform = launchboxPlatforms
-                    .FirstOrDefault(p => p.Name == removed.Name);
-
-                if (platform != null)
-                {
-                    manager.TryRemovePlatform(platform);
-                }
-
-                settings.CurrentPlatforms.Remove(removed);
-            }
-
-            RommPluginStorage.Save(settings);
-            manager.Save();
-        }
-
         public async Task UpdateServerMetadata(string username, string password, string clientApiToken = null)
         {
             await ProgressRunner.RunAsync(
@@ -840,9 +800,9 @@ namespace RommPlugin.Services
                     }
 
                     var dataManager = PluginHelper.DataManager;
-                    var settings = RommPluginStorage.Load();
 
-                    if (settings.CurrentPlatforms == null || settings.CurrentPlatforms.Count == 0)
+                    var allRommPlatforms = await _api.GetPlatformsAsync();
+                    if (allRommPlatforms == null || allRommPlatforms.Count == 0)
                     {
                         using (var form = new ConfirmForm(LocaleManager.Get("sync.no_platforms")))
                         {
@@ -851,11 +811,11 @@ namespace RommPlugin.Services
                         return;
                     }
 
-                    var list = settings.CurrentPlatforms
+                    var list = allRommPlatforms
                         .Select(p => new PlatformSelection
                         {
                             Id = p.Id,
-                            Name = p.Name,
+                            Name = $"RomM | {(string.IsNullOrEmpty(p.CustomName) ? p.Name : p.CustomName)}",
                             Selected = true
                         })
                         .ToList();

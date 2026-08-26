@@ -18,6 +18,7 @@ namespace RommPlugin.UI.Forms
             InitializeComponent();
             LoadIcon();
             ApplyLocale();
+            ActiveControl = btnCancel;
         }
 
         private void ApplyLocale()

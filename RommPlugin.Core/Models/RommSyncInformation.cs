@@ -11,7 +11,5 @@ namespace RommPlugin.Core.Models
         public Dictionary<int, List<int>> CompletedGameIdsByPlatform { get; set; } = new Dictionary<int, List<int>>();
 
         public List<int> UnselectedPlatformIds { get; set; } = new List<int>();
-
-        public List<RommCurrentPlatform> CurrentPlatforms { get; set; } = new List<RommCurrentPlatform>();
     }
 }

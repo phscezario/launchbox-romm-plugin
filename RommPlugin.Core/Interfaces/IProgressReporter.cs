@@ -1,4 +1,6 @@
-﻿namespace RommPlugin.Core.Interfaces
+﻿using System.Threading;
+
+namespace RommPlugin.Core.Interfaces
 {
     public interface IProgressReporter
     {
@@ -6,5 +8,6 @@
         void SetStatus(string message);
         void SetProgress(int value);
         void SetIndeterminate(bool value);
+        CancellationToken CancellationToken { get; }
     }
 }

@@ -18,6 +18,7 @@
   "DetailedSyncLogs": false,
   "IsAdmin": false,
   "ForcePushToServer": false,
+  "LastAutoSyncAt": null,
   "AutoSyncEnabled": false,
   "AutoSyncIntervalDays": 0
 }

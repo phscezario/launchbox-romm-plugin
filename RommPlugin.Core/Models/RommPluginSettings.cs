@@ -1,16 +1,10 @@
-﻿using System.Collections.Generic;
-using System.Runtime.Serialization;
-using Newtonsoft.Json;
+﻿using System;
+using System.Collections.Generic;
 
 namespace RommPlugin.Core.Models
 {
     public class RommPluginSettings
     {
-        [OnDeserialized]
-        internal void OnDeserialized(System.Runtime.Serialization.StreamingContext context)
-        {
-            CurrentPlatforms = CurrentPlatforms ?? new List<RommCurrentPlatform>();
-        }
         public string RommBaseUrl { get; set; }
 
         public string Username { get; set; }
@@ -33,6 +27,8 @@ namespace RommPlugin.Core.Models
 
         public bool ForcePushToServer { get; set; }
 
+        public DateTime? LastAutoSyncAt { get; set; }
+
         public int LogRetentionDays { get; set; } = 7;
 
         public bool PublicScreenshots { get; set; } = true;
@@ -47,15 +43,6 @@ namespace RommPlugin.Core.Models
 
         public int SaveBatchSize { get; set; } = 50;
 
-        public List<RommCurrentPlatform> CurrentPlatforms { get; set; } = new List<RommCurrentPlatform>();
-
         public List<int> LastSelectedPlatformIds { get; set; } = new List<int>();
-    }
-
-    public class RommCurrentPlatform
-    {
-        public string Name { get; set; }
-
-        public int Id { get; set; }
     }
 }

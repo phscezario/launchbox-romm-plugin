@@ -49,7 +49,7 @@ namespace RommPlugin.MenuItems.Buttons
                     FileName = cliPath,
                     Arguments = $"--remove-all \"{dataDir}\" --restart \"{launchBoxExe}\"",
                     UseShellExecute = false,
-                    CreateNoWindow = true,
+                    CreateNoWindow = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true
                 };

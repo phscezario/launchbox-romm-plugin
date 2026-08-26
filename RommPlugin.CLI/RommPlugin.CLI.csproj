@@ -4,6 +4,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>latest</LangVersion>
+    <DebugType>none</DebugType>
   </PropertyGroup>
 
   <ItemGroup>

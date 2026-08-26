@@ -16,12 +16,19 @@ namespace RommPlugin.UI.Helpers
             Func<IProgressReporter, Task> work)
         {
             var tcs = new TaskCompletionSource<object>();
+            var cts = new CancellationTokenSource();
 
             var uiThread = new Thread(() =>
             {
                 using (var form = new ProgressForm())
                 {
-                    var reporter = new ProgressFormReporter(form);
+                    var reporter = new ProgressFormReporter(form, cts.Token);
+
+                    form.FormClosing += (_, __) =>
+                    {
+                        cts.Cancel();
+                        tcs.TrySetResult(null);
+                    };
 
                     form.Load += async (_, __) =>
                     {
@@ -31,6 +38,9 @@ namespace RommPlugin.UI.Helpers
                             form.SetIndeterminate(true);
 
                             await work(reporter);
+                        }
+                        catch (OperationCanceledException)
+                        {
                         }
                         catch (Exception ex)
                         {
@@ -43,7 +53,7 @@ namespace RommPlugin.UI.Helpers
                         }
                         finally
                         {
-                            form.Close();
+                            try { if (!form.IsDisposed) form.Close(); } catch { }
                             tcs.TrySetResult(null);
                         }
                     };

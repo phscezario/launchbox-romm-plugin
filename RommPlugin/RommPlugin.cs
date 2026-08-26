@@ -107,9 +107,12 @@ namespace RommPlugin
                     }
                     else
                     {
-                    var shouldSync = settings.AutoSyncIntervalDays == 0
+                    var hasSelection = settings.LastSelectedPlatformIds != null && settings.LastSelectedPlatformIds.Count > 0;
+
+                    var shouldSync = hasSelection && (
+                        settings.AutoSyncIntervalDays == 0
                         || lastAutoSync == null
-                        || (DateTime.UtcNow - lastAutoSync.Value).TotalDays >= settings.AutoSyncIntervalDays;
+                        || (DateTime.UtcNow - lastAutoSync.Value).TotalDays >= settings.AutoSyncIntervalDays);
 
                     if (shouldSync)
                     {
@@ -414,21 +417,8 @@ namespace RommPlugin
         {
             try
             {
-                var game = PluginHelper.DataManager.GetAllGames()
-                    .Where(g => g.Platform != null && g.Platform.StartsWith("RomM | "))
-                    .OrderBy(g => g.Id)
-                    .FirstOrDefault();
-
-                if (game == null) return null;
-
-                var value = game.GetAllCustomFields()
-                    .FirstOrDefault(f => f.Name == GameCustomFields.LastAutoSyncAt)?.Value;
-
-                if (value != null && DateTime.TryParse(value, null,
-                    System.Globalization.DateTimeStyles.RoundtripKind, out var result))
-                {
-                    return result;
-                }
+                var settings = RommPluginStorage.Load();
+                return settings.LastAutoSyncAt;
             }
             catch
             {
@@ -441,22 +431,9 @@ namespace RommPlugin
         {
             try
             {
-                var game = PluginHelper.DataManager.GetAllGames()
-                    .Where(g => g.Platform != null && g.Platform.StartsWith("RomM | "))
-                    .OrderBy(g => g.Id)
-                    .FirstOrDefault();
-
-                if (game == null) return;
-
-                var field = game.GetAllCustomFields().FirstOrDefault(f => f.Name == GameCustomFields.LastAutoSyncAt);
-                if (field == null)
-                {
-                    field = game.AddNewCustomField();
-                    field.Name = GameCustomFields.LastAutoSyncAt;
-                }
-                field.Value = dateTime.ToString("o");
-
-                PluginHelper.DataManager.Save();
+                var settings = RommPluginStorage.Load();
+                settings.LastAutoSyncAt = dateTime;
+                RommPluginStorage.Save(settings);
             }
             catch
             {
