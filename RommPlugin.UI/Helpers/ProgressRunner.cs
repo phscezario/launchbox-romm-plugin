@@ -27,7 +27,6 @@ namespace RommPlugin.UI.Helpers
                     form.FormClosing += (_, __) =>
                     {
                         cts.Cancel();
-                        tcs.TrySetResult(null);
                     };
 
                     form.Load += async (_, __) =>
