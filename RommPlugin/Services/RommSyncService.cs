@@ -187,7 +187,15 @@ namespace RommPlugin.Services
                     var platformCompleted = 0;
                     var platformTotal = selectedPlatformIds.Count;
 
-                    var newPlatforms = new List<string>();
+                    var newPlatforms = allRommPlatforms
+                        .Where(p =>
+                        {
+                            var displayName = string.IsNullOrEmpty(p.CustomName) ? p.Name : p.CustomName;
+                            var fullName = $"RomM | {displayName}";
+                            return !localPlatformNames.Contains(fullName);
+                        })
+                        .Select(p => $"RomM | {(string.IsNullOrEmpty(p.CustomName) ? p.Name : p.CustomName)}")
+                        .ToList();
                     var removedGames = new List<IGame>();
 
                     var rootRommCategory = platformCategories.FirstOrDefault(p => p.Name == "RomM");
@@ -213,6 +221,11 @@ namespace RommPlugin.Services
 
                         var platformName = $"RomM | {name}";
 
+                        if (!selectedPlatformIds.Contains(rommPlatform.Id))
+                        {
+                            continue;
+                        }
+
                         var platform = platforms
                             .FirstOrDefault(p => string.Equals(p.Name, platformName, StringComparison.OrdinalIgnoreCase));
 
@@ -235,13 +248,6 @@ namespace RommPlugin.Services
                             platform.Category = rommCategoryName;
                             platforms.Add(platform);
                             hasChanges = true;
-
-                            newPlatforms.Add(platformName);
-                        }
-
-                        if (!selectedPlatformIds.Contains(rommPlatform.Id))
-                        {
-                            continue;
                         }
 
                         platformCompleted++;
