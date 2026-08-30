@@ -5,9 +5,14 @@
     <LangVersion>latest</LangVersion>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirects>false</GenerateBindingRedirects>
     <GenerateBindingRedirectsFromRuntimeInfo>false</GenerateBindingRedirectsFromRuntimeInfo>
     <GenerateRuntimeConfigurationFiles>false</GenerateRuntimeConfigurationFiles>
+    <NoWarn>$(NoWarn);NU1605</NoWarn>
+    <DebugType>None</DebugType>
+    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,7 +24,6 @@
     </PackageReference>
     <PackageReference Include="Moq" Version="4.16.1" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="System.Drawing.Common" Version="8.0.10" />
   </ItemGroup>
 
   <ItemGroup>
@@ -30,12 +34,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\RommPlugin.Core\RommPlugin.Core.csproj" />
     <ProjectReference Include="..\RommPlugin\RommPlugin.csproj" />
   </ItemGroup>
 
-  <Target Name="FixBindingRedirects" AfterTargets="GenerateBindingRedirects;CoreBuild">
-    <Copy SourceFiles="App.config" DestinationFiles="$(OutputPath)RommPlugin.Tests.dll.config" SkipUnchangedFiles="false" OverwriteReadOnlyFiles="true" />
+  <Target Name="FixBindingRedirects" AfterTargets="Build">
+    <Copy SourceFiles="$(ProjectDir)App.config" DestinationFiles="$(TargetDir)$(AssemblyName).dll.config" SkipUnchangedFiles="false" OverwriteReadOnlyFiles="true" />
   </Target>
 
 </Project>

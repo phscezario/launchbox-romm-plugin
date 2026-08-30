@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
+using RommPlugin.Core.Helpers;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 
 namespace RommPlugin.Core.Services
 {
-    public class InstalledGamesService
+    public class InstalledGamesService : IInstalledGamesService
     {
         private readonly string _filePath;
         private readonly object _lock = new object();
@@ -98,29 +99,13 @@ namespace RommPlugin.Core.Services
         {
             try
             {
-                RommLogger.Log($"[DIAG] InstalledGamesService.Save: path={_filePath}");
                 string json;
                 lock (_lock)
                 {
                     json = JsonConvert.SerializeObject(_file, Formatting.Indented);
                 }
 
-                var dir = Path.GetDirectoryName(_filePath);
-                if (!string.IsNullOrEmpty(dir))
-                {
-                    Directory.CreateDirectory(dir);
-                }
-
-                var tempPath = Path.Combine(Path.GetDirectoryName(_filePath), $"installed-games.{Guid.NewGuid():N}.tmp");
-                try
-                {
-                    File.WriteAllText(tempPath, json);
-                    File.Copy(tempPath, _filePath, true);
-                }
-                finally
-                {
-                    try { File.Delete(tempPath); } catch { }
-                }
+                SafeFileWriter.WriteAllText(_filePath, json);
             }
             catch (Exception ex)
             {
@@ -132,7 +117,6 @@ namespace RommPlugin.Core.Services
         {
             try
             {
-                RommLogger.Log($"[DIAG] InstalledGamesService.Load: path={_filePath}, exists={File.Exists(_filePath)}");
                 if (!File.Exists(_filePath))
                 {
                     lock (_lock)

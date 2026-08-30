@@ -1,23 +1,25 @@
 using System;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
 using System.Threading.Tasks;
 using RommPlugin.Core.Locale;
 
 namespace RommPlugin.Core.Services
 {
-    public class ConnectionTestResult
+    public class RommConnectionTester
     {
-        public bool Success { get; set; }
+        private readonly HttpClient _http;
 
-        public string Message { get; set; }
-    }
+        public RommConnectionTester() : this(new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
+        {
+        }
 
-    public static class RommConnectionTester
-    {
-        public static async Task<ConnectionTestResult> TestAsync(
+        public RommConnectionTester(HttpClient httpClient)
+        {
+            _http = httpClient;
+        }
+
+        public async Task<ConnectionTestResult> TestAsync(
             string baseUrl,
             string clientApiToken,
             string username,
@@ -41,28 +43,25 @@ namespace RommPlugin.Core.Services
                 };
             }
 
-            using (var http = new HttpClient
+            try
             {
-                BaseAddress = baseUri,
-                Timeout = TimeSpan.FromSeconds(15)
-            })
-            {
-                if (!string.IsNullOrWhiteSpace(clientApiToken))
+                var requestUri = new Uri(baseUri, "/api/platforms");
+                using (var request = new HttpRequestMessage(HttpMethod.Get, requestUri))
                 {
-                    http.DefaultRequestHeaders.Authorization =
-                        new AuthenticationHeaderValue("Bearer", clientApiToken.Trim());
-                }
-                else
-                {
-                    var credentials = $"{username}:{password}";
-                    var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(credentials));
-                    http.DefaultRequestHeaders.Authorization =
-                        new AuthenticationHeaderValue("Basic", base64);
-                }
+                    if (!string.IsNullOrWhiteSpace(clientApiToken))
+                    {
+                        request.Headers.Authorization =
+                            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", clientApiToken.Trim());
+                    }
+                    else if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
+                    {
+                        var credentials = $"{username}:{password}";
+                        var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(credentials));
+                        request.Headers.Authorization =
+                            new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", base64);
+                    }
 
-                try
-                {
-                    using (var response = await http.GetAsync("/api/platforms"))
+                    using (var response = await _http.SendAsync(request))
                     {
                         if (response.IsSuccessStatusCode)
                         {
@@ -90,14 +89,14 @@ namespace RommPlugin.Core.Services
                         };
                     }
                 }
-                catch (Exception ex)
+            }
+            catch (Exception ex)
+            {
+                return new ConnectionTestResult
                 {
-                    return new ConnectionTestResult
-                    {
-                        Success = false,
-                        Message = LocaleManager.Get("connection.unreachable") + " " + ex.Message
-                    };
-                }
+                    Success = false,
+                    Message = LocaleManager.Get("connection.unreachable") + " " + ex.Message
+                };
             }
         }
     }

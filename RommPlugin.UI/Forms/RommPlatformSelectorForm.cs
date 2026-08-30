@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using RommPlugin.Core.Locale;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Storage;
+using RommPlugin.UI.Helpers;
 
 namespace RommPlugin.UI.Forms
 {
@@ -15,7 +16,7 @@ namespace RommPlugin.UI.Forms
         public RommPlatformSelectorForm(List<PlatformSelection> platforms)
         {
             InitializeComponent();
-            LoadIcon();
+            FormIconHelper.LoadIcon(this);
             ApplyLocale();
             ActiveControl = btnCancel;
 
@@ -74,27 +75,6 @@ namespace RommPlugin.UI.Forms
             Close();
         }
 
-        private void LoadIcon()
-        {
-            try
-            {
-                var iconPath = System.IO.Path.Combine(RommPaths.ImagesFolder, "ico.ico");
 
-                if (!System.IO.File.Exists(iconPath))
-                {
-                    iconPath = System.IO.Path.Combine(
-                        AppDomain.CurrentDomain.BaseDirectory,
-                        "Images", "ico.ico");
-                }
-
-                if (System.IO.File.Exists(iconPath))
-                {
-                    Icon = new System.Drawing.Icon(iconPath);
-                }
-            }
-            catch
-            {
-            }
-        }
     }
 }

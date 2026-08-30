@@ -15,7 +15,6 @@ namespace RommPlugin.MenuItems.Buttons
         {
             if (_isOpen) return;
             _isOpen = true;
-            RommLogger.Log("[DIAG] RommSettingsMenuItem.OnSelected: clicked");
             using (var form = new RommSettingsForm())
             {
                 form.ShowDialog();

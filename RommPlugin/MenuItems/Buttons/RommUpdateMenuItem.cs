@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using RommPlugin.ApiClient;
+using RommPlugin.Core;
 using RommPlugin.Core.Locale;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
@@ -31,99 +32,79 @@ namespace RommPlugin.MenuItems.Buttons
 
         public async void OnSelected(IGame selectedGame)
         {
-            RommLogger.Log($"[DIAG] RommUpdateMenuItem.OnSelected: game={selectedGame?.Title}");
-            if (!RommGameHelpers.TryGetRommId(selectedGame, out var rommId))
-            {
-                RommLogger.Log("[DIAG] RommUpdateMenuItem.OnSelected: no rommId");
-                return;
-            }
-            RommLogger.Log($"[DIAG] RommUpdateMenuItem.OnSelected: rommId={rommId}");
-
-            var settings = RommPluginStorage.Load();
-            if (string.IsNullOrWhiteSpace(settings.RommBaseUrl))
-            {
-                MessageBox.Show(LocaleManager.Get("error.settings_not_configured"),
-                    LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
             try
             {
-                using (var client = new RommApiClient(settings.RommBaseUrl))
+                if (!RommGameHelpers.TryGetRommId(selectedGame, out var rommId))
                 {
-                    client.ApplyAuthentication(settings);
+                    return;
+                }
 
-                    var rommGame = await client.GetGameByIdAsync(rommId);
+                var settings = RommPluginStorage.Load();
+                if (string.IsNullOrWhiteSpace(settings.RommBaseUrl))
+                {
+                    MessageBox.Show(LocaleManager.Get("error.settings_not_configured"),
+                        LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                var client = (RommApiClient)ServiceLocator.GetService<IRommApiClient>();
+                client.ApplyAuthentication(settings);
 
-                    if (rommGame == null)
+                var rommGame = await client.GetGameByIdAsync(rommId);
+
+                if (rommGame == null)
+                {
+                    MessageBox.Show(
+                        string.Format(LocaleManager.Get("error.game_not_found"), rommId),
+                        LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var syncService = (RommSyncService)ServiceLocator.GetService<IRommSyncService>();
+                syncService.SetApi(client);
+
+                if (settings.KeepLocalData)
+                {
+                    if (settings.IsAdmin)
                     {
-                        MessageBox.Show(
-                            string.Format(LocaleManager.Get("error.game_not_found"), rommId),
-                            LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        return;
-                    }
+                        await syncService.PushGameMetadataAsync(selectedGame, rommGame, settings);
 
-                    var syncService = new RommSyncService();
-                    syncService.SetApi(client);
-
-                    if (settings.KeepLocalData)
-                    {
-                        if (settings.IsAdmin)
-                        {
-                            await syncService.PushGameMetadataAsyncPublic(selectedGame, rommGame, settings);
-
-                            SetCustomField(selectedGame, GameCustomFields.LastSyncedAt, DateTime.UtcNow.ToString("o"));
-                            SetCustomField(selectedGame, GameCustomFields.LocalMetadataHash,
-                                RommMetadataComparer.ComputeLocalMetadataHash(selectedGame));
-                            SetCustomField(selectedGame, GameCustomFields.RemoteMetadataHash,
-                                RommMetadataComparer.ComputeRemoteMetadataHash(rommGame));
-
-                            PluginHelper.DataManager.Save();
-                            MessageBox.Show(LocaleManager.Get("progress.finished"),
-                                LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        }
-                        else
-                        {
-                            MessageBox.Show(LocaleManager.Get("sync.update_metadata_admin_required"),
-                                LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        }
-                    }
-                    else
-                    {
-                        syncService.ApplyServerMetadataPublic(selectedGame, rommGame, settings);
-                        await syncService.SyncScreenshotsBidirectionalPublic(selectedGame, rommGame, settings);
-
-                        SetCustomField(selectedGame, GameCustomFields.LastSyncedAt, DateTime.UtcNow.ToString("o"));
-                        SetCustomField(selectedGame, GameCustomFields.LocalMetadataHash,
+                        RommGameHelpers.SetCustomField(selectedGame, GameCustomFields.LastSyncedAt, DateTime.UtcNow.ToString("o"));
+                        RommGameHelpers.SetCustomField(selectedGame, GameCustomFields.LocalMetadataHash,
                             RommMetadataComparer.ComputeLocalMetadataHash(selectedGame));
-                        SetCustomField(selectedGame, GameCustomFields.RemoteMetadataHash,
+                        RommGameHelpers.SetCustomField(selectedGame, GameCustomFields.RemoteMetadataHash,
                             RommMetadataComparer.ComputeRemoteMetadataHash(rommGame));
 
                         PluginHelper.DataManager.Save();
                         MessageBox.Show(LocaleManager.Get("progress.finished"),
                             LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
+                    else
+                    {
+                        MessageBox.Show(LocaleManager.Get("sync.update_metadata_admin_required"),
+                            LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                }
+                else
+                {
+                    syncService.ApplyServerMetadata(selectedGame, rommGame, settings);
+                    await syncService.SyncScreenshotsBidirectional(selectedGame, rommGame, settings);
+
+                    RommGameHelpers.SetCustomField(selectedGame, GameCustomFields.LastSyncedAt, DateTime.UtcNow.ToString("o"));
+                    RommGameHelpers.SetCustomField(selectedGame, GameCustomFields.LocalMetadataHash,
+                        RommMetadataComparer.ComputeLocalMetadataHash(selectedGame));
+                    RommGameHelpers.SetCustomField(selectedGame, GameCustomFields.RemoteMetadataHash,
+                        RommMetadataComparer.ComputeRemoteMetadataHash(rommGame));
+
+                    PluginHelper.DataManager.Save();
+                    MessageBox.Show(LocaleManager.Get("progress.finished"),
+                        LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
             catch (Exception ex)
             {
+                RommLogger.LogError("[RommPlugin] update metadata error: " + ex);
                 MessageBox.Show(ex.Message,
                     LocaleManager.Get("progress.error"), MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private void SetCustomField(IGame game, string name, string value)
-        {
-            var field = game.GetAllCustomFields().FirstOrDefault(f => f.Name == name);
-            if (field == null)
-            {
-                field = game.AddNewCustomField();
-                field.Name = name;
-                field.Value = value;
-            }
-            else
-            {
-                field.Value = value;
             }
         }
 

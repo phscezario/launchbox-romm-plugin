@@ -9,10 +9,12 @@ using System.Timers;
 using System.Windows.Forms;
 using Newtonsoft.Json;
 using RommPlugin.UI.Helpers;
+using RommPlugin.Core;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Services;
 using RommPlugin.Core.Storage;
 using RommPlugin.Core.Locale;
+using RommPlugin.Core.Constants;
 using RommPlugin.Core.Logging;
 using Unbroken.LaunchBox.Plugins;
 using Unbroken.LaunchBox.Plugins.Data;
@@ -37,7 +39,7 @@ namespace RommPlugin.UI.Forms
         public GameManagerForm()
         {
             InitializeComponent();
-            LoadIcon();
+            FormIconHelper.LoadIcon(this);
             ApplyLocale();
 
             bool created;
@@ -52,26 +54,17 @@ namespace RommPlugin.UI.Forms
             IsInitialized = true;
 
             var settings = RommPluginStorage.Load();
-            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
             var pluginDir = RommPaths.PluginFolder;
-            var stateFilePath = RommPaths.DownloadStateFile;
-            var queueFilePath = Path.Combine(pluginDir, "download-queue.json");
-            var installedPath = Path.Combine(pluginDir, "installed-games.json");
+            var queueFilePath = Path.Combine(pluginDir, RommConstants.DownloadQueueFile);
 
-            RommLogger.Log($"[DIAG] GameManagerForm: baseDir={baseDir}");
-            RommLogger.Log($"[DIAG] GameManagerForm: pluginDir={Path.GetFullPath(pluginDir)}, exists={Directory.Exists(pluginDir)}");
-            RommLogger.Log($"[DIAG] GameManagerForm: stateFilePath={stateFilePath}, exists={File.Exists(stateFilePath)}");
-            RommLogger.Log($"[DIAG] GameManagerForm: queueFilePath={queueFilePath}, exists={File.Exists(queueFilePath)}");
-            RommLogger.Log($"[DIAG] GameManagerForm: installedPath={installedPath}, exists={File.Exists(installedPath)}");
-
-            _queueService = new DownloadQueueService(stateFilePath, settings.RomsPath, settings.RommBaseUrl, 5);
+            _queueService = (DownloadQueueService)ServiceLocator.GetService<IDownloadQueueService>();
             _queueService.SetAuthentication(
                 settings.RommBaseUrl,
                 settings.ClientApiToken,
                 settings.Username,
                 settings.Password);
 
-            _installedService = new InstalledGamesService(installedPath);
+            _installedService = (InstalledGamesService)ServiceLocator.GetService<IInstalledGamesService>();
 
             _queueService.ItemStateChanged += OnItemStateChanged;
             _queueService.ProgressChanged += OnProgressChanged;
@@ -115,7 +108,7 @@ namespace RommPlugin.UI.Forms
             try
             {
                 var pluginDir = RommPaths.PluginFolder;
-                var queueFilePath = Path.Combine(pluginDir, "download-queue.json");
+                var queueFilePath = Path.Combine(pluginDir, RommConstants.DownloadQueueFile);
 
                 if (!File.Exists(queueFilePath)) return;
 
@@ -179,7 +172,10 @@ namespace RommPlugin.UI.Forms
             _queueWatcher?.Dispose();
             _queueService?.Dispose();
             try { _mutex?.ReleaseMutex(); }
-            catch { }
+            catch (Exception ex)
+            {
+                RommLogger.LogError($"Failed to release mutex: {ex.Message}");
+            }
             finally { _mutex?.Dispose(); }
         }
 
@@ -403,7 +399,7 @@ namespace RommPlugin.UI.Forms
             foreach (var record in _installedService.GetAll())
             {
                 var platformName = record.Platform ?? "";
-                var category = platformName.StartsWith("RomM | ")
+                var category = platformName.StartsWith(RommConstants.PlatformPrefix)
                     ? platformName.Substring(7)
                     : platformName;
 
@@ -736,8 +732,6 @@ namespace RommPlugin.UI.Forms
         {
             try
             {
-                RommLogger.Log($"[DIAG] ProcessUninstallAction: gameId={action.GameId}, gameName={action.GameName}");
-
                 var record = _installedService.GetByGameId(action.GameId);
 
                 var game = FindGameByRommId(action.GameId);
@@ -760,14 +754,12 @@ namespace RommPlugin.UI.Forms
 
                     if (result != DialogResult.Yes)
                     {
-                        RommLogger.Log($"[DIAG] ProcessUninstallAction: user cancelled for {action.GameId}");
                         return;
                     }
                 }
 
                 _installedService.MarkUninstalled(action.GameId);
                 PluginHelper.DataManager.Save();
-                RommLogger.Log($"[DIAG] ProcessUninstallAction: completed for gameId={action.GameId}");
             }
             catch (Exception ex)
             {
@@ -791,8 +783,6 @@ namespace RommPlugin.UI.Forms
 
                 if (pendingItems == null || pendingItems.Count == 0) return;
 
-                RommLogger.Log($"[DIAG] ProcessPendingUninstalls: found {pendingItems.Count} WaitingUninstall items");
-
                 foreach (var item in pendingItems)
                 {
                     var record = _installedService.GetByGameId(item.GameId);
@@ -809,7 +799,6 @@ namespace RommPlugin.UI.Forms
 
                     if (!filesDeleted)
                     {
-                        RommLogger.Log($"[DIAG] ProcessPendingUninstalls: files not found for {item.GameId}, clearing anyway");
                     }
 
                     _installedService.MarkUninstalled(item.GameId);
@@ -830,7 +819,6 @@ namespace RommPlugin.UI.Forms
                 }
 
                 PluginHelper.DataManager.Save();
-                RommLogger.Log($"[DIAG] ProcessPendingUninstalls: completed");
             }
             catch (Exception ex)
             {
@@ -858,7 +846,7 @@ namespace RommPlugin.UI.Forms
                 var isFolderGame = folderValue == bool.TrueString;
 
                 var localFile = Path.Combine(
-                    settings.RomsPath, "romm",
+                    settings.RomsPath, RommConstants.RomsSubfolder,
                     (remotePath ?? "").Replace("/", "\\"),
                     fileName ?? ""
                 );
@@ -904,56 +892,49 @@ namespace RommPlugin.UI.Forms
         {
             if (record == null)
             {
-                RommLogger.Log($"[DIAG] TryDeleteGameFiles: record is null, returning true");
                 return true;
             }
-
-            RommLogger.Log($"[DIAG] TryDeleteGameFiles: RommGameId={record.RommGameId}, Title={record.Title}, InstalledPath={record.InstalledPath}, RemotePath={record.RemotePath}, FileName={record.FileName}");
 
             var settings = RommPluginStorage.Load();
             var deleted = false;
 
             if (!string.IsNullOrEmpty(record.InstalledPath))
             {
-                RommLogger.Log($"[DIAG] TryDeleteGameFiles: checking InstalledPath={record.InstalledPath}, isDir={Directory.Exists(record.InstalledPath)}, isFile={File.Exists(record.InstalledPath)}");
-
                 if (Directory.Exists(record.InstalledPath))
                 {
-                    try { Directory.Delete(record.InstalledPath, true); deleted = true; RommLogger.Log($"[DIAG] TryDeleteGameFiles: deleted folder {record.InstalledPath}"); }
+                    try { Directory.Delete(record.InstalledPath, true); deleted = true; }
                     catch (Exception ex) { RommLogger.LogError($"[RommPlugin] Failed to delete folder {record.InstalledPath}: {ex.Message}"); }
                 }
                 else if (File.Exists(record.InstalledPath))
                 {
-                    try { File.Delete(record.InstalledPath); deleted = true; RommLogger.Log($"[DIAG] TryDeleteGameFiles: deleted file {record.InstalledPath}"); }
+                    try { File.Delete(record.InstalledPath); deleted = true; }
                     catch (Exception ex) { RommLogger.LogError($"[RommPlugin] Failed to delete file {record.InstalledPath}: {ex.Message}"); }
                 }
             }
 
             if (!deleted && !string.IsNullOrEmpty(record.RemotePath) && !string.IsNullOrEmpty(record.FileName))
             {
-                var localFile = Path.Combine(settings.RomsPath, "romm", record.RemotePath.Replace("/", "\\"), record.FileName);
-                RommLogger.Log($"[DIAG] TryDeleteGameFiles: fallback path={localFile}");
+                var localFile = Path.Combine(settings.RomsPath, RommConstants.RomsSubfolder, record.RemotePath.Replace("/", "\\"), record.FileName);
 
                 if (Directory.Exists(localFile))
                 {
-                    try { Directory.Delete(localFile, true); deleted = true; RommLogger.Log($"[DIAG] TryDeleteGameFiles: deleted folder {localFile}"); }
+                    try { Directory.Delete(localFile, true); deleted = true; }
                     catch (Exception ex) { RommLogger.LogError($"[RommPlugin] Failed to delete folder {localFile}: {ex.Message}"); }
                 }
 
                 if (File.Exists(localFile))
                 {
-                    try { File.Delete(localFile); deleted = true; RommLogger.Log($"[DIAG] TryDeleteGameFiles: deleted file {localFile}"); }
+                    try { File.Delete(localFile); deleted = true; }
                     catch (Exception ex) { RommLogger.LogError($"[RommPlugin] Failed to delete file {localFile}: {ex.Message}"); }
                 }
 
                 if (File.Exists(localFile + ".zip"))
                 {
-                    try { File.Delete(localFile + ".zip"); deleted = true; RommLogger.Log($"[DIAG] TryDeleteGameFiles: deleted file {localFile}.zip"); }
+                    try { File.Delete(localFile + ".zip"); deleted = true; }
                     catch (Exception ex) { RommLogger.LogError($"[RommPlugin] Failed to delete file {localFile}.zip: {ex.Message}"); }
                 }
             }
 
-            RommLogger.Log($"[DIAG] TryDeleteGameFiles: result={deleted}");
             return deleted;
         }
 
@@ -961,7 +942,7 @@ namespace RommPlugin.UI.Forms
         {
             var dataManager = PluginHelper.DataManager;
             var rommGames = dataManager.GetAllGames()
-                .Where(g => g.Platform != null && g.Platform.StartsWith("RomM | "))
+                .Where(g => g.Platform != null && g.Platform.StartsWith(RommConstants.PlatformPrefix))
                 .ToList();
 
             foreach (var game in rommGames)
@@ -981,7 +962,7 @@ namespace RommPlugin.UI.Forms
         {
             if (string.IsNullOrEmpty(installedPath)) return;
 
-            var jsonPath = Path.Combine(installedPath, "_launchbox.json");
+            var jsonPath = Path.Combine(installedPath, RommConstants.LaunchboxConfigFile);
             if (!File.Exists(jsonPath)) return;
 
             var config = JsonConvert.DeserializeObject<LaunchBoxFolderGameConfig>(File.ReadAllText(jsonPath));
@@ -1078,27 +1059,6 @@ namespace RommPlugin.UI.Forms
             colSize.HeaderText = LocaleManager.Get("dm.col_size");
         }
 
-        private void LoadIcon()
-        {
-            try
-            {
-                var iconPath = Path.Combine(RommPaths.ImagesFolder, "ico.ico");
 
-                if (!File.Exists(iconPath))
-                {
-                    iconPath = Path.Combine(
-                        AppDomain.CurrentDomain.BaseDirectory,
-                        "Images", "ico.ico");
-                }
-
-                if (File.Exists(iconPath))
-                {
-                    Icon = new Icon(iconPath);
-                }
-            }
-            catch
-            {
-            }
-        }
     }
 }

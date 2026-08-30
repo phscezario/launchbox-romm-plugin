@@ -25,6 +25,17 @@ namespace RommPlugin.Tests.Services
             return new RommApiClient(client);
         }
 
+        private RommSyncService CreateService(RommApiClient api)
+        {
+            return new RommSyncService(
+                api,
+                new RommMetadataMapper(),
+                new RommScreenshotSync(api),
+                new RommStatsService(api),
+                new RommHierarchyCli(),
+                new RommBackupService());
+        }
+
         [Fact]
         public async Task FetchLatestStatsFromRomm_ReturnsCorrectStats()
         {
@@ -41,8 +52,7 @@ namespace RommPlugin.Tests.Services
                     Content = new StringContent(json, Encoding.UTF8, "application/json")
                 });
             var api = CreateApiClient(handler);
-            var service = new RommSyncService();
-            service.SetApi(api);
+            var service = CreateService(api);
 
             var stats = await service.FetchLatestStatsFromRomm(100);
 
@@ -62,8 +72,7 @@ namespace RommPlugin.Tests.Services
                     Content = new StringContent(json, Encoding.UTF8, "application/json")
                 });
             var api = CreateApiClient(handler);
-            var service = new RommSyncService();
-            service.SetApi(api);
+            var service = CreateService(api);
 
             var stats = await service.FetchLatestStatsFromRomm(100);
 
@@ -79,8 +88,7 @@ namespace RommPlugin.Tests.Services
             var handler = new MockHttpMessageHandler(
                 new HttpResponseMessage(HttpStatusCode.InternalServerError));
             var api = CreateApiClient(handler);
-            var service = new RommSyncService();
-            service.SetApi(api);
+            var service = CreateService(api);
 
             var stats = await service.FetchLatestStatsFromRomm(100);
 
@@ -104,7 +112,9 @@ namespace RommPlugin.Tests.Services
                 LastPlayed = DateTime.UtcNow
             };
 
-            var service = new RommSyncService();
+            var handler = new MockHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK));
+            var api = CreateApiClient(handler);
+            var service = CreateService(api);
             service.CompareAndUpdateStats(game.Object, rommStats);
 
             Assert.Equal(10, game.Object.PlayCount);
@@ -129,7 +139,9 @@ namespace RommPlugin.Tests.Services
                 LastPlayed = DateTime.UtcNow.AddDays(-5)
             };
 
-            var service = new RommSyncService();
+            var handler = new MockHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK));
+            var api = CreateApiClient(handler);
+            var service = CreateService(api);
             service.CompareAndUpdateStats(game.Object, rommStats);
 
             Assert.Equal(5, game.Object.PlayCount);
@@ -153,7 +165,9 @@ namespace RommPlugin.Tests.Services
                 LastPlayed = DateTime.UtcNow.AddHours(-1)
             };
 
-            var service = new RommSyncService();
+            var handler = new MockHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK));
+            var api = CreateApiClient(handler);
+            var service = CreateService(api);
             service.CompareAndUpdateStats(game.Object, rommStats);
 
             Assert.Equal(3, game.Object.PlayCount);
@@ -177,7 +191,9 @@ namespace RommPlugin.Tests.Services
                 LastPlayed = null
             };
 
-            var service = new RommSyncService();
+            var handler = new MockHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK));
+            var api = CreateApiClient(handler);
+            var service = CreateService(api);
             service.CompareAndUpdateStats(game.Object, rommStats);
 
             Assert.Equal(5, game.Object.PlayCount);
@@ -201,8 +217,7 @@ namespace RommPlugin.Tests.Services
                 };
             });
             var api = CreateApiClient(handler);
-            var service = new RommSyncService();
-            service.SetApi(api);
+            var service = CreateService(api);
 
             var startTime = new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc);
             var endTime = new DateTime(2026, 1, 15, 11, 0, 0, DateTimeKind.Utc);
@@ -231,8 +246,7 @@ namespace RommPlugin.Tests.Services
                 return new HttpResponseMessage(HttpStatusCode.OK);
             });
             var api = CreateApiClient(handler);
-            var service = new RommSyncService();
-            service.SetApi(api);
+            var service = CreateService(api);
 
             await service.SendPlaySessionToRomm(42, DateTime.UtcNow.AddHours(-1), DateTime.UtcNow, 3600);
 

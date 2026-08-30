@@ -30,14 +30,7 @@ namespace RommPlugin.Tests.Services
         {
             try { Directory.Delete(_tempDir, true); } catch { }
 
-            var localesPath = Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                "..", "..", "..", "RommPlugin.Core", "Locales");
-
-            if (Directory.Exists(localesPath))
-            {
-                LocaleManager.Initialize(localesPath, "en");
-            }
+            LocaleFixture.EnsureInitialized();
         }
 
         [Fact]

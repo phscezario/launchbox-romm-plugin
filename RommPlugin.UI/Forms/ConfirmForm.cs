@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using RommPlugin.Core.Locale;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Storage;
+using RommPlugin.UI.Helpers;
 
 namespace RommPlugin.UI.Forms
 {
@@ -15,7 +16,7 @@ namespace RommPlugin.UI.Forms
         public ConfirmForm(string message, string checkboxText = null)
         {
             InitializeComponent();
-            LoadIcon();
+            FormIconHelper.LoadIcon(this);
             ApplyLocale();
             ActiveControl = btnCancel;
 
@@ -60,23 +61,6 @@ namespace RommPlugin.UI.Forms
             }
         }
 
-        private void LoadIcon()
-        {
-            try
-            {
-                var iconPath = Path.Combine(RommPaths.ImagesFolder, "ico.ico");
-                if (!File.Exists(iconPath))
-                {
-                    iconPath = Path.Combine(
-                        AppDomain.CurrentDomain.BaseDirectory,
-                        "Images", "ico.ico");
-                }
-                if (File.Exists(iconPath))
-                {
-                    Icon = new Icon(iconPath);
-                }
-            }
-            catch (Exception ex) { RommLogger.Log($"[DIAG] ConfirmForm.LoadIcon: EXCEPTION - {ex.Message}"); }
-        }
+
     }
 }

@@ -2,33 +2,37 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
   build-and-test:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
 
-    - name: Setup .NET Framework (Mono)
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '4.8.x'
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
 
-    - name: Restore
-      run: dotnet restore
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-    - name: Build
-      run: dotnet build --no-restore --configuration Release
+      - name: Restore NuGet Packages
+        run: nuget restore LaunchBoxRommPlugin.slnx
 
-    - name: Test
-      run: dotnet test --no-build --configuration Release --verbosity normal
+      - name: Build Solution
+        run: msbuild LaunchBoxRommPlugin.slnx /p:Configuration=Release
+
+      - name: Restore Test Project
+        run: dotnet restore RommPlugin.Tests/RommPlugin.Tests.csproj
+
+      - name: Run Tests
+        run: dotnet test RommPlugin.Tests/RommPlugin.Tests.csproj --configuration Release --verbosity normal

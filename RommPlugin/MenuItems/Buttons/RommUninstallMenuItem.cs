@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows.Forms;
 using Newtonsoft.Json;
 using RommPlugin.Core.Locale;
+using RommPlugin.Core.Constants;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Services;
@@ -33,17 +34,14 @@ namespace RommPlugin.MenuItems.Buttons
 
         public void OnSelected(IGame selectedGame)
         {
-            RommLogger.Log($"[DIAG] RommUninstallMenuItem.OnSelected: game={selectedGame?.Title}");
             if (!RommGameHelpers.TryGetRommId(selectedGame, out var rommId))
             {
-                RommLogger.Log("[DIAG] RommUninstallMenuItem.OnSelected: no rommId");
                 return;
             }
-            RommLogger.Log($"[DIAG] RommUninstallMenuItem.OnSelected: rommId={rommId}");
 
             var pluginDir = RommPaths.PluginFolder;
 
-            var queueFilePath = Path.Combine(pluginDir, "download-queue.json");
+            var queueFilePath = Path.Combine(pluginDir, RommConstants.DownloadQueueFile);
 
             if (File.Exists(queueFilePath))
             {
@@ -52,20 +50,18 @@ namespace RommPlugin.MenuItems.Buttons
                     var existingQueue = JsonConvert.DeserializeObject<List<QueueAction>>(File.ReadAllText(queueFilePath));
                     if (existingQueue != null && existingQueue.Any(a => a.GameId == rommId && a.Action == "remove"))
                     {
-                        RommLogger.Log($"[DIAG] RommUninstallMenuItem.OnSelected: game {rommId} already in download-queue.json for uninstall");
                         MessageBox.Show(
                             LocaleManager.Get("uninstall.already_queued"),
                             LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return;
                     }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    RommLogger.Log($"[DIAG] RommUninstallMenuItem.OnSelected: error reading download-queue.json: {ex.Message}");
                 }
             }
 
-            var stateFilePath = Path.Combine(pluginDir, "download-state.json");
+            var stateFilePath = Path.Combine(pluginDir, RommConstants.DownloadStateFile);
             if (File.Exists(stateFilePath))
             {
                 try
@@ -78,7 +74,6 @@ namespace RommPlugin.MenuItems.Buttons
                             (i.Status == DownloadStatus.WaitingUninstall));
                         if (activeItem != null)
                         {
-                            RommLogger.Log($"[DIAG] RommUninstallMenuItem.OnSelected: game {rommId} already in download-state.json with status WaitingUninstall");
                             MessageBox.Show(
                                 LocaleManager.Get("uninstall.already_queued"),
                                 LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -86,13 +81,10 @@ namespace RommPlugin.MenuItems.Buttons
                         }
                     }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    RommLogger.Log($"[DIAG] RommUninstallMenuItem.OnSelected: error reading download-state.json: {ex.Message}");
                 }
             }
-
-            RommLogger.Log($"[DIAG] RommUninstallMenuItem.OnSelected: enqueueing game {rommId} to download-queue.json");
 
             var queueActions = new List<QueueAction>();
             if (File.Exists(queueFilePath))
@@ -122,9 +114,7 @@ namespace RommPlugin.MenuItems.Buttons
 
             var json = JsonConvert.SerializeObject(queueActions, Formatting.Indented);
             File.WriteAllText(queueFilePath, json);
-            RommLogger.Log($"[DIAG] RommUninstallMenuItem.OnSelected: wrote {json.Length} chars to {queueFilePath}");
 
-            RommLogger.Log("[DIAG] RommUninstallMenuItem.OnSelected: opening Game Manager");
             RommGameManagerMenuItem.OpenOrBringToFront();
         }
 

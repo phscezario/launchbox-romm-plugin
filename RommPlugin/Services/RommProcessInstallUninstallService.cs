@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Newtonsoft.Json;
+using RommPlugin.Core.Constants;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Locale;
 using RommPlugin.Core.Models;
@@ -18,7 +19,7 @@ using Unbroken.LaunchBox.Plugins.Data;
 
 namespace RommPlugin.Services
 {
-    public class RommProcessInstallUninstallService
+    public class RommProcessInstallUninstallService : IRommProcessInstallUninstallService
     {
         public async Task ProcessInstallUninstallEvents(bool showEmptyMessage = true)
         {
@@ -27,8 +28,6 @@ namespace RommPlugin.Services
                 async progress =>
                 {
                     var stateFilePath = RommPaths.DownloadStateFile;
-
-                    RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: stateFilePath={stateFilePath}, exists={File.Exists(stateFilePath)}");
 
                     if (!File.Exists(stateFilePath))
                     {
@@ -54,8 +53,6 @@ namespace RommPlugin.Services
                         .Where(i => i.Status == DownloadStatus.WaitingInstall)
                         .ToList();
 
-                    RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: {waitingItems?.Count ?? 0} WaitingInstall items");
-
                     if (waitingItems == null || waitingItems.Count == 0)
                     {
                         if (showEmptyMessage)
@@ -69,7 +66,7 @@ namespace RommPlugin.Services
                     var dataManager = PluginHelper.DataManager;
 
                     var rommGamesOnly = dataManager.GetAllGames()
-                        .Where(g => g.Platform != null && g.Platform.StartsWith("RomM | "))
+                        .Where(g => g.Platform != null && g.Platform.StartsWith(RommConstants.PlatformPrefix))
                         .ToList();
 
                     var gamesById = new Dictionary<int, IGame>();
@@ -88,13 +85,11 @@ namespace RommPlugin.Services
                     foreach (var item in waitingItems)
                     {
                         progress.SetStatus($"Processing: {completedItems} of {totalItems}");
-                        RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: processing {completedItems+1}/{totalItems}, gameId={item.GameId}, fsName={item.FsName}");
 
                         try
                         {
                             if (!gamesById.TryGetValue(item.GameId, out var game))
                             {
-                                RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: game {item.GameId} not found in LaunchBox");
                                 item.Status = DownloadStatus.Failed;
                                 item.Error = "Game not found in LaunchBox";
                                 completedItems++;
@@ -116,16 +111,13 @@ namespace RommPlugin.Services
                             }
 
                             var isFolderGame = !Path.HasExtension(fileName);
-                            RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: remotePath={remotePath}, fileName={fileName}, isFolderGame={isFolderGame}");
 
                             var localFile = Path.Combine(
                                 settings.RomsPath,
-                                "romm",
+                                RommConstants.RomsSubfolder,
                                 remotePath.Replace("/", "\\"),
                                 fileName
                             );
-
-                            RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: localFile={localFile}");
 
                             var zipPath = localFile;
 
@@ -142,15 +134,12 @@ namespace RommPlugin.Services
                                 }
                             }
 
-                            RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: zipPath={zipPath}, exists={File.Exists(zipPath)}");
-
                             if (!isFolderGame && File.Exists(zipPath) && Path.GetExtension(zipPath).Equals(".zip", StringComparison.OrdinalIgnoreCase))
                             {
                                 using (var archive = ZipFile.OpenRead(zipPath))
                                 {
                                     var entries = archive.Entries.Where(e => !string.IsNullOrWhiteSpace(e.Name)).ToList();
                                     var hasSubdirs = entries.Any(e => e.FullName.Contains("/"));
-                                    RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: zip check: entries={entries.Count}, hasSubdirs={hasSubdirs}");
                                     if (hasSubdirs && entries.Count > 1)
                                     {
                                         isFolderGame = true;
@@ -164,14 +153,12 @@ namespace RommPlugin.Services
                                             newField.Value = newFileName;
                                         }
                                         fileName = newFileName;
-                                        RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: auto-detected folder game, updated FileName: {fileName} → {newFileName}");
                                     }
                                 }
                             }
 
                             if (!File.Exists(zipPath) && !isFolderGame)
                             {
-                                RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: file not found for {item.GameId}, zipPath={zipPath}, leaving as WaitingInstall for retry");
                                 completedItems++;
                                 continue;
                             }
@@ -181,18 +168,14 @@ namespace RommPlugin.Services
                                 Path.GetFileNameWithoutExtension(zipPath)
                             );
 
-                            RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: extractDir={extractDir}");
-
                             if (isFolderGame)
                             {
-                                RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: calling UnzipAndDelete");
                                 UnzipAndDelete(zipPath, extractDir);
 
-                                var jsonPath = Path.Combine(extractDir, "_launchbox.json");
+                                    var jsonPath = Path.Combine(extractDir, RommConstants.LaunchboxConfigFile);
 
                                 if (File.Exists(jsonPath))
                                 {
-                                    RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: _launchbox.json found, configuring game");
                                     ConfigureLaunchBoxGame(game, extractDir, jsonPath);
                                 }
 
@@ -200,18 +183,15 @@ namespace RommPlugin.Services
                             }
                             else
                             {
-                                RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: calling UnzipAndFlatten");
                                 UnzipAndFlatten(zipPath);
 
                                 if (!File.Exists(localFile) && Directory.Exists(extractDir))
                                 {
                                     localFile = extractDir;
-                                    RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: zip deleted by UnzipAndFlatten, using extractDir={extractDir}");
 
-                                    var jsonPath = Path.Combine(extractDir, "_launchbox.json");
+                                var jsonPath = Path.Combine(extractDir, RommConstants.LaunchboxConfigFile);
                                     if (File.Exists(jsonPath))
                                     {
-                                        RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: _launchbox.json found in extractDir, configuring game");
                                         ConfigureLaunchBoxGame(game, extractDir, jsonPath);
                                     }
                                 }
@@ -221,7 +201,6 @@ namespace RommPlugin.Services
                                     if (File.Exists(zipVariant))
                                     {
                                         localFile = zipVariant;
-                                        RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: fallback .zip variant found={localFile}");
                                     }
                                     else
                                     {
@@ -234,7 +213,6 @@ namespace RommPlugin.Services
                                             if (extracted != null)
                                             {
                                                 localFile = extracted;
-                                                RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: fallback extracted file found={localFile}");
                                             }
                                         }
                                     }
@@ -244,7 +222,6 @@ namespace RommPlugin.Services
                             }
 
                             game.Installed = isFolderGame ? Directory.Exists(localFile) : File.Exists(localFile);
-                            RommLogger.Log($"[DIAG] ProcessInstallUninstallEvents: game.Installed={game.Installed}, ApplicationPath={game.ApplicationPath}");
 
                             item.Status = DownloadStatus.Installed;
                             item.CompletedAt = DateTime.UtcNow;
@@ -296,7 +273,7 @@ namespace RommPlugin.Services
                 return;
             }
 
-            ClearGameAdditionalApplications(game, baseFolder);
+            RommGameHelpers.ClearGameAdditionalApplications(game, baseFolder);
 
             if (!string.IsNullOrWhiteSpace(config.DefaultFileName))
             {
@@ -313,7 +290,7 @@ namespace RommPlugin.Services
             {
                 foreach (var app in config.AdditionalApplications)
                 {
-                    var resolvedPath = ResolvePath(baseFolder, app.Path, false);
+                    var resolvedPath = RommGameHelpers.ResolvePath(baseFolder, app.Path, false);
                     if (existingPaths.Contains(resolvedPath)) continue;
 
                     var add = game.AddNewAdditionalApplication();
@@ -328,7 +305,7 @@ namespace RommPlugin.Services
             {
                 foreach (var loader in config.PreLoaders)
                 {
-                    var resolvedPath = ResolvePath(baseFolder, loader.Path, loader.FromLaunchBoxRoot ?? false);
+                    var resolvedPath = RommGameHelpers.ResolvePath(baseFolder, loader.Path, loader.FromLaunchBoxRoot ?? false);
                     if (existingPaths.Contains(resolvedPath)) continue;
 
                     var add = game.AddNewAdditionalApplication();
@@ -345,7 +322,7 @@ namespace RommPlugin.Services
             {
                 foreach (var loader in config.PosLoaders)
                 {
-                    var resolvedPath = ResolvePath(baseFolder, loader.Path, loader.FromLaunchBoxRoot ?? false);
+                    var resolvedPath = RommGameHelpers.ResolvePath(baseFolder, loader.Path, loader.FromLaunchBoxRoot ?? false);
                     if (existingPaths.Contains(resolvedPath)) continue;
 
                     var add = game.AddNewAdditionalApplication();
@@ -380,75 +357,20 @@ namespace RommPlugin.Services
             }
         }
 
-        private string ResolvePath(string baseFolder, string path, bool fromLaunchBoxRoot)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                return path;
-            }
 
-            if (fromLaunchBoxRoot)
-            {
-                return path;
-            }
-
-            return Path.GetFullPath(Path.Combine(baseFolder, path));
-        }
-
-        private void ClearGameAdditionalApplications(IGame game, string installedPath)
-        {
-            if (string.IsNullOrEmpty(installedPath)) return;
-
-            var jsonPath = Path.Combine(installedPath, "_launchbox.json");
-            if (!File.Exists(jsonPath)) return;
-
-            var config = JsonConvert.DeserializeObject<LaunchBoxFolderGameConfig>(File.ReadAllText(jsonPath));
-            if (config == null) return;
-
-            var jsonPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            if (config.AdditionalApplications != null)
-                foreach (var app in config.AdditionalApplications)
-                    if (!string.IsNullOrEmpty(app.Path))
-                        jsonPaths.Add(ResolvePath(installedPath, app.Path, false));
-
-            if (config.PreLoaders != null)
-                foreach (var loader in config.PreLoaders)
-                    if (!string.IsNullOrEmpty(loader.Path))
-                        jsonPaths.Add(ResolvePath(installedPath, loader.Path, loader.FromLaunchBoxRoot ?? false));
-
-            if (config.PosLoaders != null)
-                foreach (var loader in config.PosLoaders)
-                    if (!string.IsNullOrEmpty(loader.Path))
-                        jsonPaths.Add(ResolvePath(installedPath, loader.Path, loader.FromLaunchBoxRoot ?? false));
-
-            var apps = game.GetAllAdditionalApplications().ToList();
-            foreach (var app in apps)
-            {
-                if (!string.IsNullOrEmpty(app.ApplicationPath) && jsonPaths.Contains(app.ApplicationPath))
-                {
-                    game.TryRemoveAdditionalApplication(app);
-                }
-            }
-        }
 
         private void UnzipAndDelete(string zipPath, string extractDir)
         {
             var rootFolder = Path.GetFileNameWithoutExtension(zipPath);
-            RommLogger.Log($"[DIAG] UnzipAndDelete: zipPath={zipPath}, extractDir={extractDir}, rootFolder={rootFolder}");
 
             using (var archive = ZipFile.OpenRead(zipPath))
             {
                 var entryList = archive.Entries.ToList();
-                RommLogger.Log($"[DIAG] UnzipAndDelete: {entryList.Count} entries in archive");
 
                 foreach (var entry in entryList)
                 {
-                    RommLogger.Log($"[DIAG] UnzipAndDelete: entry FullName={entry.FullName}, Name={entry.Name}");
-
                     if (string.IsNullOrWhiteSpace(entry.Name))
                     {
-                        RommLogger.Log($"[DIAG] UnzipAndDelete: skipping empty entry");
                         continue;
                     }
 
@@ -460,20 +382,13 @@ namespace RommPlugin.Services
 
                     if (parts.Length == 0)
                     {
-                        RommLogger.Log($"[DIAG] UnzipAndDelete: rootFolder '{rootFolder}' not found in path, using full path as fallback");
                         parts = entry.FullName
                             .Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries)
                             .ToArray();
                     }
-                    else
-                    {
-                        RommLogger.Log($"[DIAG] UnzipAndDelete: stripped to [{string.Join(", ", parts)}]");
-                    }
 
                     var relativePath = Path.Combine(parts);
                     var destinationPath = Path.Combine(extractDir, relativePath);
-
-                    RommLogger.Log($"[DIAG] UnzipAndDelete: extracting to {destinationPath}");
 
                     Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
 
@@ -482,16 +397,12 @@ namespace RommPlugin.Services
             }
 
             File.Delete(zipPath);
-            RommLogger.Log($"[DIAG] UnzipAndDelete: completed, deleted zip");
         }
 
         private void UnzipAndFlatten(string zipPath)
         {
-            RommLogger.Log($"[DIAG] UnzipAndFlatten: zipPath={zipPath}");
-
             if (!File.Exists(zipPath) || !Path.GetExtension(zipPath).Equals(".zip", StringComparison.OrdinalIgnoreCase))
             {
-                RommLogger.Log($"[DIAG] UnzipAndFlatten: invalid zip, returning");
                 return;
             }
 
@@ -499,8 +410,6 @@ namespace RommPlugin.Services
                 Path.GetDirectoryName(zipPath),
                 $"_temp_{Guid.NewGuid():N}"
             );
-
-            RommLogger.Log($"[DIAG] UnzipAndFlatten: tempExtract={tempExtract}");
 
             if (Directory.Exists(tempExtract))
             {
@@ -514,11 +423,9 @@ namespace RommPlugin.Services
                 ZipFile.ExtractToDirectory(zipPath, tempExtract);
 
                 var allFiles = Directory.GetFiles(tempExtract, "*", SearchOption.AllDirectories);
-                RommLogger.Log($"[DIAG] UnzipAndFlatten: extracted {allFiles.Length} files to temp");
 
                 if (allFiles.Length > 1)
                 {
-                    RommLogger.Log($"[DIAG] UnzipAndFlatten: multi-file zip, treating as folder game");
                     var gameName = Path.GetFileNameWithoutExtension(zipPath);
 
                     foreach (var file in allFiles)
@@ -543,17 +450,14 @@ namespace RommPlugin.Services
                     }
 
                     File.Delete(zipPath);
-                    RommLogger.Log($"[DIAG] UnzipAndFlatten: folder game extracted, deleted wrapper zip");
                 }
                 else if (allFiles.Length == 1)
                 {
                     var innerFile = allFiles[0];
                     var innerExt = Path.GetExtension(innerFile).ToLowerInvariant();
-                    RommLogger.Log($"[DIAG] UnzipAndFlatten: single file={Path.GetFileName(innerFile)}, ext={innerExt}");
 
                     if (innerExt == ".zip")
                     {
-                        RommLogger.Log($"[DIAG] UnzipAndFlatten: inner zip, copying to {zipPath}");
                         File.Copy(innerFile, zipPath, true);
                     }
                     else
@@ -562,17 +466,10 @@ namespace RommPlugin.Services
                             Path.GetDirectoryName(zipPath),
                             Path.GetFileName(innerFile)
                         );
-                        RommLogger.Log($"[DIAG] UnzipAndFlatten: extracting to {targetPath}");
                         File.Copy(innerFile, targetPath, true);
                         File.Delete(zipPath);
                     }
                 }
-                else
-                {
-                    RommLogger.Log($"[DIAG] UnzipAndFlatten: no files found in zip");
-                }
-
-                RommLogger.Log($"[DIAG] UnzipAndFlatten: completed");
             }
             finally
             {

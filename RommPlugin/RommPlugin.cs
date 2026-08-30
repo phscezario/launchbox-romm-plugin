@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using RommPlugin.ApiClient;
+using RommPlugin.Core;
 using RommPlugin.Core.Locale;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
@@ -13,6 +14,7 @@ using RommPlugin.Core.Storage;
 using RommPlugin.Services;
 using Unbroken.LaunchBox.Plugins;
 using Unbroken.LaunchBox.Plugins.Data;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace RommPlugin
 {
@@ -27,11 +29,7 @@ namespace RommPlugin
         {
             try
             {
-                RommLogger.Log($"[DIAG] OnEventRaised called: {eventType}");
-                RommLogger.Log($"[DIAG] BaseDirectory: {AppDomain.CurrentDomain.BaseDirectory}");
                 var pluginFolder = RommPaths.PluginFolder;
-                RommLogger.Log($"[DIAG] Plugin folder: {Path.GetFullPath(pluginFolder)}");
-                RommLogger.Log($"[DIAG] Plugin folder exists: {Directory.Exists(pluginFolder)}");
 
                 if (eventType != SystemEventTypes.LaunchBoxStartupCompleted)
                 {
@@ -39,13 +37,39 @@ namespace RommPlugin
                 }
 
                 var settings = RommPluginStorage.Load();
-                RommLogger.Log($"[DIAG] Settings loaded: baseUrl={settings.RommBaseUrl}, romsPath={settings.RomsPath}, autoSync={settings.AutoSyncIntervalDays}");
 
                 RommLogger.Initialize(settings.SaveLogs, settings.LogRetentionDays);
-                RommLogger.Log("[DIAG] Logger initialized");
+
+                ServiceLocator.Initialize(services =>
+                {
+                    var installedGamesPath = System.IO.Path.Combine(RommPaths.PluginFolder, RommPlugin.Core.Constants.RommConstants.InstalledGamesFile);
+
+                    services.AddSingleton<IRommApiClient>(sp =>
+                    {
+                        var s = RommPluginStorage.Load();
+                        return new RommApiClient(s.RommBaseUrl ?? "http://localhost");
+                    });
+                    services.AddSingleton<IDownloadQueueService>(sp =>
+                    {
+                        var s = RommPluginStorage.Load();
+                        return new DownloadQueueService(RommPaths.DownloadStateFile, s.RomsPath ?? "", s.RommBaseUrl ?? "http://localhost");
+                    });
+                    services.AddSingleton<IInstalledGamesService>(sp =>
+                        new InstalledGamesService(installedGamesPath));
+                    services.AddSingleton<IRommMetadataMapper, RommMetadataMapper>();
+                    services.AddSingleton<IRommBackupService, RommBackupService>();
+                    services.AddSingleton<IRommHierarchyCli, RommHierarchyCli>();
+                    services.AddSingleton<IRommScreenshotSync>(sp =>
+                        new RommScreenshotSync(sp.GetRequiredService<IRommApiClient>()));
+                    services.AddSingleton<IRommStatsService>(sp =>
+                        new RommStatsService(sp.GetRequiredService<IRommApiClient>()));
+                    services.AddSingleton<IRommSyncService, RommSyncService>();
+                    services.AddSingleton<IRommResetServerService, RommResetServerService>();
+                    services.AddSingleton<IRommProcessInstallUninstallService, RommProcessInstallUninstallService>();
+                    services.AddSingleton<RommConnectionTester>();
+                });
 
                 var localeFolder = RommPaths.LocalesFolder;
-                RommLogger.Log($"[DIAG] Locale folder: {Path.GetFullPath(localeFolder)}, exists: {Directory.Exists(localeFolder)}");
                 try
                 {
                     LocaleManager.Initialize(localeFolder, settings.Language ?? "en");
@@ -55,7 +79,6 @@ namespace RommPlugin
                 }
 
                 SessionSuppressStorage.Delete();
-                RommLogger.Log("[DIAG] Session suppress deleted");
 
                 if (GitHubUpdateService.HasPendingUpdate())
                 {
@@ -82,8 +105,6 @@ namespace RommPlugin
                                 i => i.Status == RommPlugin.Core.Models.DownloadStatus.WaitingInstall ||
                                      i.Status == RommPlugin.Core.Models.DownloadStatus.WaitingUninstall) == true;
 
-                            RommLogger.Log($"[DIAG] Startup: download-state.json has WaitingInstall={hasPending}");
-
                             if (hasPending)
                             {
                                 RommPlugin.MenuItems.Buttons.RommGameManagerMenuItem.OpenOrBringToFront();
@@ -99,7 +120,6 @@ namespace RommPlugin
                 try
                 {
                     var lastAutoSync = GetLastAutoSyncAt();
-                    RommLogger.Log($"[DIAG] Last auto sync: {lastAutoSync}, interval days: {settings.AutoSyncIntervalDays}");
 
                     if (settings.AutoSyncIntervalDays == -1)
                     {
@@ -122,16 +142,13 @@ namespace RommPlugin
                         }
                         else
                         {
-                        RommLogger.Log($"[DIAG] Auto sync triggered, baseUrl: {settings.RommBaseUrl}");
                         RommLogger.Log("Auto sync triggered on startup");
-                        using (var autoSyncApi = new RommApiClient(settings.RommBaseUrl))
-                        {
-                            autoSyncApi.ApplyAuthentication(settings);
-                            var autoSyncService = new RommSyncService();
-                            autoSyncService.SetApi(autoSyncApi);
-                            await autoSyncService.SyncAsync(headless: true);
-                            SaveLastAutoSyncAt(DateTime.UtcNow);
-                        }
+                        var autoSyncApi = (RommApiClient)ServiceLocator.GetService<IRommApiClient>();
+                        autoSyncApi.ApplyAuthentication(settings);
+                        var autoSyncService = ServiceLocator.GetService<IRommSyncService>();
+                        autoSyncService.SetApi(autoSyncApi);
+                        await autoSyncService.SyncAsync(headless: true);
+                        SaveLastAutoSyncAt(DateTime.UtcNow);
                         }
                     }
                     }
@@ -212,12 +229,12 @@ namespace RommPlugin
                     return;
                 }
 
-                var api = new RommApiClient(settings.RommBaseUrl);
+                var api = (RommApiClient)ServiceLocator.GetService<IRommApiClient>();
                 try
                 {
                     api.ApplyAuthentication(settings);
 
-                    var syncService = new RommSyncService();
+                    var syncService = (RommSyncService)ServiceLocator.GetService<IRommSyncService>();
                     syncService.SetApi(api);
 
                     await syncService.SyncStatsOnGameLaunch(currentGame, currentRommId);
@@ -228,9 +245,9 @@ namespace RommPlugin
                         await syncService.SyncScreenshotsBidirectional(currentGame, remoteGame, settings);
                     }
                 }
-                finally
+                catch (Exception ex)
                 {
-                    api.Dispose();
+                    RommLogger.LogError($"Error in OnAfterGameLaunched: {ex.Message}");
                 }
             }
             catch (Exception ex)
@@ -270,12 +287,12 @@ namespace RommPlugin
                     return;
                 }
 
-                var api = new RommApiClient(settings.RommBaseUrl);
+                var api = (RommApiClient)ServiceLocator.GetService<IRommApiClient>();
                 try
                 {
                     api.ApplyAuthentication(settings);
 
-                    var syncService = new RommSyncService();
+                    var syncService = (RommSyncService)ServiceLocator.GetService<IRommSyncService>();
                     syncService.SetApi(api);
 
                     await syncService.SyncStatsOnGameExit(game, rommId, gameStart);
@@ -286,9 +303,9 @@ namespace RommPlugin
                         await syncService.SyncScreenshotsBidirectional(game, remoteGame, settings);
                     }
                 }
-                finally
+                catch (Exception ex)
                 {
-                    api.Dispose();
+                    RommLogger.LogError($"Error in OnGameExited: {ex.Message}");
                 }
 
                 RommLogger.Log($"Game exited: {game.Title} (RomM ID: {rommId})");

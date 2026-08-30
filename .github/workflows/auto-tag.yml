@@ -51,9 +51,18 @@ jobs:
           new_version="v$major.$minor.$patch"
           echo "new_version=$new_version" >> $GITHUB_OUTPUT
 
-      - name: Create and push tag
+      - name: Update VERSION file and commit
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
+          version="${{ steps.bump.outputs.new_version }}"
+          version="${version#v}"
+          echo "$version" > VERSION
+          git add VERSION
+          git commit -m "chore: update VERSION to $version"
+          git push origin HEAD:master
+
+      - name: Create and push tag
+        run: |
           git tag ${{ steps.bump.outputs.new_version }}
           git push origin ${{ steps.bump.outputs.new_version }}

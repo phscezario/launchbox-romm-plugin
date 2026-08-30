@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using RommPlugin.Core.Locale;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Storage;
+using RommPlugin.UI.Helpers;
 
 namespace RommPlugin.UI.Forms
 {
@@ -13,7 +14,7 @@ namespace RommPlugin.UI.Forms
         public RestartConfirmForm()
         {
             InitializeComponent();
-            LoadIcon();
+            FormIconHelper.LoadIcon(this);
             ApplyLocale();
         }
 
@@ -25,23 +26,6 @@ namespace RommPlugin.UI.Forms
             btnRestartLater.Text = LocaleManager.Get("restart.later");
         }
 
-        private void LoadIcon()
-        {
-            try
-            {
-                var iconPath = Path.Combine(RommPaths.ImagesFolder, "ico.ico");
-                if (!File.Exists(iconPath))
-                {
-                    iconPath = Path.Combine(
-                        AppDomain.CurrentDomain.BaseDirectory,
-                        "Images", "ico.ico");
-                }
-                if (File.Exists(iconPath))
-                {
-                    Icon = new Icon(iconPath);
-                }
-            }
-            catch (Exception ex) { RommLogger.Log($"[DIAG] RestartConfirmForm.LoadIcon: EXCEPTION - {ex.Message}"); }
-        }
+
     }
 }

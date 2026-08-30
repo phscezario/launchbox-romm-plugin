@@ -6,11 +6,11 @@ using RommPlugin.UI.Helpers;
 
 namespace RommPlugin.Services
 {
-    public class RommResetServerService
+    public class RommResetServerService : IRommResetServerService
     {
-        private RommApiClient _api;
+        private IRommApiClient _api;
 
-        public void SetApi(RommApiClient api)
+        public void SetApi(IRommApiClient api)
         {
             _api = api;
         }

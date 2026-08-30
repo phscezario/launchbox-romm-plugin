@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using RommPlugin.Core.Locale;
+using RommPlugin.Core.Constants;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Storage;
 using RommPlugin.UI.Forms;
@@ -18,32 +19,27 @@ namespace RommPlugin.MenuItems.Buttons
 
         public override async void OnSelected()
         {
-            RommLogger.Log("[DIAG] RommRemoveAllMenuItem.OnSelected: clicked");
-
-            using (var form = new ConfirmForm(LocaleManager.Get("remove_all.confirm")))
-            {
-                if (form.ShowDialog() != System.Windows.Forms.DialogResult.OK)
-                {
-                    RommLogger.Log("[DIAG] RommRemoveAllMenuItem: user cancelled");
-                    return;
-                }
-            }
-
             try
             {
+                using (var form = new ConfirmForm(LocaleManager.Get("remove_all.confirm")))
+                {
+                    if (form.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+                    {
+                        return;
+                    }
+                }
                 var baseDir = RommPaths.PluginFolder;
                 var dataDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "Data"));
-                var cliPath = Path.Combine(baseDir, "RommPlugin.CLI.exe");
+                var cliPath = Path.Combine(baseDir, RommConstants.CliExecutable);
                 var launchBoxExe = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "LaunchBox.exe"));
 
                 if (!File.Exists(cliPath))
                 {
                     RommLogger.LogError($"CLI not found at {cliPath}");
-                    MessageBox.Show("CLI not found", "RomM", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("CLI not found", RommConstants.RootCategoryName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
-                RommLogger.Log($"[DIAG] RemoveAllRomm: launching CLI with --remove-all {dataDir} --restart {launchBoxExe}");
                 var psi = new ProcessStartInfo
                 {
                     FileName = cliPath,
@@ -76,10 +72,6 @@ namespace RommPlugin.MenuItems.Buttons
 
                     await tcs.Task;
 
-                    RommLogger.Log($"[DIAG] RemoveAllRomm CLI output: {output}");
-                    if (error.Length > 0)
-                        RommLogger.Log($"[DIAG] RemoveAllRomm CLI error: {error}");
-
                     if (process.ExitCode == 0)
                     {
                         Environment.Exit(0);
@@ -88,7 +80,7 @@ namespace RommPlugin.MenuItems.Buttons
                     {
                         MessageBox.Show(
                             $"CLI exited with code {process.ExitCode}\n{error.ToString()}",
-                            "RomM",
+                            RommConstants.RootCategoryName,
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Error);
                     }
@@ -97,7 +89,7 @@ namespace RommPlugin.MenuItems.Buttons
             catch (Exception ex)
             {
                 RommLogger.LogError($"[RommPlugin] RemoveAll error: {ex}");
-                MessageBox.Show(ex.Message, "RomM", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(ex.Message, RommConstants.RootCategoryName, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }

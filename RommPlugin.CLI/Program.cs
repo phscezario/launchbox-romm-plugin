@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Xml.Linq;
 using Newtonsoft.Json;
+using RommPlugin.Core.Constants;
 
 namespace RommPlugin.CLI
 {
@@ -148,7 +149,7 @@ namespace RommPlugin.CLI
                 LogToFile("RemoveAllRomm started");
 
                 BackupXml(Path.Combine(dataDir, "Parents.xml"), dataDir);
-                BackupXml(Path.Combine(dataDir, "Platforms.xml"), dataDir);
+                BackupXml(Path.Combine(dataDir, RommConstants.PlatformsFile), dataDir);
 
                 var parentsPath = Path.Combine(dataDir, "Parents.xml");
                 if (File.Exists(parentsPath))
@@ -165,8 +166,8 @@ namespace RommPlugin.CLI
                                 var playlistId = (string)p.Element("PlaylistId") ?? "";
                                 var parentCat = (string)p.Element("ParentPlatformCategoryName") ?? "";
 
-                                return name.StartsWith("RomM") || platform.StartsWith("RomM")
-                                    || parentCat.StartsWith("RomM")
+                                return name.StartsWith(RommConstants.RootCategoryName) || platform.StartsWith(RommConstants.RootCategoryName)
+                                    || parentCat.StartsWith(RommConstants.RootCategoryName)
                                     || (playlistId != "" && IsRommPlaylist(dataDir, playlistId));
                             })
                             .ToList();
@@ -180,7 +181,7 @@ namespace RommPlugin.CLI
                     }
                 }
 
-                var platformsPath = Path.Combine(dataDir, "Platforms.xml");
+                var platformsPath = Path.Combine(dataDir, RommConstants.PlatformsFile);
                 if (File.Exists(platformsPath))
                 {
                     var doc = XDocument.Load(platformsPath);
@@ -188,7 +189,7 @@ namespace RommPlugin.CLI
                     if (root != null)
                     {
                         var removed = root.Elements("PlatformCategory")
-                            .Where(p => ((string)p.Element("Name") ?? "").StartsWith("RomM"))
+                            .Where(p => ((string)p.Element("Name") ?? "").StartsWith(RommConstants.RootCategoryName))
                             .ToList();
 
                         foreach (var el in removed)
@@ -203,7 +204,7 @@ namespace RommPlugin.CLI
                 var playlistsDir = Path.Combine(dataDir, "Playlists");
                 if (Directory.Exists(playlistsDir))
                 {
-                    var files = Directory.GetFiles(playlistsDir, "RomM _ *.xml");
+                    var files = Directory.GetFiles(playlistsDir, RommConstants.PlaylistPrefix + "*.xml");
                     foreach (var file in files)
                     {
                         try
@@ -278,7 +279,7 @@ namespace RommPlugin.CLI
             if (!Directory.Exists(playlistsDir))
                 return false;
 
-            foreach (var file in Directory.GetFiles(playlistsDir, "RomM _ *.xml"))
+            foreach (var file in Directory.GetFiles(playlistsDir, RommConstants.PlaylistPrefix + "*.xml"))
             {
                 try
                 {
@@ -294,7 +295,7 @@ namespace RommPlugin.CLI
 
         static string GetBackupDir(string dataDir)
         {
-            var backupDir = Path.Combine(dataDir, "RomM_Backups");
+            var backupDir = Path.Combine(dataDir, RommConstants.BackupFolderName);
             if (!Directory.Exists(backupDir))
                 Directory.CreateDirectory(backupDir);
             return backupDir;
@@ -336,7 +337,7 @@ namespace RommPlugin.CLI
         static bool EnsureRootRomM(XElement root)
         {
             var rootEntries = root.Elements("Parent")
-                .Where(p => (string)p.Element("PlatformCategoryName") == "RomM")
+                .Where(p => (string)p.Element("PlatformCategoryName") == RommConstants.RootCategoryName)
                 .ToList();
 
             if (rootEntries.Count > 1)
@@ -364,7 +365,7 @@ namespace RommPlugin.CLI
             root.Add(new XElement("Parent",
                 new XElement("PlatformName"),
                 new XElement("PlaylistId"),
-                new XElement("PlatformCategoryName", "RomM"),
+                new XElement("PlatformCategoryName", RommConstants.RootCategoryName),
                 new XElement("ParentPlatformName"),
                 new XElement("ParentPlaylistId"),
                 new XElement("ParentPlatformCategoryName")
@@ -408,12 +409,12 @@ namespace RommPlugin.CLI
                     }
 
                     EnsureChildElements(best);
-                    changed |= SetParentCategory(best, "RomM");
+                    changed |= SetParentCategory(best, RommConstants.RootCategoryName);
                 }
                 else if (entries.Count == 1)
                 {
                     EnsureChildElements(entries[0]);
-                    changed |= SetParentCategory(entries[0], "RomM");
+                    changed |= SetParentCategory(entries[0], RommConstants.RootCategoryName);
                 }
                 else
                 {
@@ -423,9 +424,9 @@ namespace RommPlugin.CLI
                         new XElement("PlatformCategoryName", category),
                         new XElement("ParentPlatformName"),
                         new XElement("ParentPlaylistId"),
-                        new XElement("ParentPlatformCategoryName", "RomM")
+                        new XElement("ParentPlatformCategoryName", RommConstants.RootCategoryName)
                     ));
-                    Console.WriteLine($"Created category '{category}' with parent 'RomM'");
+                    Console.WriteLine($"Created category '{category}' with parent '{RommConstants.RootCategoryName}'");
                     changed = true;
                 }
             }
@@ -482,8 +483,8 @@ namespace RommPlugin.CLI
 
             foreach (var category in categoriesWithGames)
             {
-                var shortCategory = category.Substring("RomM | ".Length);
-                var playlistFileName = $"RomM _ {shortCategory} Installed.xml";
+                var shortCategory = category.Substring(RommConstants.PlatformPrefix.Length);
+                var playlistFileName = $"{RommConstants.PlaylistPrefix}{shortCategory} Installed.xml";
                 var playlistFilePath = Path.Combine(playlistsDir, playlistFileName);
 
                 if (!File.Exists(playlistFilePath))
@@ -532,7 +533,7 @@ namespace RommPlugin.CLI
                 }
             }
 
-            var allInstalledPath = Path.Combine(playlistsDir, "RomM _ Installed Games.xml");
+            var allInstalledPath = Path.Combine(playlistsDir, RommConstants.InstalledGamesPlaylistName + ".xml");
             if (File.Exists(allInstalledPath))
             {
                 var allDoc = XDocument.Load(allInstalledPath);
@@ -551,16 +552,16 @@ namespace RommPlugin.CLI
                             new XElement("PlatformCategoryName"),
                             new XElement("ParentPlatformName"),
                             new XElement("ParentPlaylistId"),
-                            new XElement("ParentPlatformCategoryName", "RomM")
+                        new XElement("ParentPlatformCategoryName", RommConstants.RootCategoryName)
                         ));
-                        Console.WriteLine($"Created playlist link '{allId}' -> 'RomM'");
+                        Console.WriteLine($"Created playlist link '{allId}' -> '{RommConstants.RootCategoryName}'");
                         changed = true;
                     }
                     else
                     {
                         foreach (var entry in existing)
                         {
-                            changed |= SetParentCategory(entry, "RomM");
+                            changed |= SetParentCategory(entry, RommConstants.RootCategoryName);
                         }
                     }
                 }
@@ -577,7 +578,7 @@ namespace RommPlugin.CLI
                 .Where(p =>
                 {
                     var name = (string)p.Element("PlatformCategoryName") ?? "";
-                    return name.StartsWith("RomM | ") && !categoriesWithGames.Contains(name);
+                    return name.StartsWith(RommConstants.PlatformPrefix) && !categoriesWithGames.Contains(name);
                 })
                 .ToList();
 
@@ -599,17 +600,17 @@ namespace RommPlugin.CLI
                 return false;
 
             var changed = false;
-            var rommPlaylists = Directory.GetFiles(playlistsDir, "RomM _ * Installed.xml");
+            var rommPlaylists = Directory.GetFiles(playlistsDir, RommConstants.PlaylistPrefix + "* Installed.xml");
 
             foreach (var file in rommPlaylists)
             {
                 var fileName = Path.GetFileNameWithoutExtension(file);
 
-                if (fileName == "RomM _ Installed Games")
+                if (fileName == RommConstants.InstalledGamesPlaylistName)
                     continue;
 
-                var shortCat = fileName.Replace("RomM _ ", "").Replace(" Installed", "");
-                var categoryName = $"RomM | {shortCat}";
+                var shortCat = fileName.Replace(RommConstants.PlaylistPrefix, "").Replace(" Installed", "");
+                var categoryName = $"{RommConstants.PlatformPrefix}{shortCat}";
 
                 if (!categoriesWithGames.Contains(categoryName))
                 {
@@ -639,9 +640,9 @@ namespace RommPlugin.CLI
 
             foreach (var category in categoriesWithGames)
             {
-                var shortCategory = category.Substring("RomM | ".Length);
-                var playlistName = $"RomM | {shortCategory} Installed";
-                var playlistFileName = $"RomM _ {shortCategory} Installed.xml";
+                var shortCategory = category.Substring(RommConstants.PlatformPrefix.Length);
+                var playlistName = $"{RommConstants.PlatformPrefix}{shortCategory} Installed";
+                var playlistFileName = $"{RommConstants.PlaylistPrefix}{shortCategory} Installed.xml";
                 var playlistFilePath = Path.Combine(playlistsDir, playlistFileName);
 
                 var platforms = categoryPlatforms.ContainsKey(category)
@@ -688,13 +689,13 @@ namespace RommPlugin.CLI
                 }
             }
 
-            var allInstalledPath = Path.Combine(playlistsDir, "RomM _ Installed Games.xml");
+            var allInstalledPath = Path.Combine(playlistsDir, RommConstants.InstalledGamesPlaylistName + ".xml");
             if (!File.Exists(allInstalledPath))
             {
                 var allId = Guid.NewGuid().ToString();
                 var doc = CreateAllInstalledPlaylist(allId);
                 doc.Save(allInstalledPath);
-                Console.WriteLine("Created playlist 'RomM | Installed Games'");
+                Console.WriteLine($"Created playlist '{RommConstants.InstalledGamesPlaylistName}'");
                 changed = true;
             }
 
@@ -805,7 +806,7 @@ namespace RommPlugin.CLI
                 new XElement("LaunchBox",
                     new XElement("Playlist",
                         new XElement("PlaylistId", id),
-                        new XElement("Name", "RomM | Installed Games"),
+                        new XElement("Name", RommConstants.InstalledGamesPlaylistName),
                         new XElement("NestedName", "Installed Games"),
                         new XElement("SortBy", "Default"),
                         new XElement("Notes"),
@@ -930,8 +931,8 @@ namespace RommPlugin.CLI
                     if (string.IsNullOrEmpty(parentCat))
                         return true;
 
-                    return parentCat != "RomM"
-                        && (!parentCat.StartsWith("RomM | ") || !categoriesWithGames.Contains(parentCat));
+                    return parentCat != RommConstants.RootCategoryName
+                        && (!parentCat.StartsWith(RommConstants.PlatformPrefix) || !categoriesWithGames.Contains(parentCat));
                 })
                 .ToList();
 
@@ -981,7 +982,7 @@ namespace RommPlugin.CLI
             var platformsDir = Path.Combine(dataDir, "Platforms");
             if (!Directory.Exists(platformsDir)) return;
 
-            var files = Directory.GetFiles(platformsDir, "RomM _ *.xml");
+            var files = Directory.GetFiles(platformsDir, RommConstants.PlaylistPrefix + "*.xml");
             foreach (var file in files)
             {
                 try
@@ -1000,7 +1001,7 @@ namespace RommPlugin.CLI
         static void RemovePluginStorageFiles()
         {
             var pluginDir = AppDomain.CurrentDomain.BaseDirectory;
-            var filesToDelete = new[] { "installed-games.json", "download-state.json", "sync_information.json" };
+            var filesToDelete = new[] { RommConstants.InstalledGamesFile, RommConstants.DownloadStateFile, RommConstants.SyncInformationFile };
             foreach (var fileName in filesToDelete)
             {
                 var path = Path.Combine(pluginDir, fileName);

@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using RommPlugin.Core;
 using RommPlugin.Core.Locale;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Services;
 using RommPlugin.Core.Storage;
+using RommPlugin.UI.Helpers;
 
 namespace RommPlugin.UI.Forms
 {
@@ -16,7 +18,7 @@ namespace RommPlugin.UI.Forms
         public RommSettingsForm()
         {
             InitializeComponent();
-            LoadIcon();
+            FormIconHelper.LoadIcon(this);
             ApplyLocale();
             ActiveControl = btnCancel;
         }
@@ -57,17 +59,14 @@ namespace RommPlugin.UI.Forms
 
         private void LoadSettings()
         {
-            RommLogger.Log("[DIAG] RommSettingsForm.LoadSettings: called");
             RommPluginSettings settings;
 
             try
             {
                 settings = RommPluginStorage.Load();
-                RommLogger.Log($"[DIAG] RommSettingsForm.LoadSettings: baseUrl={settings.RommBaseUrl}");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                RommLogger.Log($"[DIAG] RommSettingsForm.LoadSettings: EXCEPTION - {ex.Message}");
                 settings = new RommPluginSettings();
             }
 
@@ -89,7 +88,6 @@ namespace RommPlugin.UI.Forms
             nudSaveBatchSize.Value = Math.Max(1, Math.Min(500, settings.SaveBatchSize));
 
             var localeFolder = RommPaths.LocalesFolder;
-            RommLogger.Log($"[DIAG] RommSettingsForm.LoadSettings: localeFolder={localeFolder}, exists={Directory.Exists(localeFolder)}");
             var languages = LocaleManager.GetAvailableLanguages(localeFolder);
 
             cmbLanguage.Items.Clear();
@@ -248,7 +246,8 @@ namespace RommPlugin.UI.Forms
 
             try
             {
-                var result = await RommConnectionTester.TestAsync(
+                var tester = ServiceLocator.GetService<RommConnectionTester>();
+                var result = await tester.TestAsync(
                     txtBaseUrl.Text.Trim(),
                     txtClientApiToken.Text.Trim(),
                     txtUsername.Text.Trim(),
@@ -277,28 +276,7 @@ namespace RommPlugin.UI.Forms
             }
         }
 
-        private void LoadIcon()
-        {
-            try
-            {
-                var iconPath = Path.Combine(RommPaths.ImagesFolder, "ico.ico");
 
-                if (!File.Exists(iconPath))
-                {
-                    iconPath = Path.Combine(
-                        AppDomain.CurrentDomain.BaseDirectory,
-                        "Images", "ico.ico");
-                }
-
-                if (File.Exists(iconPath))
-                {
-                    Icon = new System.Drawing.Icon(iconPath);
-                }
-            }
-            catch
-            {
-            }
-        }
 
         private async void btnCheckUpdates_Click(object sender, EventArgs e)
         {

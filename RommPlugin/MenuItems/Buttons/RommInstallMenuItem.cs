@@ -4,7 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using Newtonsoft.Json;
+using RommPlugin.Core;
 using RommPlugin.Core.Locale;
+using RommPlugin.Core.Constants;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Services;
@@ -33,18 +35,14 @@ namespace RommPlugin.MenuItems.Buttons
 
         public void OnSelected(IGame selectedGame)
         {
-            RommLogger.Log($"[DIAG] RommInstallMenuItem.OnSelected: game={selectedGame?.Title}");
             if (!RommGameHelpers.TryGetRommId(selectedGame, out var rommId))
             {
-                RommLogger.Log("[DIAG] RommInstallMenuItem.OnSelected: no rommId found");
                 return;
             }
 
-            RommLogger.Log($"[DIAG] RommInstallMenuItem.OnSelected: rommId={rommId}");
             var settings = RommPluginStorage.Load();
             if (string.IsNullOrWhiteSpace(settings.RomsPath))
             {
-                RommLogger.Log("[DIAG] RommInstallMenuItem.OnSelected: RomsPath not configured");
                 MessageBox.Show(LocaleManager.Get("error.settings_not_configured"),
                     LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -54,11 +52,9 @@ namespace RommPlugin.MenuItems.Buttons
 
             fields.TryGetValue(GameCustomFields.RemotePath, out var remotePath);
             fields.TryGetValue(GameCustomFields.FileName, out var fileName);
-            RommLogger.Log($"[DIAG] RommInstallMenuItem.OnSelected: remotePath={remotePath}, fileName={fileName}");
 
             if (string.IsNullOrEmpty(remotePath) || string.IsNullOrEmpty(fileName))
             {
-                RommLogger.Log("[DIAG] RommInstallMenuItem.OnSelected: remotePath or fileName empty");
                 MessageBox.Show(
                     string.Format(LocaleManager.Get("error.game_not_found"), rommId),
                     LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -68,11 +64,9 @@ namespace RommPlugin.MenuItems.Buttons
             var pluginDir = RommPaths.PluginFolder;
 
             // Validação 1: já instalado via installed-games.json
-            var installedPath = Path.Combine(pluginDir, "installed-games.json");
-            var installedService = new InstalledGamesService(installedPath);
+            var installedService = ServiceLocator.GetService<IInstalledGamesService>();
             if (installedService.IsInstalled(rommId))
             {
-                RommLogger.Log($"[DIAG] RommInstallMenuItem.OnSelected: game {rommId} already installed (installed-games.json)");
                 MessageBox.Show(
                     LocaleManager.Get("install.already_installed"),
                     LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -80,7 +74,7 @@ namespace RommPlugin.MenuItems.Buttons
             }
 
             // Validação 2: já na fila de download (download-queue.json)
-            var queueFilePath = Path.Combine(pluginDir, "download-queue.json");
+            var queueFilePath = Path.Combine(pluginDir, RommConstants.DownloadQueueFile);
             if (File.Exists(queueFilePath))
             {
                 try
@@ -88,21 +82,19 @@ namespace RommPlugin.MenuItems.Buttons
                     var existingQueue = JsonConvert.DeserializeObject<List<QueueAction>>(File.ReadAllText(queueFilePath));
                     if (existingQueue != null && existingQueue.Any(a => a.GameId == rommId && a.Action == "add"))
                     {
-                        RommLogger.Log($"[DIAG] RommInstallMenuItem.OnSelected: game {rommId} already in download-queue.json");
                         MessageBox.Show(
                             LocaleManager.Get("install.already_queued"),
                             LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return;
                     }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    RommLogger.Log($"[DIAG] RommInstallMenuItem.OnSelected: error reading download-queue.json: {ex.Message}");
                 }
             }
 
             // Validação 3: já em download ativo (download-state.json)
-            var stateFilePath = Path.Combine(pluginDir, "download-state.json");
+            var stateFilePath = Path.Combine(pluginDir, RommConstants.DownloadStateFile);
             if (File.Exists(stateFilePath))
             {
                 try
@@ -117,7 +109,6 @@ namespace RommPlugin.MenuItems.Buttons
                              i.Status == DownloadStatus.WaitingInstall));
                         if (activeItem != null)
                         {
-                            RommLogger.Log($"[DIAG] RommInstallMenuItem.OnSelected: game {rommId} already in download-state.json with status {activeItem.Status}");
                             MessageBox.Show(
                                 LocaleManager.Get("install.already_queued"),
                                 LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -125,19 +116,16 @@ namespace RommPlugin.MenuItems.Buttons
                         }
                     }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    RommLogger.Log($"[DIAG] RommInstallMenuItem.OnSelected: error reading download-state.json: {ex.Message}");
                 }
             }
 
             // Validação 4: arquivo local já existe no disco
-            var localFile = Path.Combine(settings.RomsPath, "romm", remotePath.Replace("/", "\\"), fileName);
-            RommLogger.Log($"[DIAG] RommInstallMenuItem.OnSelected: localFile={localFile}, exists={File.Exists(localFile)}");
+            var localFile = Path.Combine(settings.RomsPath, RommConstants.RomsSubfolder, remotePath.Replace("/", "\\"), fileName);
 
             if (File.Exists(localFile) || Directory.Exists(localFile))
             {
-                RommLogger.Log("[DIAG] RommInstallMenuItem.OnSelected: file already exists, asking user");
                 var result = MessageBox.Show(
                     string.Format(LocaleManager.Get("install.already_exists"), selectedGame.Title),
                     LocaleManager.Get("confirm.title"),
@@ -147,7 +135,6 @@ namespace RommPlugin.MenuItems.Buttons
             }
 
             // Tudo OK: adicionar à fila de download
-            RommLogger.Log($"[DIAG] RommInstallMenuItem.OnSelected: enqueueing game {rommId} to download-queue.json");
 
             var queueActions = new List<QueueAction>();
             if (File.Exists(queueFilePath))
@@ -179,10 +166,8 @@ namespace RommPlugin.MenuItems.Buttons
 
             var json = JsonConvert.SerializeObject(queueActions, Formatting.Indented);
             File.WriteAllText(queueFilePath, json);
-            RommLogger.Log($"[DIAG] RommInstallMenuItem.OnSelected: wrote {json.Length} chars to {queueFilePath}");
 
             // Abrir/trazer o Game Manager
-            RommLogger.Log("[DIAG] RommInstallMenuItem.OnSelected: opening Game Manager");
             RommGameManagerMenuItem.OpenOrBringToFront();
         }
 

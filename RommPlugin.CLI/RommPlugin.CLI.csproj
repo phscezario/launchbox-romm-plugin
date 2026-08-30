@@ -5,10 +5,15 @@
     <TargetFramework>net48</TargetFramework>
     <LangVersion>latest</LangVersion>
     <DebugType>none</DebugType>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RommPlugin.Core\RommPlugin.Core.csproj" />
   </ItemGroup>
 
 </Project>

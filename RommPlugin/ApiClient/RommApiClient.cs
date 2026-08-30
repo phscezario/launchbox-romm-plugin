@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using RommPlugin.Core.Constants;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 
@@ -24,7 +25,7 @@ namespace RommPlugin.ApiClient
         }
     }
 
-    public class RommApiClient : IDisposable
+    public class RommApiClient : IRommApiClient
     {
         private readonly HttpClient _http;
 
@@ -33,7 +34,7 @@ namespace RommPlugin.ApiClient
             _http = new HttpClient
             {
                 BaseAddress = new Uri(baseUrl.TrimEnd('/')),
-                Timeout = TimeSpan.FromSeconds(120)
+                Timeout = TimeSpan.FromSeconds(RommConstants.HttpTimeoutSeconds)
             };
         }
 
@@ -88,7 +89,7 @@ namespace RommPlugin.ApiClient
         public async Task<List<RommGame>> GetAllGamesByPlatformAsync(int platformId)
         {
             var allGames = new List<RommGame>();
-            int limit = 1000;
+            int limit = RommConstants.ApiPageSize;
             int offset = 0;
             bool hasMore = true;
 
@@ -146,7 +147,7 @@ namespace RommPlugin.ApiClient
 
         public async Task UpdateGameById(int gameId, RommUpdateGameRequest request)
         {
-            const int maxAttempts = 5;
+            const int maxAttempts = RommConstants.MaxRetryAttempts;
 
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
@@ -254,7 +255,7 @@ namespace RommPlugin.ApiClient
                 catch (Exception ex) when (attempt < maxAttempts && IsTransientError(ex))
                 {
                     RommLogger.LogError($"Connection error updating game {gameId} (attempt {attempt}/{maxAttempts}): {ex.Message}");
-                    await Task.Delay(1000 * attempt);
+                    await Task.Delay(RommConstants.RetryBaseDelayMs * attempt);
                 }
                 catch (Exception ex) when (attempt == maxAttempts && IsTransientError(ex))
                 {
@@ -266,7 +267,7 @@ namespace RommPlugin.ApiClient
 
         public async Task RemoveGameMetadataById(int gameId)
         {
-            const int maxAttempts = 5;
+            const int maxAttempts = RommConstants.MaxRetryAttempts;
 
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
@@ -325,7 +326,7 @@ namespace RommPlugin.ApiClient
                 var fileName = SanitizeFileName(Path.GetFileName(filePath));
                 var mimeType = GetMimeType(filePath);
 
-                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(300)))
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(RommConstants.UploadTimeoutSeconds)))
                 using (var fileStream = File.OpenRead(filePath))
                 using (var content = new MultipartFormDataContent())
                 {
@@ -351,7 +352,7 @@ namespace RommPlugin.ApiClient
         {
             await ExecuteWithRetryAsync(async () =>
             {
-                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120)))
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(RommConstants.HttpTimeoutSeconds)))
                 {
                     var json = JsonConvert.SerializeObject(new { is_public = true });
                     using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
@@ -370,7 +371,7 @@ namespace RommPlugin.ApiClient
             return await ExecuteWithRetryAsync(async () =>
             {
                 using (var response = await _http.GetAsync(
-                    $"/api/play-sessions?rom_id={romId}&limit=1000"))
+                    $"/api/play-sessions?rom_id={romId}&limit={RommConstants.ApiPageSize}"))
                 {
                 await ThrowIfNotSuccessAsync(response);
                 var json = await response.Content.ReadAsStringAsync();
@@ -531,7 +532,7 @@ namespace RommPlugin.ApiClient
         {
             using (var cts = CancellationTokenSource.CreateLinkedTokenSource(ct))
             {
-                cts.CancelAfter(TimeSpan.FromSeconds(300));
+                cts.CancelAfter(TimeSpan.FromSeconds(RommConstants.UploadTimeoutSeconds));
 
                 using (var response = await _http.GetAsync($"/api/screenshots/{screenshotId}/content", cts.Token))
                 {

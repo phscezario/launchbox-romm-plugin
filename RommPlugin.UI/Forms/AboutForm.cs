@@ -93,7 +93,7 @@ namespace RommPlugin.UI.Forms
                 {
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
-                        FileName = "https://github.com/anomalyco/launchbox-romm-plugin",
+                        FileName = "https://github.com/phscezario/launchbox-romm-plugin",
                         UseShellExecute = true
                     });
                 }

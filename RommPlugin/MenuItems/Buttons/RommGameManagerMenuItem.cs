@@ -17,7 +17,6 @@ namespace RommPlugin.MenuItems.Buttons
 
         public override void OnSelected()
         {
-            RommLogger.Log("[DIAG] RommGameManagerMenuItem.OnSelected: clicked");
             OpenOrBringToFront();
         }
 
@@ -25,15 +24,12 @@ namespace RommPlugin.MenuItems.Buttons
         {
             if (_form != null && !_form.IsDisposed)
             {
-                RommLogger.Log("[DIAG] RommGameManagerMenuItem: form already exists, skipping (list updates via callback)");
                 return;
             }
 
-            RommLogger.Log("[DIAG] RommGameManagerMenuItem: creating new GameManagerForm");
             var form = new GameManagerForm();
             if (!form.IsInitialized)
             {
-                RommLogger.Log("[DIAG] RommGameManagerMenuItem: form not initialized, disposing");
                 form.Dispose();
                 return;
             }
@@ -41,7 +37,6 @@ namespace RommPlugin.MenuItems.Buttons
             form.FormClosed += (s, e) => { _form = null; };
             _form = form;
             _form.Show();
-            RommLogger.Log("[DIAG] RommGameManagerMenuItem: form shown");
         }
     }
 }

@@ -1,6 +1,8 @@
 using System;
 using System.Globalization;
+using System.IO;
 using System.Threading;
+using RommPlugin.Core.Locale;
 using RommPlugin.Core.Models;
 using Xunit;
 
@@ -13,6 +15,7 @@ namespace RommPlugin.Tests.Models
         {
             Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
             Thread.CurrentThread.CurrentUICulture = CultureInfo.InvariantCulture;
+            LocaleFixture.EnsureInitialized();
         }
         [Fact]
         public void Percentage_ReturnsZero_WhenTotalBytesIsZero()
@@ -154,12 +157,13 @@ namespace RommPlugin.Tests.Models
         [InlineData(DownloadStatus.Completed, "dm.status.completed")]
         [InlineData(DownloadStatus.Failed, "dm.status.failed")]
         [InlineData(DownloadStatus.WaitingInstall, "gm.status.installing")]
-        public void StatusText_ReturnsLocaleKey(DownloadStatus status, string expectedKey)
+        [InlineData(DownloadStatus.WaitingUninstall, "gm.status.pending_uninstall")]
+        [InlineData(DownloadStatus.Installed, "gm.status.installed")]
+        public void StatusText_ReturnsLocalizedText(DownloadStatus status, string expectedKey)
         {
             var item = new DownloadItem { Status = status };
-            var result = item.StatusText;
-            Assert.False(string.IsNullOrEmpty(result));
-            Assert.NotEqual("[" + expectedKey + "]", result);
+            var expected = LocaleManager.Get(expectedKey);
+            Assert.Equal(expected, item.StatusText);
         }
     }
 }

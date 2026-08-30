@@ -50,21 +50,25 @@ namespace RommPlugin.Core.Locale
 
         public static void Initialize(string localeFolder, string languageCode)
         {
-            _localeFolder = localeFolder;
-            _languageCode = languageCode;
-            _fallback = LoadLanguage(Path.Combine(localeFolder, "en.json"));
-
-            if (!string.IsNullOrEmpty(languageCode) && !languageCode.Equals("en", StringComparison.OrdinalIgnoreCase))
+            lock (_initLock)
             {
-                var langFile = Path.Combine(localeFolder, languageCode + ".json");
-                _strings = LoadLanguage(langFile);
-            }
-            else
-            {
-                _strings = new Dictionary<string, string>(_fallback);
-            }
+                _localeFolder = localeFolder;
+                _languageCode = languageCode;
+                _fallback = LoadLanguage(Path.Combine(localeFolder, "en.json"));
 
-            _initialized = true;
+                if (!string.IsNullOrEmpty(languageCode) &&
+                    !languageCode.Equals("en", StringComparison.OrdinalIgnoreCase))
+                {
+                    var langFile = Path.Combine(localeFolder, languageCode + ".json");
+                    _strings = LoadLanguage(langFile);
+                }
+                else
+                {
+                    _strings = new Dictionary<string, string>(_fallback);
+                }
+
+                _initialized = true;
+            }
         }
 
         private static void EnsureInitialized()
@@ -78,14 +82,12 @@ namespace RommPlugin.Core.Locale
                 if (string.IsNullOrEmpty(_localeFolder))
                 {
                     _localeFolder = RommPaths.LocalesFolder;
-                    RommLogger.Log($"[DIAG] LocaleManager.EnsureInitialized: localeFolder={_localeFolder}");
                 }
 
                 try
                 {
                     var settings = RommPluginStorage.Load();
                     Initialize(_localeFolder, settings.Language ?? "en");
-                    RommLogger.Log($"[DIAG] LocaleManager.EnsureInitialized: initialized with language={settings.Language}");
                 }
                 catch
                 {

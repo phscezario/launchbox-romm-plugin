@@ -4,4 +4,33 @@
     <IntermediateOutputPath>$(SolutionDir)obj\$(MSBuildProjectName)\$(Configuration)\</IntermediateOutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
+
+  <Target Name="SetGitVersion" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <VersionFile Condition="Exists('$(MSBuildThisFileDirectory)VERSION')">$(MSBuildThisFileDirectory)VERSION</VersionFile>
+    </PropertyGroup>
+    <ReadLinesFromFile File="$(VersionFile)" Condition="'$(VersionFile)' != ''">
+      <Output TaskParameter="Lines" ItemName="VersionLines" />
+    </ReadLinesFromFile>
+    <PropertyGroup>
+      <GitVersion Condition="'@(VersionLines)' != ''">@(VersionLines)</GitVersion>
+      <GitVersion Condition="'$(GitVersion)' == ''">1.0.3</GitVersion>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssemblyAttributes Include="System.Reflection.AssemblyVersionAttribute">
+        <_Parameter1>$(GitVersion)</_Parameter1>
+      </AssemblyAttributes>
+      <AssemblyAttributes Include="System.Reflection.AssemblyFileVersionAttribute">
+        <_Parameter1>$(GitVersion)</_Parameter1>
+      </AssemblyAttributes>
+      <AssemblyAttributes Include="System.Reflection.AssemblyInformationalVersionAttribute">
+        <_Parameter1>$(GitVersion)</_Parameter1>
+      </AssemblyAttributes>
+    </ItemGroup>
+    <WriteCodeFragment AssemblyAttributes="@(AssemblyAttributes)" Language="C#"
+                       OutputDirectory="$(IntermediateOutputPath)" OutputFile="GitVersionInfo.cs">
+      <Output TaskParameter="OutputFile" ItemName="Compile" />
+      <Output TaskParameter="OutputFile" ItemName="FileWrites" />
+    </WriteCodeFragment>
+  </Target>
 </Project>

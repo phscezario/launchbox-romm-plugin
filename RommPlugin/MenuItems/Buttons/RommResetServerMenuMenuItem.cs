@@ -2,7 +2,9 @@
 using System.Threading;
 using System.Windows.Forms;
 using RommPlugin.ApiClient;
+using RommPlugin.Core;
 using RommPlugin.Core.Locale;
+using RommPlugin.Core.Constants;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Storage;
@@ -13,7 +15,6 @@ namespace RommPlugin.MenuItems.Buttons
 {
     public class RommResetServerMenuMenuItem : RommMenuItem, ISystemMenuItemPlugin
     {
-        private static readonly RommResetServerService sync = new RommResetServerService();
         private static int _isRunning = 0;
 
         public override string Caption => LocaleManager.Get("menu.reset_server");
@@ -22,16 +23,14 @@ namespace RommPlugin.MenuItems.Buttons
         {
             if (Interlocked.CompareExchange(ref _isRunning, 1, 0) != 0)
             {
-                RommLogger.Log("[DIAG] RommResetServerMenuMenuItem: reset already running, skipping");
                 MessageBox.Show(
                     LocaleManager.Get("sync.already_running"),
-                    "RomM");
+                    RommConstants.RootCategoryName);
                 return;
             }
 
             try
             {
-                RommLogger.Log("[DIAG] RommResetServerMenuMenuItem.OnSelected: clicked");
                 var settings = RommPluginStorage.Load();
 
                 if (string.IsNullOrWhiteSpace(settings.RommBaseUrl))
@@ -43,33 +42,37 @@ namespace RommPlugin.MenuItems.Buttons
                     return;
                 }
 
-                using (var api = new RommApiClient(settings.RommBaseUrl))
+                var api = (RommApiClient)ServiceLocator.GetService<IRommApiClient>();
+                api.ApplyAuthentication(settings);
+                var sync = ServiceLocator.GetService<IRommResetServerService>();
+                sync.SetApi(api);
+
+                try
                 {
-                    sync.SetApi(api);
+                    await sync.RemoveAllGamesServerMetadata(
+                        settings.Username,
+                        settings.Password,
+                        settings.ClientApiToken);
 
-                    try
-                    {
-                        await sync.RemoveAllGamesServerMetadata(
-                            settings.Username,
-                            settings.Password,
-                            settings.ClientApiToken);
-
-                        var syncInfo = RommSyncInformationStorage.Load();
-                        syncInfo.SyncInProgress = false;
-                        syncInfo.CompletedPlatformIds.Clear();
-                        syncInfo.CompletedGameIdsByPlatform.Clear();
-                        RommSyncInformationStorage.Save(syncInfo);
-                    }
-                    catch (Exception ex)
-                    {
-                        RommLogger.LogError("[RommPlugin] reset server error: " + ex);
-                        MessageBox.Show(
-                            ex.Message,
-                            LocaleManager.Get("settings.title_box"),
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Warning);
-                    }
+                    var syncInfo = RommSyncInformationStorage.Load();
+                    syncInfo.SyncInProgress = false;
+                    syncInfo.CompletedPlatformIds.Clear();
+                    syncInfo.CompletedGameIdsByPlatform.Clear();
+                    RommSyncInformationStorage.Save(syncInfo);
                 }
+                catch (Exception ex)
+                {
+                    RommLogger.LogError("[RommPlugin] reset server error: " + ex);
+                    MessageBox.Show(
+                        ex.Message,
+                        LocaleManager.Get("settings.title_box"),
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                RommLogger.LogError("[RommPlugin] reset server unexpected error: " + ex);
             }
             finally
             {

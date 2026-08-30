@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Drawing;
 using System.IO;
+using RommPlugin.Core.Constants;
 using RommPlugin.Core.Storage;
 
 namespace RommPlugin.MenuItems
@@ -12,7 +13,7 @@ namespace RommPlugin.MenuItems
 
         protected virtual string IconName => "ico.png";
 
-        public virtual string Caption => "RomM";
+        public virtual string Caption => RommConstants.RootCategoryName;
         public virtual bool ShowInLaunchBox => true;
         public virtual bool ShowInBigBox => true;
         public virtual bool AllowInBigBoxWhenLocked => false;

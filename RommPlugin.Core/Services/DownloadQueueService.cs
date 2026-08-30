@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using RommPlugin.Core.Constants;
+using RommPlugin.Core.Helpers;
 using RommPlugin.Core.Logging;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -14,7 +16,7 @@ using RommPlugin.Core.Models.Statics;
 
 namespace RommPlugin.Core.Services
 {
-    public class DownloadQueueService : IDisposable
+    public class DownloadQueueService : IDownloadQueueService
     {
         private readonly SemaphoreSlim _semaphore;
         private readonly HttpClient _http;
@@ -47,8 +49,6 @@ namespace RommPlugin.Core.Services
         {
             _stateFilePath = stateFilePath;
             _romsPath = romsPath;
-            RommLogger.Log($"[DIAG] DownloadQueueService: stateFilePath={stateFilePath}");
-            RommLogger.Log($"[DIAG] DownloadQueueService: romsPath={romsPath}");
             _semaphore = new SemaphoreSlim(concurrentLimit, concurrentLimit);
             _items = new List<DownloadItem>();
             _cts = new CancellationTokenSource();
@@ -64,18 +64,7 @@ namespace RommPlugin.Core.Services
         {
             _http.BaseAddress = new Uri(baseUrl);
 
-            if (!string.IsNullOrWhiteSpace(token))
-            {
-                _http.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", token.Trim());
-            }
-            else if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
-            {
-                var credentials = $"{username}:{password}";
-                var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(credentials));
-                _http.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Basic", base64);
-            }
+            AuthHeaderHelper.ApplyAuthentication(_http, token, username, password);
         }
 
         public void Enqueue(int gameId, string gameName, string fsName, string fsPath)
@@ -98,7 +87,7 @@ namespace RommPlugin.Core.Services
 
                 var localDir = Path.Combine(
                     _romsPath,
-                    "romm",
+                    RommConstants.RomsSubfolder,
                     fsPath?.Replace("/", "\\") ?? "");
 
                 Directory.CreateDirectory(localDir);
@@ -213,7 +202,7 @@ namespace RommPlugin.Core.Services
                     using (var stream = await response.Content.ReadAsStreamAsync())
                     using (var file = new FileStream(item.PartFilePath, mode, FileAccess.Write, FileShare.None))
                     {
-                        var buffer = new byte[8192];
+                        var buffer = new byte[RommConstants.HttpBufferSize];
                         int bytesRead;
                         var lastProgressUpdate = DateTime.UtcNow;
 
@@ -476,19 +465,11 @@ namespace RommPlugin.Core.Services
                 }
 
                 var json = JsonConvert.SerializeObject(state, Formatting.Indented);
-                var tempPath = Path.Combine(Path.GetDirectoryName(_stateFilePath), $"download-state.{Guid.NewGuid():N}.tmp");
-                try
-                {
-                    File.WriteAllText(tempPath, json);
-                    File.Copy(tempPath, _stateFilePath, true);
-                }
-                finally
-                {
-                    try { File.Delete(tempPath); } catch { }
-                }
+                SafeFileWriter.WriteAllText(_stateFilePath, json);
             }
-            catch
+            catch (Exception ex)
             {
+                RommLogger.LogError($"Failed to save download state: {ex.Message}");
             }
         }
 
@@ -496,18 +477,14 @@ namespace RommPlugin.Core.Services
         {
             try
             {
-                RommLogger.Log($"[DIAG] DownloadQueueService.LoadState: stateFilePath={_stateFilePath}, exists={File.Exists(_stateFilePath)}");
                 if (!File.Exists(_stateFilePath)) return;
 
                 var json = File.ReadAllText(_stateFilePath);
-                RommLogger.Log($"[DIAG] DownloadQueueService.LoadState: read {json.Length} chars");
                 var state = JsonConvert.DeserializeObject<DownloadState>(json);
                 if (state?.Items == null)
                 {
-                    RommLogger.Log("[DIAG] DownloadQueueService.LoadState: no items in state");
                     return;
                 }
-                RommLogger.Log($"[DIAG] DownloadQueueService.LoadState: {state.Items.Count} items in state");
 
                 lock (_lock)
                 {
@@ -547,8 +524,9 @@ namespace RommPlugin.Core.Services
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                RommLogger.LogError($"Failed to load download state: {ex.Message}");
             }
         }
 

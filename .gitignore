@@ -38,6 +38,7 @@ packages/
 
 # MSBuild
 *.binlog
+*.pdb
 
 # Test Results
 [Tt]est[Rr]esult*/

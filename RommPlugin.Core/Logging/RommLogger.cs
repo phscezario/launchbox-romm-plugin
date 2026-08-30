@@ -13,7 +13,6 @@ namespace RommPlugin.Core.Logging
         static RommLogger()
         {
             LogDirectory = RommPaths.LogsFolder;
-            System.Diagnostics.Debug.WriteLine($"[DIAG] RommLogger: LogDirectory={LogDirectory}");
         }
 
         public static void Initialize(bool enabled, int retentionDays = 7)
