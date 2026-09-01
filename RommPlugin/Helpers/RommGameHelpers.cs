@@ -150,7 +150,8 @@ namespace RommPlugin.Helpers
             var apps = game.GetAllAdditionalApplications().ToList();
             foreach (var app in apps)
             {
-                if (!string.IsNullOrEmpty(app.ApplicationPath) && jsonPaths.Contains(app.ApplicationPath))
+                if (!string.IsNullOrEmpty(app.ApplicationPath) && jsonPaths.Contains(app.ApplicationPath)
+                    && app.Name?.StartsWith(RommConstants.PlatformPrefix) == true)
                 {
                     game.TryRemoveAdditionalApplication(app);
                 }

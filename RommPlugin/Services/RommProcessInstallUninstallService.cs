@@ -294,7 +294,7 @@ namespace RommPlugin.Services
                     if (existingPaths.Contains(resolvedPath)) continue;
 
                     var add = game.AddNewAdditionalApplication();
-                    add.Name = app.Name;
+                    add.Name = $"{RommConstants.PlatformPrefix}{app.Name}";
                     add.ApplicationPath = resolvedPath;
                     add.CommandLine = app.CommandLine;
                     existingPaths.Add(resolvedPath);
@@ -309,7 +309,7 @@ namespace RommPlugin.Services
                     if (existingPaths.Contains(resolvedPath)) continue;
 
                     var add = game.AddNewAdditionalApplication();
-                    add.Name = loader.Name;
+                    add.Name = $"{RommConstants.PlatformPrefix}{loader.Name}";
                     add.ApplicationPath = resolvedPath;
                     add.CommandLine = loader.CommandLine;
                     add.AutoRunBefore = true;
@@ -326,7 +326,7 @@ namespace RommPlugin.Services
                     if (existingPaths.Contains(resolvedPath)) continue;
 
                     var add = game.AddNewAdditionalApplication();
-                    add.Name = loader.Name;
+                    add.Name = $"{RommConstants.PlatformPrefix}{loader.Name}";
                     add.ApplicationPath = resolvedPath;
                     add.CommandLine = loader.CommandLine;
                     add.AutoRunAfter = true;
@@ -348,7 +348,7 @@ namespace RommPlugin.Services
                         if (existingPaths.Contains(file)) continue;
 
                         var add = game.AddNewAdditionalApplication();
-                        add.Name = $"DLC {index}";
+                        add.Name = $"{RommConstants.PlatformPrefix}DLC {index}";
                         add.ApplicationPath = file;
                         existingPaths.Add(file);
                         index++;
