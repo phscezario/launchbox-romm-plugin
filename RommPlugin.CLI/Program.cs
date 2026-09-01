@@ -253,6 +253,7 @@ namespace RommPlugin.CLI
                 RemovePlatformFiles(dataDir);
                 RemovePluginStorageFiles();
                 ClearSettingsPlatforms();
+                RemoveRomsFolder();
 
                 Console.WriteLine("=== Remove All RomM (Full) completed ===");
                 LogToFile("RemoveAllRommFull completed");
@@ -1043,6 +1044,36 @@ namespace RommPlugin.CLI
             catch (Exception ex)
             {
                 Console.WriteLine($"Warning: could not clear settings: {ex.Message}");
+            }
+        }
+
+        static void RemoveRomsFolder()
+        {
+            var pluginDir = AppDomain.CurrentDomain.BaseDirectory;
+            var settingsPath = Path.Combine(pluginDir, "settings.json");
+            if (!File.Exists(settingsPath)) return;
+
+            try
+            {
+                var json = File.ReadAllText(settingsPath);
+                var settings = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
+                if (settings == null || !settings.ContainsKey("RomsPath")) return;
+
+                var romsPath = settings["RomsPath"]?.ToString();
+                if (string.IsNullOrEmpty(romsPath)) return;
+
+                var romsDir = Path.Combine(romsPath, RommConstants.RomsSubfolder);
+                if (Directory.Exists(romsDir))
+                {
+                    Directory.Delete(romsDir, true);
+                    Console.WriteLine($"Deleted roms folder: {romsDir}");
+                    LogToFile($"RemoveAllRommFull: deleted roms folder: {romsDir}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: could not delete roms folder: {ex.Message}");
+                LogToFile($"RemoveAllRommFull: failed to delete roms folder: {ex.Message}");
             }
         }
 

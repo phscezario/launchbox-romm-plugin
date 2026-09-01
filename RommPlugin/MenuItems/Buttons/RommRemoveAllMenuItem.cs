@@ -28,6 +28,7 @@ namespace RommPlugin.MenuItems.Buttons
                         return;
                     }
                 }
+
                 var baseDir = RommPaths.PluginFolder;
                 var dataDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "Data"));
                 var cliPath = Path.Combine(baseDir, RommConstants.CliExecutable);
