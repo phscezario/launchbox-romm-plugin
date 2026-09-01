@@ -52,7 +52,9 @@ namespace RommPlugin
                     services.AddSingleton<IDownloadQueueService>(sp =>
                     {
                         var s = RommPluginStorage.Load();
-                        return new DownloadQueueService(RommPaths.DownloadStateFile, s.RomsPath ?? "", s.RommBaseUrl ?? "http://localhost");
+                        var svc = new DownloadQueueService(RommPaths.DownloadStateFile, s.RomsPath ?? "", s.RommBaseUrl ?? "http://localhost");
+                        svc.SetAuthentication(s.RommBaseUrl, s.ClientApiToken, s.Username, s.Password);
+                        return svc;
                     });
                     services.AddSingleton<IInstalledGamesService>(sp =>
                         new InstalledGamesService(installedGamesPath));
@@ -107,7 +109,7 @@ namespace RommPlugin
 
                             if (hasPending)
                             {
-                                RommPlugin.MenuItems.Buttons.RommGameManagerMenuItem.OpenOrBringToFront();
+                                RommPlugin.Services.GameManagerLauncher.EnsureOpen();
                             }
                         }
                     }

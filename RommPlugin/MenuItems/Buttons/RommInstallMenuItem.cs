@@ -12,6 +12,8 @@ using RommPlugin.Core.Models;
 using RommPlugin.Core.Services;
 using RommPlugin.Core.Storage;
 using RommPlugin.Helpers;
+using RommPlugin.Services;
+using RommPlugin.UI.Forms;
 using Unbroken.LaunchBox.Plugins;
 using Unbroken.LaunchBox.Plugins.Data;
 
@@ -43,8 +45,8 @@ namespace RommPlugin.MenuItems.Buttons
             var settings = RommPluginStorage.Load();
             if (string.IsNullOrWhiteSpace(settings.RomsPath))
             {
-                MessageBox.Show(LocaleManager.Get("error.settings_not_configured"),
-                    LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                using (var form = new ConfirmForm(LocaleManager.Get("error.settings_not_configured")))
+                    form.ShowDialog();
                 return;
             }
 
@@ -55,9 +57,9 @@ namespace RommPlugin.MenuItems.Buttons
 
             if (string.IsNullOrEmpty(remotePath) || string.IsNullOrEmpty(fileName))
             {
-                MessageBox.Show(
-                    string.Format(LocaleManager.Get("error.game_not_found"), rommId),
-                    LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                using (var form = new ConfirmForm(
+                    string.Format(LocaleManager.Get("error.game_not_found"), rommId)))
+                    form.ShowDialog();
                 return;
             }
 
@@ -67,9 +69,8 @@ namespace RommPlugin.MenuItems.Buttons
             var installedService = ServiceLocator.GetService<IInstalledGamesService>();
             if (installedService.IsInstalled(rommId))
             {
-                MessageBox.Show(
-                    LocaleManager.Get("install.already_installed"),
-                    LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                using (var form = new ConfirmForm(LocaleManager.Get("install.already_installed")))
+                    form.ShowDialog();
                 return;
             }
 
@@ -82,9 +83,8 @@ namespace RommPlugin.MenuItems.Buttons
                     var existingQueue = JsonConvert.DeserializeObject<List<QueueAction>>(File.ReadAllText(queueFilePath));
                     if (existingQueue != null && existingQueue.Any(a => a.GameId == rommId && a.Action == "add"))
                     {
-                        MessageBox.Show(
-                            LocaleManager.Get("install.already_queued"),
-                            LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        using (var form = new ConfirmForm(LocaleManager.Get("install.already_queued")))
+                            form.ShowDialog();
                         return;
                     }
                 }
@@ -109,9 +109,8 @@ namespace RommPlugin.MenuItems.Buttons
                              i.Status == DownloadStatus.WaitingInstall));
                         if (activeItem != null)
                         {
-                            MessageBox.Show(
-                                LocaleManager.Get("install.already_queued"),
-                                LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            using (var form = new ConfirmForm(LocaleManager.Get("install.already_queued")))
+                                form.ShowDialog();
                             return;
                         }
                     }
@@ -126,12 +125,11 @@ namespace RommPlugin.MenuItems.Buttons
 
             if (File.Exists(localFile) || Directory.Exists(localFile))
             {
-                var result = MessageBox.Show(
-                    string.Format(LocaleManager.Get("install.already_exists"), selectedGame.Title),
-                    LocaleManager.Get("confirm.title"),
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-
-                if (result != DialogResult.Yes) return;
+                using (var form = new ConfirmForm(
+                    string.Format(LocaleManager.Get("install.already_exists"), selectedGame.Title)))
+                {
+                    if (form.ShowDialog() != DialogResult.OK) return;
+                }
             }
 
             // Tudo OK: adicionar à fila de download
@@ -167,8 +165,7 @@ namespace RommPlugin.MenuItems.Buttons
             var json = JsonConvert.SerializeObject(queueActions, Formatting.Indented);
             File.WriteAllText(queueFilePath, json);
 
-            // Abrir/trazer o Game Manager
-            RommGameManagerMenuItem.OpenOrBringToFront();
+            GameManagerLauncher.EnsureOpen();
         }
 
         public bool GetIsValidForGames(IGame[] selectedGames)

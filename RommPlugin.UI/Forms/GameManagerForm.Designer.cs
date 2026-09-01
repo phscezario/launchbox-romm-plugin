@@ -10,8 +10,8 @@ namespace RommPlugin.UI.Forms
             {
                 _uiTimer?.Stop();
                 _uiTimer?.Dispose();
+                _queueWatcher?.Stop();
                 _queueWatcher?.Dispose();
-                _queueService?.Dispose();
                 try { _mutex?.ReleaseMutex(); } catch { }
                 try { _mutex?.Dispose(); } catch { }
                 (components as System.IDisposable)?.Dispose();

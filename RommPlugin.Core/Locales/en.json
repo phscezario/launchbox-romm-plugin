@@ -121,6 +121,7 @@
     "error.not_configured": "RomM is not configured yet.",
     "error.settings_not_configured": "RomM settings not configured",
     "error.game_not_found": "Game {0} not found on server. Run Sync to update game IDs.",
+    "error.game_manager_failed": "Failed to open Game Manager. Check the log for details.",
 
     "platform_selector.title": "Select platforms to sync",
     "platform_selector.select_all": "Select All",

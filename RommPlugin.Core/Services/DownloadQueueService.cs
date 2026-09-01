@@ -19,7 +19,7 @@ namespace RommPlugin.Core.Services
     public class DownloadQueueService : IDownloadQueueService
     {
         private readonly SemaphoreSlim _semaphore;
-        private readonly HttpClient _http;
+        private HttpClient _http;
         private readonly List<DownloadItem> _items;
         private readonly string _stateFilePath;
         private readonly string _romsPath;
@@ -62,8 +62,8 @@ namespace RommPlugin.Core.Services
 
         public void SetAuthentication(string baseUrl, string token = null, string username = null, string password = null)
         {
-            _http.BaseAddress = new Uri(baseUrl);
-
+            _http?.Dispose();
+            _http = new HttpClient { BaseAddress = new Uri(baseUrl), Timeout = Timeout.InfiniteTimeSpan };
             AuthHeaderHelper.ApplyAuthentication(_http, token, username, password);
         }
 

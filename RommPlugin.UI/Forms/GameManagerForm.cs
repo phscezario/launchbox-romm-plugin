@@ -47,38 +47,43 @@ namespace RommPlugin.UI.Forms
 
             if (!created)
             {
-                MessageBox.Show("Game Manager is already running.", "RomM Game Manager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                using (var form = new ConfirmForm("Game Manager is already running."))
+                    form.ShowDialog();
                 return;
             }
 
-            IsInitialized = true;
+            try
+            {
+                IsInitialized = true;
 
-            var settings = RommPluginStorage.Load();
-            var pluginDir = RommPaths.PluginFolder;
-            var queueFilePath = Path.Combine(pluginDir, RommConstants.DownloadQueueFile);
+                var settings = RommPluginStorage.Load();
+                var pluginDir = RommPaths.PluginFolder;
+                var queueFilePath = Path.Combine(pluginDir, RommConstants.DownloadQueueFile);
 
-            _queueService = (DownloadQueueService)ServiceLocator.GetService<IDownloadQueueService>();
-            _queueService.SetAuthentication(
-                settings.RommBaseUrl,
-                settings.ClientApiToken,
-                settings.Username,
-                settings.Password);
+                _queueService = (DownloadQueueService)ServiceLocator.GetService<IDownloadQueueService>();
 
-            _installedService = (InstalledGamesService)ServiceLocator.GetService<IInstalledGamesService>();
+                _installedService = (InstalledGamesService)ServiceLocator.GetService<IInstalledGamesService>();
 
-            _queueService.ItemStateChanged += OnItemStateChanged;
-            _queueService.ProgressChanged += OnProgressChanged;
-            _queueService.AllDownloadsCompleted += OnAllDownloadsCompleted;
+                _queueService.ItemStateChanged += OnItemStateChanged;
+                _queueService.ProgressChanged += OnProgressChanged;
+                _queueService.AllDownloadsCompleted += OnAllDownloadsCompleted;
 
-            _queueWatcher = new QueueFileWatcher(queueFilePath);
-            _queueWatcher.ActionDetected += OnQueueActionDetected;
+                _queueWatcher = new QueueFileWatcher(queueFilePath);
+                _queueWatcher.ActionDetected += OnQueueActionDetected;
 
-            _uiTimer = new Timer(1000);
-            _uiTimer.Elapsed += OnUiTimerElapsed;
+                _uiTimer = new Timer(1000);
+                _uiTimer.Elapsed += OnUiTimerElapsed;
 
-            Load += OnFormLoad;
-            FormClosing += OnFormClosing;
-            dgvGames.SelectionChanged += DgvGames_SelectionChanged;
+                Load += OnFormLoad;
+                FormClosing += OnFormClosing;
+                dgvGames.SelectionChanged += DgvGames_SelectionChanged;
+            }
+            catch (Exception ex)
+            {
+                IsInitialized = false;
+                RommLogger.LogException(ex);
+                _mutex.ReleaseMutex();
+            }
         }
 
         public void SetApplyPendingHandler(Func<Task> handler)
@@ -105,13 +110,13 @@ namespace RommPlugin.UI.Forms
 
         private void ProcessExistingQueueFile()
         {
+            var pluginDir = RommPaths.PluginFolder;
+            var queueFilePath = Path.Combine(pluginDir, RommConstants.DownloadQueueFile);
+
+            if (!File.Exists(queueFilePath)) return;
+
             try
             {
-                var pluginDir = RommPaths.PluginFolder;
-                var queueFilePath = Path.Combine(pluginDir, RommConstants.DownloadQueueFile);
-
-                if (!File.Exists(queueFilePath)) return;
-
                 var json = File.ReadAllText(queueFilePath);
                 var actions = JsonConvert.DeserializeObject<List<QueueAction>>(json);
 
@@ -131,11 +136,16 @@ namespace RommPlugin.UI.Forms
                         }
                     }
                     RefreshList();
-                    File.Delete(queueFilePath);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                RommLogger.Log($"[QueueFile] Error processing existing queue: {ex.Message}");
+            }
+            finally
+            {
+                try { File.Delete(queueFilePath); }
+                catch { }
             }
         }
 
@@ -151,16 +161,14 @@ namespace RommPlugin.UI.Forms
 
             if (hasActive)
             {
-                var choice = MessageBox.Show(
-                    LocaleManager.Get("gm.confirm_close_active"),
-                    LocaleManager.Get("gm.title"),
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning);
-
-                if (choice == DialogResult.No)
+                using (var form = new ConfirmForm(
+                    LocaleManager.Get("gm.confirm_close_active")))
                 {
-                    e.Cancel = true;
-                    return;
+                    if (form.ShowDialog() != DialogResult.OK)
+                    {
+                        e.Cancel = true;
+                        return;
+                    }
                 }
             }
 
@@ -170,7 +178,6 @@ namespace RommPlugin.UI.Forms
             _queueService.SaveState();
             _installedService.RemoveUninstalled();
             _queueWatcher?.Dispose();
-            _queueService?.Dispose();
             try { _mutex?.ReleaseMutex(); }
             catch (Exception ex)
             {
@@ -596,13 +603,11 @@ namespace RommPlugin.UI.Forms
             _isUninstalling = true;
             try
             {
-                var confirm = MessageBox.Show(
-                    LocaleManager.Get("gm.confirm_uninstall", selectedRecords.Count),
-                    LocaleManager.Get("gm.title"),
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning);
-
-                if (confirm != DialogResult.Yes) return;
+                using (var form = new ConfirmForm(
+                    LocaleManager.Get("gm.confirm_uninstall", selectedRecords.Count)))
+                {
+                    if (form.ShowDialog() != DialogResult.OK) return;
+                }
 
                 var filesNotFound = new List<string>();
 
@@ -632,11 +637,9 @@ namespace RommPlugin.UI.Forms
                     if (filesNotFound.Count > 10)
                         names += string.Format("\n... and {0} more", filesNotFound.Count - 10);
 
-                    MessageBox.Show(
-                        string.Format(LocaleManager.Get("uninstall.files_not_found_batch"), filesNotFound.Count, names),
-                        LocaleManager.Get("gm.title"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
+                    using (var form = new ConfirmForm(
+                        string.Format(LocaleManager.Get("uninstall.files_not_found_batch"), filesNotFound.Count, names)))
+                        form.ShowDialog();
                 }
 
                 PluginHelper.DataManager.Save();
@@ -665,13 +668,11 @@ namespace RommPlugin.UI.Forms
             _isUninstalling = true;
             try
             {
-                var confirm = MessageBox.Show(
-                    LocaleManager.Get("gm.confirm_uninstall", allRecords.Count),
-                    LocaleManager.Get("gm.title"),
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning);
-
-                if (confirm != DialogResult.Yes) return;
+                using (var form = new ConfirmForm(
+                    LocaleManager.Get("gm.confirm_uninstall", allRecords.Count)))
+                {
+                    if (form.ShowDialog() != DialogResult.OK) return;
+                }
 
                 var filesNotFound = new List<string>();
 
@@ -701,11 +702,9 @@ namespace RommPlugin.UI.Forms
                     if (filesNotFound.Count > 10)
                         names += string.Format("\n... and {0} more", filesNotFound.Count - 10);
 
-                    MessageBox.Show(
-                        string.Format(LocaleManager.Get("uninstall.files_not_found_batch"), filesNotFound.Count, names),
-                        LocaleManager.Get("gm.title"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
+                    using (var form = new ConfirmForm(
+                        string.Format(LocaleManager.Get("uninstall.files_not_found_batch"), filesNotFound.Count, names)))
+                        form.ShowDialog();
                 }
 
                 PluginHelper.DataManager.Save();
@@ -743,23 +742,14 @@ namespace RommPlugin.UI.Forms
                 }
 
                 var filesDeleted = TryDeleteGameFiles(record);
-
                 if (!filesDeleted)
                 {
-                    var result = MessageBox.Show(
-                        string.Format(LocaleManager.Get("uninstall.files_not_found"), action.GameName),
-                        LocaleManager.Get("confirm.title"),
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question);
-
-                    if (result != DialogResult.Yes)
-                    {
-                        return;
-                    }
+                    RommLogger.Log($"[Uninstall] Files not found for {action.GameName} (GameId={action.GameId}), proceeding anyway");
                 }
 
                 _installedService.MarkUninstalled(action.GameId);
                 PluginHelper.DataManager.Save();
+                RommLogger.Log($"[Uninstall] Completed: {action.GameName} (GameId={action.GameId})");
             }
             catch (Exception ex)
             {
@@ -898,41 +888,64 @@ namespace RommPlugin.UI.Forms
             var settings = RommPluginStorage.Load();
             var deleted = false;
 
+            RommLogger.Log($"[Uninstall] Trying to delete files for: {record.Title} (GameId={record.RommGameId})");
+
             if (!string.IsNullOrEmpty(record.InstalledPath))
             {
+                RommLogger.Log($"[Uninstall] Trying InstalledPath: {record.InstalledPath}");
                 if (Directory.Exists(record.InstalledPath))
                 {
-                    try { Directory.Delete(record.InstalledPath, true); deleted = true; }
-                    catch (Exception ex) { RommLogger.LogError($"[RommPlugin] Failed to delete folder {record.InstalledPath}: {ex.Message}"); }
+                    try { Directory.Delete(record.InstalledPath, true); deleted = true; RommLogger.Log($"[Uninstall] Deleted folder: {record.InstalledPath}"); }
+                    catch (Exception ex) { RommLogger.LogError($"[Uninstall] Failed to delete folder {record.InstalledPath}: {ex.Message}"); }
                 }
                 else if (File.Exists(record.InstalledPath))
                 {
-                    try { File.Delete(record.InstalledPath); deleted = true; }
-                    catch (Exception ex) { RommLogger.LogError($"[RommPlugin] Failed to delete file {record.InstalledPath}: {ex.Message}"); }
+                    try { File.Delete(record.InstalledPath); deleted = true; RommLogger.Log($"[Uninstall] Deleted file: {record.InstalledPath}"); }
+                    catch (Exception ex) { RommLogger.LogError($"[Uninstall] Failed to delete file {record.InstalledPath}: {ex.Message}"); }
+                }
+                else
+                {
+                    RommLogger.Log($"[Uninstall] InstalledPath not found on disk: {record.InstalledPath}");
                 }
             }
 
             if (!deleted && !string.IsNullOrEmpty(record.RemotePath) && !string.IsNullOrEmpty(record.FileName))
             {
                 var localFile = Path.Combine(settings.RomsPath, RommConstants.RomsSubfolder, record.RemotePath.Replace("/", "\\"), record.FileName);
+                RommLogger.Log($"[Uninstall] Trying constructed path: {localFile}");
 
                 if (Directory.Exists(localFile))
                 {
-                    try { Directory.Delete(localFile, true); deleted = true; }
-                    catch (Exception ex) { RommLogger.LogError($"[RommPlugin] Failed to delete folder {localFile}: {ex.Message}"); }
+                    try { Directory.Delete(localFile, true); deleted = true; RommLogger.Log($"[Uninstall] Deleted folder: {localFile}"); }
+                    catch (Exception ex) { RommLogger.LogError($"[Uninstall] Failed to delete folder {localFile}: {ex.Message}"); }
                 }
 
                 if (File.Exists(localFile))
                 {
-                    try { File.Delete(localFile); deleted = true; }
-                    catch (Exception ex) { RommLogger.LogError($"[RommPlugin] Failed to delete file {localFile}: {ex.Message}"); }
+                    try { File.Delete(localFile); deleted = true; RommLogger.Log($"[Uninstall] Deleted file: {localFile}"); }
+                    catch (Exception ex) { RommLogger.LogError($"[Uninstall] Failed to delete file {localFile}: {ex.Message}"); }
                 }
 
                 if (File.Exists(localFile + ".zip"))
                 {
-                    try { File.Delete(localFile + ".zip"); deleted = true; }
-                    catch (Exception ex) { RommLogger.LogError($"[RommPlugin] Failed to delete file {localFile}.zip: {ex.Message}"); }
+                    try { File.Delete(localFile + ".zip"); deleted = true; RommLogger.Log($"[Uninstall] Deleted file: {localFile}.zip"); }
+                    catch (Exception ex) { RommLogger.LogError($"[Uninstall] Failed to delete file {localFile}.zip: {ex.Message}"); }
                 }
+
+                if (record.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    var withoutZip = localFile.Substring(0, localFile.Length - 4);
+                    if (File.Exists(withoutZip))
+                    {
+                        try { File.Delete(withoutZip); deleted = true; RommLogger.Log($"[Uninstall] Deleted file (without .zip): {withoutZip}"); }
+                        catch (Exception ex) { RommLogger.LogError($"[Uninstall] Failed to delete file {withoutZip}: {ex.Message}"); }
+                    }
+                }
+            }
+
+            if (!deleted)
+            {
+                RommLogger.Log($"[Uninstall] No files found to delete for: {record.Title}");
             }
 
             return deleted;

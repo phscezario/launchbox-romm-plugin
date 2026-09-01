@@ -11,6 +11,8 @@ using RommPlugin.Core.Models;
 using RommPlugin.Core.Services;
 using RommPlugin.Core.Storage;
 using RommPlugin.Helpers;
+using RommPlugin.Services;
+using RommPlugin.UI.Forms;
 using Unbroken.LaunchBox.Plugins;
 using Unbroken.LaunchBox.Plugins.Data;
 
@@ -50,9 +52,8 @@ namespace RommPlugin.MenuItems.Buttons
                     var existingQueue = JsonConvert.DeserializeObject<List<QueueAction>>(File.ReadAllText(queueFilePath));
                     if (existingQueue != null && existingQueue.Any(a => a.GameId == rommId && a.Action == "remove"))
                     {
-                        MessageBox.Show(
-                            LocaleManager.Get("uninstall.already_queued"),
-                            LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        using (var form = new ConfirmForm(LocaleManager.Get("uninstall.already_queued")))
+                            form.ShowDialog();
                         return;
                     }
                 }
@@ -74,9 +75,8 @@ namespace RommPlugin.MenuItems.Buttons
                             (i.Status == DownloadStatus.WaitingUninstall));
                         if (activeItem != null)
                         {
-                            MessageBox.Show(
-                                LocaleManager.Get("uninstall.already_queued"),
-                                LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            using (var form = new ConfirmForm(LocaleManager.Get("uninstall.already_queued")))
+                                form.ShowDialog();
                             return;
                         }
                     }
@@ -115,7 +115,7 @@ namespace RommPlugin.MenuItems.Buttons
             var json = JsonConvert.SerializeObject(queueActions, Formatting.Indented);
             File.WriteAllText(queueFilePath, json);
 
-            RommGameManagerMenuItem.OpenOrBringToFront();
+            GameManagerLauncher.EnsureOpen();
         }
 
         public bool GetIsValidForGames(IGame[] selectedGames)
