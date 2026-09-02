@@ -6,7 +6,6 @@ using RommPlugin.Core;
 using RommPlugin.Core.Locale;
 using RommPlugin.Core.Constants;
 using RommPlugin.Core.Logging;
-using RommPlugin.Core.Models;
 using RommPlugin.Core.Storage;
 using RommPlugin.Services;
 using Unbroken.LaunchBox.Plugins;

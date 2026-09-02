@@ -1,6 +1,5 @@
 using System;
 using RommPlugin.Core.Models;
-using RommPlugin.Core.Models.Statics;
 using Unbroken.LaunchBox.Plugins.Data;
 
 namespace RommPlugin.Services

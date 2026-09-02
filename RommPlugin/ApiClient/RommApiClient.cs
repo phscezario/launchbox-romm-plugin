@@ -382,7 +382,7 @@ namespace RommPlugin.ApiClient
         {
             await ExecuteWithRetryAsync(async () =>
             {
-                using (var cts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+using (var cts = new CancellationTokenSource())
                 {
                     cts.CancelAfter(TimeSpan.FromSeconds(RommConstants.HttpTimeoutSeconds));
 

@@ -2,9 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using Newtonsoft.Json;
-using RommPlugin.Core.Logging;
 using RommPlugin.Core.Storage;
 
 namespace RommPlugin.Core.Locale

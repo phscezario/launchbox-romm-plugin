@@ -1,4 +1,3 @@
-using System;
 using RommPlugin.Core.Models;
 using Xunit;
 

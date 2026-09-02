@@ -1,6 +1,4 @@
-using System;
 using System.IO;
-using RommPlugin.Core.Logging;
 
 namespace RommPlugin.Core.Helpers
 {

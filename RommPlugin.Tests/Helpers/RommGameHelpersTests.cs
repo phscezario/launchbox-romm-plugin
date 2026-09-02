@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using Moq;
 using RommPlugin.Core.Models;
-using RommPlugin.Core.Models.Statics;
 using RommPlugin.Helpers;
 using Unbroken.LaunchBox.Plugins.Data;
 using Xunit;

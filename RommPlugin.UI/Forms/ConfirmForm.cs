@@ -1,10 +1,7 @@
 using System;
 using System.Drawing;
-using System.IO;
 using System.Windows.Forms;
 using RommPlugin.Core.Locale;
-using RommPlugin.Core.Logging;
-using RommPlugin.Core.Storage;
 using RommPlugin.UI.Helpers;
 
 namespace RommPlugin.UI.Forms

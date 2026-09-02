@@ -1,4 +1,3 @@
-using System.IO;
 using Newtonsoft.Json;
 using RommPlugin.Core.Models;
 using Xunit;

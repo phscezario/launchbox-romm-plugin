@@ -1,9 +1,7 @@
-using System;
 using System.IO;
 using Newtonsoft.Json;
 using RommPlugin.Core.Constants;
 using RommPlugin.Core.Helpers;
-using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 
 namespace RommPlugin.Core.Storage
