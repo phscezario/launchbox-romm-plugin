@@ -101,7 +101,8 @@ namespace RommPlugin.Core.Services
                     (i.Status == DownloadStatus.Downloading ||
                      i.Status == DownloadStatus.Pending ||
                      i.Status == DownloadStatus.WaitingInstall ||
-                     i.Status == DownloadStatus.Completed)))
+                     i.Status == DownloadStatus.Completed ||
+                     i.Status == DownloadStatus.Cancelled)))
                 {
                     return;
                 }
@@ -124,7 +125,8 @@ namespace RommPlugin.Core.Services
                     FilePath = localFile,
                     PartFilePath = localFile + ".part",
                     Status = DownloadStatus.Pending,
-                    AddedAt = DateTime.UtcNow
+                    AddedAt = DateTime.UtcNow,
+                    Cts = new CancellationTokenSource()
                 };
 
                 _items.Add(item);
@@ -161,13 +163,17 @@ namespace RommPlugin.Core.Services
                 {
                     item.Status = DownloadStatus.Downloading;
                     ItemStateChanged?.Invoke(item);
-                    await DownloadWithResumeAsync(item, _cts.Token);
+                    await DownloadWithResumeAsync(item, item.Cts.Token);
                 }
                 catch (OperationCanceledException)
                 {
+                    try { if (File.Exists(item.PartFilePath)) File.Delete(item.PartFilePath); }
+                    catch { }
                 }
                 catch (Exception ex)
                 {
+                    try { if (File.Exists(item.PartFilePath)) File.Delete(item.PartFilePath); }
+                    catch { }
                     item.Status = DownloadStatus.Failed;
                     item.Error = ex.Message;
                     ItemStateChanged?.Invoke(item);
@@ -243,6 +249,13 @@ namespace RommPlugin.Core.Services
                         }
                     }
                 }
+            }
+
+            if (item.Status == DownloadStatus.Cancelled)
+            {
+                try { if (File.Exists(item.PartFilePath)) File.Delete(item.PartFilePath); }
+                catch { }
+                return;
             }
 
             var finalPath = item.FilePath;
@@ -321,13 +334,21 @@ namespace RommPlugin.Core.Services
                     return;
                 }
 
+                item.Status = DownloadStatus.Cancelled;
+                item.Error = null;
+                item.BytesReceived = 0;
+                item.TotalBytes = 0;
+                item.SpeedBytesPerSecond = 0;
+                item.EstimatedTimeRemaining = TimeSpan.Zero;
+
+                try { item.Cts?.Cancel(); } catch { }
+
                 if (File.Exists(item.PartFilePath))
                 {
                     try { File.Delete(item.PartFilePath); }
                     catch { }
                 }
 
-                _items.Remove(item);
                 ItemStateChanged?.Invoke(item);
             }
         }
@@ -355,7 +376,8 @@ namespace RommPlugin.Core.Services
                 var toRemove = _items.Where(i =>
                     i.Status == DownloadStatus.Completed ||
                     i.Status == DownloadStatus.Installed ||
-                    i.Status == DownloadStatus.Failed).ToList();
+                    i.Status == DownloadStatus.Failed ||
+                    i.Status == DownloadStatus.Cancelled).ToList();
 
                 foreach (var item in toRemove)
                 {
@@ -368,7 +390,8 @@ namespace RommPlugin.Core.Services
                 _items.RemoveAll(i =>
                     i.Status == DownloadStatus.Completed ||
                     i.Status == DownloadStatus.Installed ||
-                    i.Status == DownloadStatus.Failed);
+                    i.Status == DownloadStatus.Failed ||
+                    i.Status == DownloadStatus.Cancelled);
             }
 
             SaveState();
@@ -410,7 +433,7 @@ namespace RommPlugin.Core.Services
         {
             lock (_lock)
             {
-                var item = _items.FirstOrDefault(i => i.GameId == gameId && i.Status == DownloadStatus.Failed);
+                var item = _items.FirstOrDefault(i => i.GameId == gameId && (i.Status == DownloadStatus.Failed || i.Status == DownloadStatus.Cancelled));
                 if (item != null && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
                 {
                     item.Status = DownloadStatus.WaitingInstall;
@@ -442,7 +465,7 @@ namespace RommPlugin.Core.Services
         {
             lock (_lock)
             {
-                var item = _items.FirstOrDefault(i => i.GameId == gameId && i.Status == DownloadStatus.Failed);
+                var item = _items.FirstOrDefault(i => i.GameId == gameId && (i.Status == DownloadStatus.Failed || i.Status == DownloadStatus.Cancelled));
                 if (item != null)
                 {
                     if (File.Exists(item.PartFilePath))
@@ -459,6 +482,8 @@ namespace RommPlugin.Core.Services
                     item.RetryCount = 0;
                     item.BytesReceived = 0;
                     item.TotalBytes = 0;
+                    item.Cts?.Dispose();
+                    item.Cts = new CancellationTokenSource();
                     ItemStateChanged?.Invoke(item);
                 }
             }
@@ -526,7 +551,8 @@ namespace RommPlugin.Core.Services
                     foreach (var item in state.Items)
                     {
                         if (item.Status == DownloadStatus.Completed ||
-                            item.Status == DownloadStatus.Installed)
+                            item.Status == DownloadStatus.Installed ||
+                            item.Status == DownloadStatus.Cancelled)
                         {
                             continue;
                         }
@@ -568,6 +594,16 @@ namespace RommPlugin.Core.Services
             try { _cts?.Cancel(); } catch { }
             try { _cts?.Dispose(); } catch { }
             _cts = null;
+
+            lock (_lock)
+            {
+                foreach (var item in _items)
+                {
+                    try { item.Cts?.Cancel(); } catch { }
+                    try { item.Cts?.Dispose(); } catch { }
+                }
+            }
+
             _http?.Dispose();
             _semaphore?.Dispose();
         }

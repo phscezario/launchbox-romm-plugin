@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using Newtonsoft.Json;
 using RommPlugin.Core.Locale;
 
 namespace RommPlugin.Core.Models
@@ -94,6 +96,12 @@ namespace RommPlugin.Core.Models
         internal DateTime _lastUpdateTime;
 
         /// <summary>
+        /// Gets or sets the per-item cancellation token source used to stop this download.
+        /// </summary>
+        [JsonIgnore]
+        public CancellationTokenSource Cts { get; set; }
+
+        /// <summary>
         /// Gets the download progress as a percentage (0-100).
         /// </summary>
         public int Percentage
@@ -175,6 +183,8 @@ namespace RommPlugin.Core.Models
                         return LocaleManager.Get("dm.status.completed");
                     case DownloadStatus.Failed:
                         return LocaleManager.Get("dm.status.failed");
+                    case DownloadStatus.Cancelled:
+                        return LocaleManager.Get("dm.status.cancelled");
                     case DownloadStatus.WaitingInstall:
                         return LocaleManager.Get("gm.status.installing");
                     case DownloadStatus.WaitingUninstall:
@@ -217,6 +227,11 @@ namespace RommPlugin.Core.Models
         /// The download has failed due to an error.
         /// </summary>
         Failed,
+
+        /// <summary>
+        /// The download has been cancelled by the user.
+        /// </summary>
+        Cancelled,
 
         /// <summary>
         /// The download is complete and waiting to be installed.

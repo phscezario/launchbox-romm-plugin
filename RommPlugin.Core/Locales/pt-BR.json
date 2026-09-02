@@ -43,6 +43,7 @@
     "dm.status.paused": "Pausado",
     "dm.status.completed": "Concluído",
     "dm.status.failed": "Falhou",
+    "dm.status.cancelled": "Cancelado",
     "dm.status.ready": "Pronto para Instalar",
     "dm.status.installing": "Instalando: {0}",
     "dm.status.installed": "Instalado: {0}",

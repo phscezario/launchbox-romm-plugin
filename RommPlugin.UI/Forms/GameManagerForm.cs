@@ -391,6 +391,7 @@ namespace RommPlugin.UI.Forms
             dgvGames.Rows.Clear();
 
             var pendingUninstalls = GetPendingUninstallIds();
+            var queueIds = new HashSet<int>(_queueService.Items.Select(i => i.GameId));
 
             foreach (var item in _queueService.Items)
             {
@@ -419,6 +420,9 @@ namespace RommPlugin.UI.Forms
 
             foreach (var record in _installedService.GetAll())
             {
+                if (queueIds.Contains(record.RommGameId))
+                    continue;
+
                 var platformName = record.Platform ?? "";
                 var category = platformName.StartsWith(RommConstants.PlatformPrefix)
                     ? platformName.Substring(7)
@@ -498,6 +502,8 @@ namespace RommPlugin.UI.Forms
                     return Color.LightGreen;
                 case DownloadStatus.Failed:
                     return Color.Red;
+                case DownloadStatus.Cancelled:
+                    return Color.Gray;
                 case DownloadStatus.WaitingInstall:
                     return Color.Cyan;
                 case DownloadStatus.Installed:
@@ -515,11 +521,12 @@ namespace RommPlugin.UI.Forms
             var failed = items.Count(i => i.Status == DownloadStatus.Failed);
             var waitingInstall = items.Count(i => i.Status == DownloadStatus.WaitingInstall);
             var installed = items.Count(i => i.Status == DownloadStatus.Installed);
+            var cancelled = items.Count(i => i.Status == DownloadStatus.Cancelled);
             var installedGames = _installedService.GetAll().Count(r => !r.UninstalledAt.HasValue);
             var totalSize = items.Where(i => i.Status == DownloadStatus.Downloading || i.Status == DownloadStatus.WaitingInstall)
                 .Sum(i => i.TotalBytes);
 
-            lblSummary.Text = $"{LocaleManager.Get("dm.active", active)} | {LocaleManager.Get("dm.pending", pending)} | {LocaleManager.Get("dm.failed", failed)} | {LocaleManager.Get("gm.status.installing")} {waitingInstall} | {LocaleManager.Get("gm.status.installed")} {installed + installedGames} | {LocaleManager.Get("dm.size", FormatSize(totalSize))}";
+            lblSummary.Text = $"{LocaleManager.Get("dm.active", active)} | {LocaleManager.Get("dm.pending", pending)} | {LocaleManager.Get("dm.failed", failed)} | {LocaleManager.Get("gm.status.installing")} {waitingInstall} | {LocaleManager.Get("gm.status.installed")} {installed + installedGames} | Canc: {cancelled} | {LocaleManager.Get("dm.size", FormatSize(totalSize))}";
 
             DownloadItem selectedDownload = null;
             InstalledGameRecord selectedInstalled = null;
@@ -533,10 +540,11 @@ namespace RommPlugin.UI.Forms
                     selectedInstalled = record;
             }
 
-            btnRetry.Enabled = selectedDownload != null && selectedDownload.Status == DownloadStatus.Failed;
+            btnRetry.Enabled = (selectedDownload != null && (selectedDownload.Status == DownloadStatus.Failed || selectedDownload.Status == DownloadStatus.Cancelled))
+                || (selectedInstalled != null && selectedInstalled.UninstalledAt.HasValue);
             btnCancel.Enabled = items.Any(i => i.Status == DownloadStatus.Downloading || i.Status == DownloadStatus.Pending);
             btnUninstall.Enabled = selectedInstalled != null && !selectedInstalled.UninstalledAt.HasValue;
-            btnClear.Enabled = items.Any(i => i.Status == DownloadStatus.Installed || i.Status == DownloadStatus.Failed) ||
+            btnClear.Enabled = items.Any(i => i.Status == DownloadStatus.Installed || i.Status == DownloadStatus.Failed || i.Status == DownloadStatus.Cancelled) ||
                               _installedService.GetAll().Any(r => r.UninstalledAt.HasValue);
         }
 
@@ -561,9 +569,19 @@ namespace RommPlugin.UI.Forms
             if (e.RowIndex < 0) return;
 
             var item = dgvGames.Rows[e.RowIndex].Tag as DownloadItem;
-            if (item == null) return;
+            if (item == null)
+            {
+                var installedRecord = dgvGames.Rows[e.RowIndex].Tag as InstalledGameRecord;
+                if (installedRecord != null && installedRecord.UninstalledAt.HasValue)
+                {
+                    _queueService.Enqueue(installedRecord.RommGameId, installedRecord.Title, installedRecord.FileName, installedRecord.RemotePath);
+                    RefreshList();
+                    return;
+                }
+                return;
+            }
 
-            if (item.Status == DownloadStatus.Failed)
+            if (item.Status == DownloadStatus.Failed || item.Status == DownloadStatus.Cancelled)
             {
                 if (!string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
                     _queueService.RetryInstall(item.GameId);
@@ -576,12 +594,17 @@ namespace RommPlugin.UI.Forms
         {
             foreach (DataGridViewRow row in dgvGames.SelectedRows)
             {
-                if (row.Tag is DownloadItem item && item.Status == DownloadStatus.Failed)
+                if (row.Tag is DownloadItem item && (item.Status == DownloadStatus.Failed || item.Status == DownloadStatus.Cancelled))
                 {
                     if (!string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
                         _queueService.RetryInstall(item.GameId);
                     else
                         _queueService.Retry(item.GameId);
+                }
+                else if (row.Tag is InstalledGameRecord record && record.UninstalledAt.HasValue)
+                {
+                    _queueService.Enqueue(record.RommGameId, record.Title, record.FileName, record.RemotePath);
+                    RefreshList();
                 }
             }
         }
