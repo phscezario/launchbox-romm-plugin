@@ -5,8 +5,12 @@ using Unbroken.LaunchBox.Plugins.Data;
 
 namespace RommPlugin.Services
 {
+    /// <summary>
+    /// Maps metadata from RomM server game objects to LaunchBox game properties, with priority fallback across multiple metadata sources.
+    /// </summary>
     public class RommMetadataMapper : IRommMetadataMapper
     {
+        /// <inheritdoc/>
         public void ApplyServerMetadata(IGame game, RommGame rommGame, RommPluginSettings settings)
         {
             var shouldOverwrite = !settings.KeepLocalData;
@@ -41,6 +45,7 @@ namespace RommPlugin.Services
             }
         }
 
+        /// <inheritdoc/>
         public void ApplyReleaseDate(IGame game, LaunchBoxMetadataModel lb, SsMetadata ss, IgdbMetadata igdb, RommGameMeta meta, bool overwrite)
         {
             if (overwrite || game.ReleaseDate == null)
@@ -61,6 +66,7 @@ namespace RommPlugin.Services
             }
         }
 
+        /// <inheritdoc/>
         public void ApplyMaxPlayers(IGame game, LaunchBoxMetadataModel lb, SsMetadata ss, bool overwrite)
         {
             if (overwrite || game.MaxPlayers == null || game.MaxPlayers == 0)
@@ -72,6 +78,7 @@ namespace RommPlugin.Services
             }
         }
 
+        /// <inheritdoc/>
         public void ApplyPlayMode(IGame game, LaunchBoxMetadataModel lb, bool overwrite)
         {
             if (overwrite || string.IsNullOrEmpty(game.PlayMode))
@@ -81,6 +88,7 @@ namespace RommPlugin.Services
             }
         }
 
+        /// <inheritdoc/>
         public void ApplyVideoUrl(IGame game, LaunchBoxMetadataModel lb, IgdbMetadata igdb, bool overwrite)
         {
             if (overwrite || string.IsNullOrEmpty(game.VideoUrl))
@@ -92,6 +100,7 @@ namespace RommPlugin.Services
             }
         }
 
+        /// <inheritdoc/>
         public void ApplyCommunityRating(IGame game, LaunchBoxMetadataModel lb, IgdbMetadata igdb, RommGameMeta meta, bool overwrite)
         {
             if (overwrite || game.CommunityStarRating == 0)

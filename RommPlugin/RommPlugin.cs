@@ -18,6 +18,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace RommPlugin
 {
+    /// <summary>
+    /// Main plugin class that handles system events and game launching hooks for the RomM integration.
+    /// </summary>
     public class RommMenuPlugin : ISystemEventsPlugin, IGameLaunchingPlugin
     {
         private DateTime? _gameStartTime;
@@ -25,6 +28,7 @@ namespace RommPlugin
         private int _currentRommId;
         private readonly object _gameLock = new object();
 
+        /// <inheritdoc/>
         public async void OnEventRaised(string eventType)
         {
             try
@@ -166,6 +170,7 @@ namespace RommPlugin
             }
         }
 
+        /// <inheritdoc/>
         public void OnBeforeGameLaunching(IGame game, IAdditionalApplication app, IEmulator emulator)
         {
             try
@@ -202,6 +207,7 @@ namespace RommPlugin
             }
         }
 
+        /// <inheritdoc/>
         public async void OnAfterGameLaunched(IGame game, IAdditionalApplication app, IEmulator emulator)
         {
             IGame currentGame;
@@ -258,6 +264,7 @@ namespace RommPlugin
             }
         }
 
+        /// <inheritdoc/>
         public async void OnGameExited()
         {
             IGame game;

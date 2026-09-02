@@ -9,10 +9,20 @@ using RommPlugin.UI.Helpers;
 
 namespace RommPlugin.UI.Forms
 {
+    /// <summary>
+    /// A form that allows users to select which platforms to sync from the Romm server.
+    /// </summary>
     public partial class RommPlatformSelectorForm : Form
     {
+        /// <summary>
+        /// Gets the list of platform selections with their current checked state.
+        /// </summary>
         public List<PlatformSelection> Platforms { get; private set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RommPlatformSelectorForm"/> class.
+        /// </summary>
+        /// <param name="platforms">The list of platforms to display for selection.</param>
         public RommPlatformSelectorForm(List<PlatformSelection> platforms)
         {
             InitializeComponent();

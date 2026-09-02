@@ -66,8 +66,6 @@ namespace RommPlugin.Tests.Helpers
             return field;
         }
 
-        // --- TryGetRommId ---
-
         [Fact]
         public void TryGetRommId_ReturnsTrue_WhenFieldExists()
         {
@@ -102,8 +100,6 @@ namespace RommPlugin.Tests.Helpers
             Assert.Equal(0, rommId);
         }
 
-        // --- GetRommId ---
-
         [Fact]
         public void GetRommId_ReturnsId_WhenFieldExists()
         {
@@ -124,8 +120,6 @@ namespace RommPlugin.Tests.Helpers
 
             Assert.Equal(0, result);
         }
-
-        // --- SetCustomField ---
 
         [Fact]
         public void SetCustomField_CreatesNewField_WhenNotExists()
@@ -165,8 +159,6 @@ namespace RommPlugin.Tests.Helpers
             Assert.Equal("old_value", field.Object.Value);
         }
 
-        // --- GetCustomField ---
-
         [Fact]
         public void GetCustomField_ReturnsValue_WhenFieldExists()
         {
@@ -195,8 +187,6 @@ namespace RommPlugin.Tests.Helpers
 
             Assert.Null(result);
         }
-
-        // --- NormalizeGameTitle ---
 
         [Theory]
         [InlineData("Game.zip", "Game")]
@@ -244,8 +234,6 @@ namespace RommPlugin.Tests.Helpers
             Assert.Equal("Game", result);
         }
 
-        // --- ParseCategory ---
-
         [Theory]
         [InlineData("Arcade", "Arcade")]
         [InlineData("Console", "Consoles")]
@@ -259,8 +247,6 @@ namespace RommPlugin.Tests.Helpers
 
             Assert.Equal(expected, result);
         }
-
-        // --- SanitizeFolderName ---
 
         [Fact]
         public void SanitizeFolderName_RemovesInvalidChars()
@@ -286,8 +272,6 @@ namespace RommPlugin.Tests.Helpers
             Assert.Equal("Game Name", result);
         }
 
-        // --- EnsureDirectoryExists ---
-
         [Fact]
         public void EnsureDirectoryExists_CreatesDirectory_WhenMissing()
         {
@@ -306,8 +290,6 @@ namespace RommPlugin.Tests.Helpers
                     Directory.Delete(tempDir, true);
             }
         }
-
-        // --- ResolvePath ---
 
         [Fact]
         public void ResolvePath_ReturnsAbsolutePath_WhenFromLaunchBoxRoot()

@@ -6,15 +6,20 @@ using RommPlugin.UI.Helpers;
 
 namespace RommPlugin.Services
 {
+    /// <summary>
+    /// Provides functionality to reset (delete) all metadata from games on the RomM server.
+    /// </summary>
     public class RommResetServerService : IRommResetServerService
     {
         private IRommApiClient _api;
 
+        /// <inheritdoc/>
         public void SetApi(IRommApiClient api)
         {
             _api = api;
         }
 
+        /// <inheritdoc/>
         public async Task RemoveAllGamesServerMetadata(string username, string password, string clientApiToken = null)
         {
             await ProgressRunner.RunAsync(

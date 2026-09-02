@@ -13,12 +13,17 @@ using Unbroken.LaunchBox.Plugins;
 
 namespace RommPlugin.MenuItems.Buttons
 {
+    /// <summary>
+    /// Menu item that resets server-side metadata for all games, removing plugin-created fields.
+    /// </summary>
     public class RommResetServerMenuMenuItem : RommMenuItem, ISystemMenuItemPlugin
     {
         private static int _isRunning = 0;
 
+        /// <inheritdoc/>
         public override string Caption => LocaleManager.Get("menu.reset_server");
 
+        /// <inheritdoc/>
         public override async void OnSelected()
         {
             if (Interlocked.CompareExchange(ref _isRunning, 1, 0) != 0)

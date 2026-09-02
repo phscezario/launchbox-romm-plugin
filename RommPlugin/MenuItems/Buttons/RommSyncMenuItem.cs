@@ -10,10 +10,15 @@ using Unbroken.LaunchBox.Plugins;
 
 namespace RommPlugin.MenuItems.Buttons
 {
+    /// <summary>
+    /// Menu item that triggers a full synchronization between LaunchBox and the RomM server.
+    /// </summary>
     public class RommSyncMenuItem : RommMenuItem, ISystemMenuItemPlugin
     {
+        /// <inheritdoc/>
         public override string Caption => LocaleManager.Get("menu.sync");
 
+        /// <inheritdoc/>
         public override async void OnSelected()
         {
             try

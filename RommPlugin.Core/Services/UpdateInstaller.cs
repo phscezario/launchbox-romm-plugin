@@ -7,6 +7,10 @@ using RommPlugin.Core.Logging;
 
 namespace RommPlugin.Core.Services
 {
+    /// <summary>
+    /// Handles the extraction and installation of pending plugin updates from
+    /// a staged zip archive, using a batch script to replace files and restart LaunchBox.
+    /// </summary>
     public static class UpdateInstaller
     {
         private static string UpdateDir => Path.Combine(Path.GetTempPath(), "RomMPlugin_Update");
@@ -15,11 +19,20 @@ namespace RommPlugin.Core.Services
         private static string PendingVersionPath => Path.Combine(UpdateDir, "pending.version");
         private static string BatchScriptPath => Path.Combine(UpdateDir, "update.bat");
 
+        /// <summary>
+        /// Determines whether a previously downloaded update is pending installation
+        /// by checking for the presence of both the flag file and the zip archive.
+        /// </summary>
+        /// <returns><c>true</c> if a pending update exists; otherwise, <c>false</c>.</returns>
         public static bool HasPendingUpdate()
         {
             return File.Exists(PendingFlagPath) && File.Exists(PendingZipPath);
         }
 
+        /// <summary>
+        /// Gets the version string of the pending update, read from the pending version file.
+        /// </summary>
+        /// <returns>The pending version string, or <c>null</c> if no version file exists.</returns>
         public static string GetPendingVersion()
         {
             if (File.Exists(PendingVersionPath))
@@ -27,6 +40,12 @@ namespace RommPlugin.Core.Services
             return null;
         }
 
+        /// <summary>
+        /// Applies the pending update by extracting the downloaded archive, locating the
+        /// plugin directory within it, generating a batch script to replace files, and
+        /// launching the script before exiting the current process.
+        /// </summary>
+        /// <returns><c>true</c> if the update batch was launched successfully; otherwise, <c>false</c>.</returns>
         public static bool ApplyPendingUpdate()
         {
             try
@@ -138,6 +157,9 @@ del ""%~f0"" 2>nul
             }
         }
 
+        /// <summary>
+        /// Removes the temporary update staging directory and all its contents.
+        /// </summary>
         public static void CleanupUpdateDir()
         {
             try

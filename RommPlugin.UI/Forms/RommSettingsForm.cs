@@ -13,8 +13,14 @@ using RommPlugin.UI.Helpers;
 
 namespace RommPlugin.UI.Forms
 {
+    /// <summary>
+    /// A form for configuring the Romm plugin settings including server connection, paths, and behavior options.
+    /// </summary>
     public partial class RommSettingsForm : Form
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RommSettingsForm"/> class.
+        /// </summary>
         public RommSettingsForm()
         {
             InitializeComponent();

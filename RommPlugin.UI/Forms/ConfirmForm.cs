@@ -9,10 +9,21 @@ using RommPlugin.UI.Helpers;
 
 namespace RommPlugin.UI.Forms
 {
+    /// <summary>
+    /// A modal confirmation dialog that displays a message and optional checkbox.
+    /// </summary>
     public partial class ConfirmForm : Form
     {
+        /// <summary>
+        /// Gets a value indicating whether the "Don't ask again" checkbox is checked.
+        /// </summary>
         public bool SuppressChecked => chkSuppress.Checked;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ConfirmForm"/> class.
+        /// </summary>
+        /// <param name="message">The message to display in the dialog.</param>
+        /// <param name="checkboxText">Optional text for a suppression checkbox. If <c>null</c>, the checkbox is hidden.</param>
         public ConfirmForm(string message, string checkboxText = null)
         {
             InitializeComponent();

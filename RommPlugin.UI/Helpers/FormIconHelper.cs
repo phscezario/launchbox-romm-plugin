@@ -6,8 +6,15 @@ using RommPlugin.Core.Storage;
 
 namespace RommPlugin.UI.Helpers
 {
+    /// <summary>
+    /// Provides helper methods for loading form icons from the plugin's image resources.
+    /// </summary>
     public static class FormIconHelper
     {
+        /// <summary>
+        /// Loads and sets the icon for a <see cref="Form"/> from the plugin's images folder.
+        /// </summary>
+        /// <param name="form">The form to set the icon on.</param>
         public static void LoadIcon(Form form)
         {
             try

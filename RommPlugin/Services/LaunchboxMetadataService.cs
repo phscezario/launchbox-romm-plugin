@@ -6,8 +6,17 @@ using Unbroken.LaunchBox.Plugins.Data;
 
 namespace RommPlugin.Services
 {
+    /// <summary>
+    /// Provides utility methods for building LaunchBox metadata structures from game data.
+    /// </summary>
     public static class LaunchboxMetadataService
     {
+        /// <summary>
+        /// Builds a <see cref="LaunchBoxMetadataModel"/> from a LaunchBox game's properties.
+        /// Extracts release date, player count, rating, video URL, genres, and other metadata.
+        /// </summary>
+        /// <param name="game">The LaunchBox game to extract metadata from.</param>
+        /// <returns>A populated <see cref="LaunchBoxMetadataModel"/> with the game's metadata.</returns>
         public static LaunchBoxMetadataModel BuildLaunchboxMetadata(IGame game)
         {
             var metadata = new LaunchBoxMetadataModel

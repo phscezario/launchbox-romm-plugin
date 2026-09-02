@@ -13,8 +13,13 @@ using Unbroken.LaunchBox.Plugins.Data;
 
 namespace RommPlugin.Services
 {
+    /// <summary>
+    /// Launches the external hierarchy CLI tool to rebuild LaunchBox platform playlists and categories
+    /// based on the current RomM platforms and games.
+    /// </summary>
     public class RommHierarchyCli : IRommHierarchyCli
     {
+        /// <inheritdoc/>
         public void LaunchHierarchyCli(List<IPlatform> platforms, List<IGame> rommGamesOnly, Dictionary<string, string> platformCategoryMap, bool restartLaunchBox = false)
         {
             var baseDir = RommPaths.PluginFolder;

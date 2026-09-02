@@ -20,6 +20,9 @@ using Unbroken.LaunchBox.Plugins.Data;
 
 namespace RommPlugin.Services
 {
+    /// <summary>
+    /// Orchestrates bidirectional synchronization of platforms, games, metadata, screenshots, and play statistics between LaunchBox and a RomM server.
+    /// </summary>
     public class RommSyncService : IRommSyncService
     {
         private IRommApiClient _api;
@@ -30,8 +33,12 @@ namespace RommPlugin.Services
         private readonly IRommBackupService _backupService;
         private static int _isRunning = 0;
 
+        /// <inheritdoc/>
         public IRommApiClient Api => _api;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RommSyncService"/> class with default dependencies.
+        /// </summary>
         public RommSyncService()
         {
             _metadataMapper = new RommMetadataMapper();
@@ -39,6 +46,15 @@ namespace RommPlugin.Services
             _backupService = new RommBackupService();
         }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RommSyncService"/> class with the specified dependencies.
+        /// </summary>
+        /// <param name="api">The RomM API client for server communication.</param>
+        /// <param name="metadataMapper">The metadata mapper for applying server data to local games.</param>
+        /// <param name="screenshotSync">The screenshot synchronization service.</param>
+        /// <param name="statsService">The play statistics synchronization service.</param>
+        /// <param name="hierarchyCli">The hierarchy CLI launcher for rebuilding playlists.</param>
+        /// <param name="backupService">The XML backup service.</param>
         public RommSyncService(
             IRommApiClient api,
             IRommMetadataMapper metadataMapper,
@@ -55,11 +71,13 @@ namespace RommPlugin.Services
             _backupService = backupService;
         }
 
+        /// <inheritdoc/>
         public void SetApi(IRommApiClient api)
         {
             _api = api;
         }
 
+        /// <inheritdoc/>
         public async Task SyncAsync(bool headless = false)
         {
             if (Interlocked.CompareExchange(ref _isRunning, 1, 0) != 0)
@@ -521,7 +539,6 @@ namespace RommPlugin.Services
                     {
                         _hierarchyCli.LaunchHierarchyCli(platforms, rommGamesOnly, platformCategoryMap, false);
 
-                        // Limpar categorias RomM sem jogos (baseado nos XML files, não HasGames)
                         try
                         {
                             var baseDirForCleanup = RommPaths.PluginFolder;
@@ -609,6 +626,7 @@ namespace RommPlugin.Services
             }
         }
 
+        /// <inheritdoc/>
         public async Task UpdateServerMetadata(string username, string password, string clientApiToken = null)
         {
             await ProgressRunner.RunAsync(
@@ -769,11 +787,13 @@ namespace RommPlugin.Services
             );
         }
 
+        /// <inheritdoc/>
         public void ApplyServerMetadata(IGame game, RommGame rommGame, RommPluginSettings settings)
         {
             _metadataMapper.ApplyServerMetadata(game, rommGame, settings);
         }
 
+        /// <inheritdoc/>
         public async Task PushGameMetadataAsync(IGame game, RommGame remoteGame, RommPluginSettings settings)
         {
             RommGameHelpers.TryGetRommId(game, out int rommId);
@@ -816,31 +836,37 @@ namespace RommPlugin.Services
             await _screenshotSync.SyncScreenshotsBidirectional(game, remoteGame, settings);
         }
 
+        /// <inheritdoc/>
         public async Task SyncStatsOnGameLaunch(IGame game, int rommId)
         {
             await _statsService.SyncStatsOnGameLaunch(game, rommId);
         }
 
+        /// <inheritdoc/>
         public async Task SyncStatsOnGameExit(IGame game, int rommId, DateTime startTime)
         {
             await _statsService.SyncStatsOnGameExit(game, rommId, startTime);
         }
 
+        /// <inheritdoc/>
         public async Task SyncScreenshotsBidirectional(IGame game, RommGame remoteGame, RommPluginSettings settings)
         {
             await _screenshotSync.SyncScreenshotsBidirectional(game, remoteGame, settings);
         }
 
+        /// <inheritdoc/>
         public async Task<RommStats> FetchLatestStatsFromRomm(int romId)
         {
             return await _statsService.FetchLatestStatsFromRomm(romId);
         }
 
+        /// <inheritdoc/>
         public void CompareAndUpdateStats(IGame game, RommStats rommStats)
         {
             _statsService.CompareAndUpdateStats(game, rommStats);
         }
 
+        /// <inheritdoc/>
         public async Task SendPlaySessionToRomm(int rommGameId, DateTime startTime, DateTime endTime, long durationMs)
         {
             await _statsService.SendPlaySessionToRomm(rommGameId, startTime, endTime, durationMs);

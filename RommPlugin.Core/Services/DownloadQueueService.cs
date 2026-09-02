@@ -16,6 +16,10 @@ using RommPlugin.Core.Models.Statics;
 
 namespace RommPlugin.Core.Services
 {
+    /// <summary>
+    /// Manages a queue of download items with support for concurrent downloads,
+    /// progress tracking, resume capability, and persistent state.
+    /// </summary>
     public class DownloadQueueService : IDownloadQueueService
     {
         private readonly SemaphoreSlim _semaphore;
@@ -26,25 +30,40 @@ namespace RommPlugin.Core.Services
         private readonly object _lock = new object();
         private CancellationTokenSource _cts;
 
+        /// <inheritdoc/>
         public event Action<DownloadItem> ItemStateChanged;
+
+        /// <inheritdoc/>
         public event Action AllDownloadsCompleted;
+
+        /// <inheritdoc/>
         public event Action<DownloadItem> ProgressChanged;
 
+        /// <inheritdoc/>
         public IReadOnlyList<DownloadItem> Items
         {
             get { lock (_lock) return _items.ToList(); }
         }
 
+        /// <inheritdoc/>
         public int ActiveCount
         {
             get { lock (_lock) return _items.Count(i => i.Status == DownloadStatus.Downloading); }
         }
 
+        /// <inheritdoc/>
         public int PendingCount
         {
             get { lock (_lock) return _items.Count(i => i.Status == DownloadStatus.Pending); }
         }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DownloadQueueService"/> class.
+        /// </summary>
+        /// <param name="stateFilePath">Path to the file used to persist queue state.</param>
+        /// <param name="romsPath">Local directory where downloaded ROM files are stored.</param>
+        /// <param name="rommBaseUrl">Base URL of the RomM server.</param>
+        /// <param name="concurrentLimit">Maximum number of simultaneous downloads. Defaults to 5.</param>
         public DownloadQueueService(string stateFilePath, string romsPath, string rommBaseUrl, int concurrentLimit = 5)
         {
             _stateFilePath = stateFilePath;
@@ -60,6 +79,7 @@ namespace RommPlugin.Core.Services
             };
         }
 
+        /// <inheritdoc/>
         public void SetAuthentication(string baseUrl, string token = null, string username = null, string password = null)
         {
             _http?.Dispose();
@@ -67,6 +87,7 @@ namespace RommPlugin.Core.Services
             AuthHeaderHelper.ApplyAuthentication(_http, token, username, password);
         }
 
+        /// <inheritdoc/>
         public void Enqueue(int gameId, string gameName, string fsName, string fsPath)
         {
             DownloadItem item = null;
@@ -113,6 +134,7 @@ namespace RommPlugin.Core.Services
             StartNext();
         }
 
+        /// <inheritdoc/>
         public void StartNext()
         {
             List<DownloadItem> toStart;
@@ -285,6 +307,7 @@ namespace RommPlugin.Core.Services
             item._lastBytesReceived = item.BytesReceived;
         }
 
+        /// <inheritdoc/>
         public void Cancel(int gameId)
         {
             lock (_lock)
@@ -309,6 +332,7 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <inheritdoc/>
         public void CancelAll()
         {
             List<int> ids;
@@ -323,6 +347,7 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <inheritdoc/>
         public void ClearCompleted()
         {
             lock (_lock)
@@ -350,6 +375,7 @@ namespace RommPlugin.Core.Services
             ItemStateChanged?.Invoke(null);
         }
 
+        /// <inheritdoc/>
         public void InstallPending(int gameId)
         {
             lock (_lock)
@@ -364,6 +390,7 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <inheritdoc/>
         public void MarkInstallFailed(int gameId, string error)
         {
             lock (_lock)
@@ -378,6 +405,7 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <inheritdoc/>
         public void RetryInstall(int gameId)
         {
             lock (_lock)
@@ -394,6 +422,7 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <inheritdoc/>
         public void InstallAllPending()
         {
             List<DownloadItem> toInstall;
@@ -408,6 +437,7 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <inheritdoc/>
         public void Retry(int gameId)
         {
             lock (_lock)
@@ -450,6 +480,7 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <inheritdoc/>
         public void SaveState()
         {
             try
@@ -473,6 +504,7 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <inheritdoc/>
         public void LoadState()
         {
             try
@@ -530,6 +562,7 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <inheritdoc/>
         public void Dispose()
         {
             try { _cts?.Cancel(); } catch { }

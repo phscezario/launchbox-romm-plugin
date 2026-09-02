@@ -3,6 +3,9 @@ using System.Windows.Forms;
 
 namespace RommPlugin.UI.Helpers
 {
+    /// <summary>
+    /// Provides static methods for rendering progress bars and status cells in list view controls.
+    /// </summary>
     public static class ListViewProgressRenderer
     {
         private static readonly Font ProgressFont = new Font("Segoe UI", 8f, FontStyle.Bold);
@@ -15,6 +18,13 @@ namespace RommPlugin.UI.Helpers
             LineAlignment = StringAlignment.Center
         };
 
+        /// <summary>
+        /// Draws a progress bar cell with a percentage label.
+        /// </summary>
+        /// <param name="g">The <see cref="Graphics"/> surface to draw on.</param>
+        /// <param name="bounds">The bounding rectangle for the cell.</param>
+        /// <param name="percentage">The progress percentage (0-100).</param>
+        /// <param name="barColor">The color of the progress bar fill.</param>
         public static void DrawProgressCell(Graphics g, Rectangle bounds, int percentage, Color barColor)
         {
             g.FillRectangle(BarBackgroundBrush, bounds);
@@ -34,6 +44,13 @@ namespace RommPlugin.UI.Helpers
             g.DrawString(text, ProgressFont, TextBrush, textRect, CenterFormat);
         }
 
+        /// <summary>
+        /// Draws a status text cell with vertically centered text.
+        /// </summary>
+        /// <param name="g">The <see cref="Graphics"/> surface to draw on.</param>
+        /// <param name="bounds">The bounding rectangle for the cell.</param>
+        /// <param name="status">The status text to display.</param>
+        /// <param name="textColor">The color of the status text.</param>
         public static void DrawStatusCell(Graphics g, Rectangle bounds, string status, Color textColor)
         {
             using (var brush = new SolidBrush(textColor))

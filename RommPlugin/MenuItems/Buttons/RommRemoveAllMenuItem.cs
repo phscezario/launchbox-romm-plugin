@@ -13,10 +13,15 @@ using Unbroken.LaunchBox.Plugins;
 
 namespace RommPlugin.MenuItems.Buttons
 {
+    /// <summary>
+    /// Menu item that removes all plugin data and restarts LaunchBox using the CLI tool.
+    /// </summary>
     public class RommRemoveAllMenuItem : RommMenuItem, ISystemMenuItemPlugin
     {
+        /// <inheritdoc/>
         public override string Caption => LocaleManager.Get("menu.remove_all");
 
+        /// <inheritdoc/>
         public override async void OnSelected()
         {
             try

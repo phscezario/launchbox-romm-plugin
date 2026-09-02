@@ -6,19 +6,40 @@ using RommPlugin.Core.Locale;
 
 namespace RommPlugin.Core.Services
 {
+    /// <summary>
+    /// Tests connectivity and authentication against a RomM server instance.
+    /// </summary>
     public class RommConnectionTester
     {
         private readonly HttpClient _http;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RommConnectionTester"/> class
+        /// with a default 15-second HTTP timeout.
+        /// </summary>
         public RommConnectionTester() : this(new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
         {
         }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RommConnectionTester"/> class
+        /// with the specified HTTP client.
+        /// </summary>
+        /// <param name="httpClient">The HTTP client to use for connection tests.</param>
         public RommConnectionTester(HttpClient httpClient)
         {
             _http = httpClient;
         }
 
+        /// <summary>
+        /// Tests connectivity and authentication against a RomM server by calling the
+        /// <c>/api/platforms</c> endpoint.
+        /// </summary>
+        /// <param name="baseUrl">The base URL of the RomM server to test.</param>
+        /// <param name="clientApiToken">Optional API token for Bearer authentication.</param>
+        /// <param name="username">Optional username for Basic authentication.</param>
+        /// <param name="password">Optional password for Basic authentication.</param>
+        /// <returns>A <see cref="ConnectionTestResult"/> indicating whether the connection succeeded.</returns>
         public async Task<ConnectionTestResult> TestAsync(
             string baseUrl,
             string clientApiToken,

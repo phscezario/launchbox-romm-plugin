@@ -7,6 +7,9 @@ using RommPlugin.Core.Models;
 
 namespace RommPlugin.UI.Helpers
 {
+    /// <summary>
+    /// Watches a JSON queue file for changes and raises events when new actions are detected.
+    /// </summary>
     public class QueueFileWatcher : IDisposable
     {
         private readonly FileSystemWatcher _watcher;
@@ -14,8 +17,16 @@ namespace RommPlugin.UI.Helpers
         private readonly object _processLock = new object();
         private bool _disposed;
 
+        /// <summary>
+        /// Occurs when a new queue action is detected in the watched file.
+        /// </summary>
         public event Action<QueueAction> ActionDetected;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="QueueFileWatcher"/> class
+        /// that watches the specified queue file for changes.
+        /// </summary>
+        /// <param name="queueFilePath">The full path to the JSON queue file to monitor.</param>
         public QueueFileWatcher(string queueFilePath)
         {
             _queueFilePath = queueFilePath;
@@ -38,11 +49,17 @@ namespace RommPlugin.UI.Helpers
             _watcher.Created += OnQueueFileChanged;
         }
 
+        /// <summary>
+        /// Starts monitoring the queue file for changes.
+        /// </summary>
         public void Start()
         {
             _watcher.EnableRaisingEvents = true;
         }
 
+        /// <summary>
+        /// Stops monitoring the queue file for changes.
+        /// </summary>
         public void Stop()
         {
             _watcher.EnableRaisingEvents = false;
@@ -83,6 +100,7 @@ namespace RommPlugin.UI.Helpers
             }
         }
 
+        /// <inheritdoc/>
         public void Dispose()
         {
             if (_disposed) return;

@@ -8,8 +8,12 @@ using RommPlugin.Core.Storage;
 
 namespace RommPlugin.Services
 {
+    /// <summary>
+    /// Creates timestamped backups of LaunchBox XML data files with automatic rotation of old backups.
+    /// </summary>
     public class RommBackupService : IRommBackupService
     {
+        /// <inheritdoc/>
         public void BackupXml(string fileName)
         {
             try

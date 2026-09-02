@@ -7,8 +7,17 @@ using RommPlugin.Core.Models;
 
 namespace RommPlugin.Core.Storage
 {
+    /// <summary>
+    /// Handles loading and saving of plugin settings to/from the settings.json file.
+    /// Automatically encrypts and decrypts sensitive credentials (Password, ClientApiToken).
+    /// </summary>
     public static class RommPluginStorage
     {
+        /// <summary>
+        /// Loads the plugin settings from disk, decrypting credentials as needed.
+        /// Returns default settings if the file doesn't exist or cannot be read.
+        /// </summary>
+        /// <returns>The deserialized <see cref="RommPluginSettings"/> instance.</returns>
         public static RommPluginSettings Load()
         {
             try
@@ -33,6 +42,11 @@ namespace RommPlugin.Core.Storage
             }
         }
 
+        /// <summary>
+        /// Saves the plugin settings to disk, encrypting sensitive credentials before writing.
+        /// Uses atomic file write via <see cref="SafeFileWriter"/> to prevent corruption.
+        /// </summary>
+        /// <param name="settings">The settings to save.</param>
         public static void Save(RommPluginSettings settings)
         {
             try

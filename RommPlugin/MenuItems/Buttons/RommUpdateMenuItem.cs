@@ -15,21 +15,29 @@ using Unbroken.LaunchBox.Plugins.Data;
 
 namespace RommPlugin.MenuItems.Buttons
 {
+    /// <summary>
+    /// Context menu item that synchronizes metadata for a single game between LaunchBox and RomM.
+    /// </summary>
     public class RommUpdateMenuItem : RommMenuItem, IGameMenuItemPlugin
     {
+        /// <inheritdoc/>
         public override string Caption => LocaleManager.Get("context.update_metadata");
 
+        /// <inheritdoc/>
         public bool SupportsMultipleGames => false;
 
+        /// <inheritdoc/>
         public bool GetIsValidForGame(IGame selectedGame)
         {
             return RommGameHelpers.TryGetRommId(selectedGame, out _);
         }
 
+        /// <inheritdoc/>
         public override void OnSelected()
         {
         }
 
+        /// <inheritdoc/>
         public async void OnSelected(IGame selectedGame)
         {
             try
@@ -108,11 +116,13 @@ namespace RommPlugin.MenuItems.Buttons
             }
         }
 
+        /// <inheritdoc/>
         public bool GetIsValidForGames(IGame[] selectedGames)
         {
             return false;
         }
 
+        /// <inheritdoc/>
         public void OnSelected(IGame[] selectedGames)
         {
         }

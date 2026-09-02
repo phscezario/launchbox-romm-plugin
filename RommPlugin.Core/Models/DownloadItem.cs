@@ -3,27 +3,99 @@ using RommPlugin.Core.Locale;
 
 namespace RommPlugin.Core.Models
 {
+    /// <summary>
+    /// Represents a file download item with progress tracking and status information.
+    /// </summary>
     public class DownloadItem
     {
+        /// <summary>
+        /// Gets or sets the RomM game identifier.
+        /// </summary>
         public int GameId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the display name of the game.
+        /// </summary>
         public string GameName { get; set; }
+
+        /// <summary>
+        /// Gets or sets the filesystem name of the ROM.
+        /// </summary>
         public string FsName { get; set; }
+
+        /// <summary>
+        /// Gets or sets the filesystem path on the server.
+        /// </summary>
         public string FsPath { get; set; }
+
+        /// <summary>
+        /// Gets or sets the number of bytes received so far.
+        /// </summary>
         public long BytesReceived { get; set; }
+
+        /// <summary>
+        /// Gets or sets the total file size in bytes.
+        /// </summary>
         public long TotalBytes { get; set; }
+
+        /// <summary>
+        /// Gets or sets the current download status.
+        /// </summary>
         public DownloadStatus Status { get; set; }
+
+        /// <summary>
+        /// Gets or sets the local file path where the download is saved.
+        /// </summary>
         public string FilePath { get; set; }
+
+        /// <summary>
+        /// Gets or sets the path to the temporary partial download file.
+        /// </summary>
         public string PartFilePath { get; set; }
+
+        /// <summary>
+        /// Gets or sets the current download speed in bytes per second.
+        /// </summary>
         public double SpeedBytesPerSecond { get; set; }
+
+        /// <summary>
+        /// Gets or sets the estimated time remaining for the download.
+        /// </summary>
         public TimeSpan EstimatedTimeRemaining { get; set; }
+
+        /// <summary>
+        /// Gets or sets the number of retry attempts made.
+        /// </summary>
         public int RetryCount { get; set; }
+
+        /// <summary>
+        /// Gets or sets the timestamp when the download was added to the queue.
+        /// </summary>
         public DateTime AddedAt { get; set; }
+
+        /// <summary>
+        /// Gets or sets the timestamp when the download completed, or null if not yet complete.
+        /// </summary>
         public DateTime? CompletedAt { get; set; }
+
+        /// <summary>
+        /// Gets or sets the error message if the download failed.
+        /// </summary>
         public string Error { get; set; }
 
+        /// <summary>
+        /// Internal tracking field for bytes received at the last speed calculation.
+        /// </summary>
         internal long _lastBytesReceived;
+
+        /// <summary>
+        /// Internal tracking field for the last speed calculation timestamp.
+        /// </summary>
         internal DateTime _lastUpdateTime;
 
+        /// <summary>
+        /// Gets the download progress as a percentage (0-100).
+        /// </summary>
         public int Percentage
         {
             get
@@ -33,6 +105,9 @@ namespace RommPlugin.Core.Models
             }
         }
 
+        /// <summary>
+        /// Gets the current download speed as a formatted string (e.g., "1.5 MB/s").
+        /// </summary>
         public string SpeedText
         {
             get
@@ -46,6 +121,9 @@ namespace RommPlugin.Core.Models
             }
         }
 
+        /// <summary>
+        /// Gets the estimated time remaining as a formatted string (e.g., "5m 30s").
+        /// </summary>
         public string TimeRemainingText
         {
             get
@@ -60,6 +138,9 @@ namespace RommPlugin.Core.Models
             }
         }
 
+        /// <summary>
+        /// Gets the total file size as a formatted string (e.g., "1.25 GB").
+        /// </summary>
         public string SizeText
         {
             get
@@ -75,6 +156,9 @@ namespace RommPlugin.Core.Models
             }
         }
 
+        /// <summary>
+        /// Gets the localized status text for the current download status.
+        /// </summary>
         public string StatusText
         {
             get
@@ -104,15 +188,49 @@ namespace RommPlugin.Core.Models
         }
     }
 
+    /// <summary>
+    /// Enumerates the possible states of a download.
+    /// </summary>
     public enum DownloadStatus
     {
+        /// <summary>
+        /// The download is queued and waiting to start.
+        /// </summary>
         Pending,
+
+        /// <summary>
+        /// The download is actively in progress.
+        /// </summary>
         Downloading,
+
+        /// <summary>
+        /// The download has been paused by the user.
+        /// </summary>
         Paused,
+
+        /// <summary>
+        /// The download has completed successfully.
+        /// </summary>
         Completed,
+
+        /// <summary>
+        /// The download has failed due to an error.
+        /// </summary>
         Failed,
+
+        /// <summary>
+        /// The download is complete and waiting to be installed.
+        /// </summary>
         WaitingInstall,
+
+        /// <summary>
+        /// The game is waiting to be uninstalled.
+        /// </summary>
         WaitingUninstall,
+
+        /// <summary>
+        /// The game has been successfully installed.
+        /// </summary>
         Installed
     }
 }

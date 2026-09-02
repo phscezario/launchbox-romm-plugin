@@ -18,22 +18,30 @@ using Unbroken.LaunchBox.Plugins.Data;
 
 namespace RommPlugin.MenuItems.Buttons
 {
+    /// <summary>
+    /// Context menu item that queues an installed game for uninstallation.
+    /// </summary>
     public class RommUninstallMenuItem : RommMenuItem, IGameMenuItemPlugin
     {
+        /// <inheritdoc/>
         public override string Caption => LocaleManager.Get("context.uninstall");
 
+        /// <inheritdoc/>
         public bool SupportsMultipleGames => false;
 
+        /// <inheritdoc/>
         public bool GetIsValidForGame(IGame selectedGame)
         {
             return RommGameHelpers.TryGetRommId(selectedGame, out _)
                 && selectedGame.Installed == true;
         }
 
+        /// <inheritdoc/>
         public override void OnSelected()
         {
         }
 
+        /// <inheritdoc/>
         public void OnSelected(IGame selectedGame)
         {
             if (!RommGameHelpers.TryGetRommId(selectedGame, out var rommId))
@@ -118,11 +126,13 @@ namespace RommPlugin.MenuItems.Buttons
             GameManagerLauncher.EnsureOpen();
         }
 
+        /// <inheritdoc/>
         public bool GetIsValidForGames(IGame[] selectedGames)
         {
             return false;
         }
 
+        /// <inheritdoc/>
         public void OnSelected(IGame[] selectedGames)
         {
         }

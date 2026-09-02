@@ -19,8 +19,13 @@ using Unbroken.LaunchBox.Plugins.Data;
 
 namespace RommPlugin.Services
 {
+    /// <summary>
+    /// Processes pending download items (installs and uninstalls) from the RomM server.
+    /// Extracts downloaded ROMs, configures LaunchBox games, and handles folder game detection.
+    /// </summary>
     public class RommProcessInstallUninstallService : IRommProcessInstallUninstallService
     {
+        /// <inheritdoc/>
         public async Task ProcessInstallUninstallEvents(bool showEmptyMessage = true)
         {
             await ProgressRunner.RunAsync(

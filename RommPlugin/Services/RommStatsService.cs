@@ -10,15 +10,24 @@ using Unbroken.LaunchBox.Plugins.Data;
 
 namespace RommPlugin.Services
 {
+    /// <summary>
+    /// Synchronizes play statistics between LaunchBox games and the RomM server.
+    /// Handles fetching stats, comparing them with local data, and sending play sessions.
+    /// </summary>
     public class RommStatsService : IRommStatsService
     {
         private readonly IRommApiClient _api;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RommStatsService"/> class.
+        /// </summary>
+        /// <param name="api">The RomM API client used for fetching and sending play statistics.</param>
         public RommStatsService(IRommApiClient api)
         {
             _api = api;
         }
 
+        /// <inheritdoc/>
         public async Task<RommStats> FetchLatestStatsFromRomm(int romId)
         {
             try
@@ -44,6 +53,7 @@ namespace RommPlugin.Services
             }
         }
 
+        /// <inheritdoc/>
         public void CompareAndUpdateStats(IGame game, RommStats rommStats)
         {
             if (rommStats.LastPlayed == null)
@@ -60,6 +70,7 @@ namespace RommPlugin.Services
             }
         }
 
+        /// <inheritdoc/>
         public async Task SendPlaySessionToRomm(int rommGameId, DateTime startTime, DateTime endTime, long durationMs)
         {
             try
@@ -89,6 +100,7 @@ namespace RommPlugin.Services
             }
         }
 
+        /// <inheritdoc/>
         public async Task SyncStatsOnGameLaunch(IGame game, int rommId)
         {
             try
@@ -102,6 +114,7 @@ namespace RommPlugin.Services
             }
         }
 
+        /// <inheritdoc/>
         public async Task SyncStatsOnGameExit(IGame game, int rommId, DateTime startTime)
         {
             try

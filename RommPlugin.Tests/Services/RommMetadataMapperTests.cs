@@ -32,8 +32,6 @@ namespace RommPlugin.Tests.Services
             return new RommPluginSettings { KeepLocalData = keepLocalData };
         }
 
-        // --- ApplyReleaseDate ---
-
         [Fact]
         public void ApplyReleaseDate_PrefersLaunchBoxMetadata()
         {
@@ -87,8 +85,6 @@ namespace RommPlugin.Tests.Services
             Assert.Equal(expected, game.Object.ReleaseDate.Value);
         }
 
-        // --- ApplyMaxPlayers ---
-
         [Fact]
         public void ApplyMaxPlayers_PrefersLaunchBoxMetadata()
         {
@@ -124,8 +120,6 @@ namespace RommPlugin.Tests.Services
             Assert.Equal(2, game.Object.MaxPlayers);
         }
 
-        // --- ApplyPlayMode ---
-
         [Fact]
         public void ApplyPlayMode_SetsCooperative_WhenTrue()
         {
@@ -147,8 +141,6 @@ namespace RommPlugin.Tests.Services
 
             Assert.Null(game.Object.PlayMode);
         }
-
-        // --- ApplyVideoUrl ---
 
         [Fact]
         public void ApplyVideoUrl_UsesLaunchBoxVideoId()
@@ -184,8 +176,6 @@ namespace RommPlugin.Tests.Services
 
             Assert.Equal("https://existing.url", game.Object.VideoUrl);
         }
-
-        // --- ApplyCommunityRating ---
 
         [Fact]
         public void ApplyCommunityRating_PrefersLaunchBoxRating()
@@ -224,8 +214,6 @@ namespace RommPlugin.Tests.Services
 
             Assert.Equal(6.0f, game.Object.CommunityStarRating);
         }
-
-        // --- ApplyServerMetadata (integration) ---
 
         [Fact]
         public void ApplyServerMetadata_Overwrites_WhenKeepLocalDataFalse()

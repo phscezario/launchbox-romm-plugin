@@ -9,18 +9,28 @@ using RommPlugin.Core.Models;
 
 namespace RommPlugin.Core.Services
 {
+    /// <summary>
+    /// Tracks which games have been installed locally from the RomM server,
+    /// persisting records to a JSON file.
+    /// </summary>
     public class InstalledGamesService : IInstalledGamesService
     {
         private readonly string _filePath;
         private readonly object _lock = new object();
         private InstalledGamesFile _file;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="InstalledGamesService"/> class
+        /// and loads existing records from disk.
+        /// </summary>
+        /// <param name="filePath">Path to the JSON file used to persist installed game records.</param>
         public InstalledGamesService(string filePath)
         {
             _filePath = filePath;
             Load();
         }
 
+        /// <inheritdoc/>
         public IReadOnlyList<InstalledGameRecord> GetAll()
         {
             lock (_lock)
@@ -29,6 +39,7 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <inheritdoc/>
         public InstalledGameRecord GetByGameId(int rommGameId)
         {
             lock (_lock)
@@ -37,6 +48,7 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <inheritdoc/>
         public bool IsInstalled(int rommGameId)
         {
             lock (_lock)
@@ -45,6 +57,7 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <inheritdoc/>
         public void MarkInstalled(InstalledGameRecord record)
         {
             lock (_lock)
@@ -71,6 +84,7 @@ namespace RommPlugin.Core.Services
             Save();
         }
 
+        /// <inheritdoc/>
         public void MarkUninstalled(int rommGameId)
         {
             lock (_lock)
@@ -85,6 +99,7 @@ namespace RommPlugin.Core.Services
             Save();
         }
 
+        /// <inheritdoc/>
         public void RemoveUninstalled()
         {
             lock (_lock)
@@ -95,6 +110,9 @@ namespace RommPlugin.Core.Services
             Save();
         }
 
+        /// <summary>
+        /// Saves the current installed games records to disk.
+        /// </summary>
         public void Save()
         {
             try
@@ -113,6 +131,9 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <summary>
+        /// Loads installed games records from the JSON file on disk.
+        /// </summary>
         public void Load()
         {
             try

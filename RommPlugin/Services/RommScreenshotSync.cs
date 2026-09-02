@@ -13,15 +13,24 @@ using Unbroken.LaunchBox.Plugins.Data;
 
 namespace RommPlugin.Services
 {
+    /// <summary>
+    /// Synchronizes screenshots and cover art between LaunchBox games and the RomM server.
+    /// Handles bidirectional screenshot sync, cover art download, and image management.
+    /// </summary>
     public class RommScreenshotSync : IRommScreenshotSync
     {
         private readonly IRommApiClient _api;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RommScreenshotSync"/> class.
+        /// </summary>
+        /// <param name="api">The RomM API client used for downloading and uploading screenshots.</param>
         public RommScreenshotSync(IRommApiClient api)
         {
             _api = api;
         }
 
+        /// <inheritdoc/>
         public async Task SyncScreenshotsBidirectional(IGame game, RommGame remoteGame, RommPluginSettings settings)
         {
             try
@@ -105,6 +114,7 @@ namespace RommPlugin.Services
             }
         }
 
+        /// <inheritdoc/>
         public async Task DownloadAndSetCoverArt(IGame game, RommGame rommGame)
         {
             var coverUrl = !string.IsNullOrEmpty(rommGame.PathCoverSmall)
@@ -152,6 +162,7 @@ namespace RommPlugin.Services
             }
         }
 
+        /// <inheritdoc/>
         public string GetCoverImagePath(IGame game)
         {
             var images = game.GetAllImagesWithDetails();
@@ -177,6 +188,7 @@ namespace RommPlugin.Services
             return "";
         }
 
+        /// <inheritdoc/>
         public bool HasAnyBoxFrontImage(IGame game)
         {
             var images = game.GetAllImagesWithDetails();
@@ -202,6 +214,7 @@ namespace RommPlugin.Services
             return false;
         }
 
+        /// <inheritdoc/>
         public void DeleteGameImages(IGame game)
         {
             var imagesFolder = RommHelpers.GetLaunchBoxImagesFolder();

@@ -22,6 +22,9 @@ using Timer = System.Timers.Timer;
 
 namespace RommPlugin.UI.Forms
 {
+    /// <summary>
+    /// A form that manages game downloads, installations, and uninstalls for the Romm plugin.
+    /// </summary>
     public partial class GameManagerForm : Form
     {
         private readonly DownloadQueueService _queueService;
@@ -34,8 +37,15 @@ namespace RommPlugin.UI.Forms
         private bool _isUninstalling;
         private Func<Task> _onApplyPending;
 
+        /// <summary>
+        /// Gets a value indicating whether the form initialized successfully.
+        /// </summary>
         public bool IsInitialized { get; private set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="GameManagerForm"/> class
+        /// and sets up download queue, installed games, and UI timer services.
+        /// </summary>
         public GameManagerForm()
         {
             InitializeComponent();
@@ -86,6 +96,10 @@ namespace RommPlugin.UI.Forms
             }
         }
 
+        /// <summary>
+        /// Sets the handler to be invoked when pending downloads are ready for installation.
+        /// </summary>
+        /// <param name="handler">The asynchronous handler to execute when applying pending items.</param>
         public void SetApplyPendingHandler(Func<Task> handler)
         {
             _onApplyPending = handler;

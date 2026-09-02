@@ -6,8 +6,14 @@ using RommPlugin.UI.Helpers;
 
 namespace RommPlugin.UI.Forms
 {
+    /// <summary>
+    /// A modal form that displays progress information including a title, status message, and progress bar.
+    /// </summary>
     public partial class ProgressForm : Form
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ProgressForm"/> class.
+        /// </summary>
         public ProgressForm()
         {
             InitializeComponent();
@@ -21,6 +27,10 @@ namespace RommPlugin.UI.Forms
             lblStatus.Text = LocaleManager.Get("progress.loading");
         }
 
+        /// <summary>
+        /// Sets the title text of the progress form window.
+        /// </summary>
+        /// <param name="title">The title text to display.</param>
         public void SetTitle(string title)
         {
             if (InvokeRequired && !IsDisposed && IsHandleCreated)
@@ -33,6 +43,10 @@ namespace RommPlugin.UI.Forms
             }  
         }
 
+        /// <summary>
+        /// Sets the status message displayed on the progress form.
+        /// </summary>
+        /// <param name="message">The status message to display.</param>
         public void SetStatus(string message)
         {
             if (InvokeRequired && !IsDisposed && IsHandleCreated)
@@ -45,6 +59,10 @@ namespace RommPlugin.UI.Forms
             }
         }
 
+        /// <summary>
+        /// Sets the progress bar value.
+        /// </summary>
+        /// <param name="value">The progress value (0-100).</param>
         public void SetProgress(int value)
         {
             if (InvokeRequired && !IsDisposed && IsHandleCreated)
@@ -57,6 +75,10 @@ namespace RommPlugin.UI.Forms
             }  
         }
 
+        /// <summary>
+        /// Sets whether the progress bar is in indeterminate (marquee) mode.
+        /// </summary>
+        /// <param name="value">If <c>true</c>, the progress bar animates continuously; otherwise it displays a fixed value.</param>
         public void SetIndeterminate(bool value)
         {
             if (InvokeRequired && !IsDisposed && IsHandleCreated)

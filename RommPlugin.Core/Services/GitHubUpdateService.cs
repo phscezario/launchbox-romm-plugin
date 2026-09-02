@@ -13,6 +13,10 @@ using RommPlugin.Core.Models;
 
 namespace RommPlugin.Core.Services
 {
+    /// <summary>
+    /// Checks for plugin updates from GitHub releases and manages the download
+    /// and staging of update artifacts.
+    /// </summary>
     public static class GitHubUpdateService
     {
         private const string GitHubOwner = "phscezario";
@@ -34,15 +38,31 @@ namespace RommPlugin.Core.Services
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("RomM-LaunchBox-Plugin");
         }
 
+        /// <summary>
+        /// Gets the version of the currently executing plugin assembly.
+        /// </summary>
+        /// <returns>The current assembly version.</returns>
         public static Version GetCurrentVersion()
         {
             return Assembly.GetExecutingAssembly().GetName().Version;
         }
 
+        /// <summary>
+        /// Determines whether a previously downloaded update is pending installation.
+        /// </summary>
+        /// <returns><c>true</c> if a pending update exists; otherwise, <c>false</c>.</returns>
         public static bool HasPendingUpdate() => UpdateInstaller.HasPendingUpdate();
 
+        /// <summary>
+        /// Gets the version string of the pending update, if one exists.
+        /// </summary>
+        /// <returns>The pending version string, or <c>null</c> if no update is pending.</returns>
         public static string GetPendingVersion() => UpdateInstaller.GetPendingVersion();
 
+        /// <summary>
+        /// Checks the GitHub releases API for a newer version of the plugin.
+        /// </summary>
+        /// <returns>An <see cref="UpdateCheckResult"/> containing version info, release notes, and download assets.</returns>
         public static async Task<UpdateCheckResult> CheckForUpdateAsync()
         {
             var currentVersion = GetCurrentVersion();
@@ -100,6 +120,14 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <summary>
+        /// Downloads a release asset to the local update staging directory and marks it
+        /// as pending for installation on the next launch.
+        /// </summary>
+        /// <param name="asset">The GitHub release asset to download.</param>
+        /// <param name="version">The version string of the update being downloaded.</param>
+        /// <param name="progressCallback">Optional callback invoked with download progress (0-100).</param>
+        /// <returns><c>true</c> if the download succeeded; otherwise, <c>false</c>.</returns>
         public static async Task<bool> DownloadUpdateAsync(GitHubReleaseAsset asset, string version, Action<int> progressCallback = null)
         {
             try
@@ -149,8 +177,16 @@ namespace RommPlugin.Core.Services
             }
         }
 
+        /// <summary>
+        /// Applies the pending update by extracting the downloaded archive and launching
+        /// a batch script that replaces the plugin files and restarts LaunchBox.
+        /// </summary>
+        /// <returns><c>true</c> if the update was applied successfully; otherwise, <c>false</c>.</returns>
         public static bool ApplyPendingUpdate() => UpdateInstaller.ApplyPendingUpdate();
 
+        /// <summary>
+        /// Removes the temporary update staging directory and all its contents.
+        /// </summary>
         public static void CleanupUpdateDir() => UpdateInstaller.CleanupUpdateDir();
     }
 }

@@ -1125,23 +1125,33 @@ namespace RommPlugin.CLI
         }
     }
 
+    /// <summary>
+    /// Represents the JSON request payload for the CLI hierarchy fix operation.
+    /// Deserialized from the pending_hierarchy.json file created by the main plugin.
+    /// </summary>
     public class SyncRequest
     {
+        /// <summary>Mapping of platform names to their parent category names.</summary>
         [JsonProperty("PlatformCategoryMap")]
         public Dictionary<string, string> PlatformCategoryMap { get; set; } = new Dictionary<string, string>();
 
+        /// <summary>All RomM category names that exist on the server.</summary>
         [JsonProperty("AllCategories")]
         public List<string> AllCategories { get; set; } = new List<string>();
 
+        /// <summary>Category names that contain at least one game with installed files.</summary>
         [JsonProperty("CategoriesWithGames")]
         public List<string> CategoriesWithGames { get; set; } = new List<string>();
 
+        /// <summary>Mapping of category names to their list of platform names.</summary>
         [JsonProperty("CategoryPlatforms")]
         public Dictionary<string, List<string>> CategoryPlatforms { get; set; } = new Dictionary<string, List<string>>();
 
+        /// <summary>When true, restarts LaunchBox after the hierarchy fix is complete.</summary>
         [JsonProperty("RestartLaunchBox")]
         public bool RestartLaunchBox { get; set; }
 
+        /// <summary>Optional path to LaunchBox.exe for restart. Uses default path if null.</summary>
         [JsonProperty("LaunchBoxExe")]
         public string LaunchBoxExe { get; set; }
     }

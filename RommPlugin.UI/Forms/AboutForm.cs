@@ -6,6 +6,9 @@ using RommPlugin.Core.Locale;
 
 namespace RommPlugin.UI.Forms
 {
+    /// <summary>
+    /// An "About" dialog that displays plugin name, version, author, and open-source information.
+    /// </summary>
     public class AboutForm : Form
     {
         private Label lblName;
@@ -16,6 +19,9 @@ namespace RommPlugin.UI.Forms
         private Label lblDescription;
         private Button btnClose;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AboutForm"/> class.
+        /// </summary>
         public AboutForm()
         {
             InitializeComponent();

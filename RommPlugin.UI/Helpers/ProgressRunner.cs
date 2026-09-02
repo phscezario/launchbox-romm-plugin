@@ -9,8 +9,18 @@ using RommPlugin.UI.Reporters;
 
 namespace RommPlugin.UI.Helpers
 {
+    /// <summary>
+    /// Provides a static method to run asynchronous work on a dedicated UI thread
+    /// with a progress form for displaying status updates.
+    /// </summary>
     public static class ProgressRunner
     {
+        /// <summary>
+        /// Executes an asynchronous operation on a dedicated STA thread with a progress form.
+        /// </summary>
+        /// <param name="title">The title displayed on the progress form window.</param>
+        /// <param name="work">The asynchronous work to perform, receiving an <see cref="IProgressReporter"/> for progress updates.</param>
+        /// <returns>A <see cref="Task"/> that completes when the work finishes or the form is closed.</returns>
         public static Task RunAsync(
             string title,
             Func<IProgressReporter, Task> work)

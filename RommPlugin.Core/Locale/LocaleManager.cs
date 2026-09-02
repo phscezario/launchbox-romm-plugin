@@ -9,6 +9,10 @@ using RommPlugin.Core.Storage;
 
 namespace RommPlugin.Core.Locale
 {
+    /// <summary>
+    /// Manages internationalization (i18n) for the plugin UI.
+    /// Loads string translations from JSON locale files and provides fallback to English.
+    /// </summary>
     public static class LocaleManager
     {
         private static Dictionary<string, string> _strings = new Dictionary<string, string>();
@@ -18,6 +22,11 @@ namespace RommPlugin.Core.Locale
         private static string _languageCode;
         private static readonly object _initLock = new object();
 
+        /// <summary>
+        /// Scans the locale folder and returns all available languages with their display names.
+        /// </summary>
+        /// <param name="localeFolder">Path to the folder containing locale JSON files.</param>
+        /// <returns>List of language code/display name pairs, ordered alphabetically by display name.</returns>
         public static List<KeyValuePair<string, string>> GetAvailableLanguages(string localeFolder)
         {
             var result = new List<KeyValuePair<string, string>>();
@@ -48,6 +57,12 @@ namespace RommPlugin.Core.Locale
             return result.OrderBy(kvp => kvp.Value).ToList();
         }
 
+        /// <summary>
+        /// Initializes the locale system with the specified language.
+        /// Loads the selected language file and falls back to English for missing keys.
+        /// </summary>
+        /// <param name="localeFolder">Path to the folder containing locale JSON files.</param>
+        /// <param name="languageCode">The language code to load (e.g., "en", "pt-BR").</param>
         public static void Initialize(string localeFolder, string languageCode)
         {
             lock (_initLock)
@@ -98,6 +113,13 @@ namespace RommPlugin.Core.Locale
             }
         }
 
+        /// <summary>
+        /// Gets the translated string for the specified key.
+        /// Falls back to English if the key is not found in the current language.
+        /// Returns "[key]" if the key is not found in any language.
+        /// </summary>
+        /// <param name="key">The locale key to look up.</param>
+        /// <returns>The translated string, or the key wrapped in brackets if not found.</returns>
         public static string Get(string key)
         {
             EnsureInitialized();
@@ -111,6 +133,13 @@ namespace RommPlugin.Core.Locale
             return "[" + key + "]";
         }
 
+        /// <summary>
+        /// Gets the translated string for the specified key and formats it with the provided arguments.
+        /// Uses <see cref="string.Format(string, object[])"/> for placeholder substitution.
+        /// </summary>
+        /// <param name="key">The locale key to look up.</param>
+        /// <param name="args">Arguments to substitute into the translated string.</param>
+        /// <returns>The formatted translated string.</returns>
         public static string Get(string key, params object[] args)
         {
             var template = Get(key);

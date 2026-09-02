@@ -208,8 +208,6 @@ namespace RommPlugin.Tests.Services
             Assert.Equal(HttpMethod.Put, handler.Requests[0].Method);
         }
 
-        // --- GetAllGamesByPlatformAsync ---
-
         [Fact]
         public async Task GetAllGamesByPlatformAsync_SinglePage()
         {
@@ -293,8 +291,6 @@ namespace RommPlugin.Tests.Services
             Assert.Empty(result);
         }
 
-        // --- UpdateGameById ---
-
         [Fact]
         public async Task UpdateGameById_Succeeds()
         {
@@ -348,8 +344,6 @@ namespace RommPlugin.Tests.Services
                 () => api.UpdateGameById(42, request));
         }
 
-        // --- RemoveGameMetadataById ---
-
         [Fact]
         public async Task RemoveGameMetadataById_Succeeds()
         {
@@ -385,8 +379,6 @@ namespace RommPlugin.Tests.Services
             Assert.Equal(2, callCount);
         }
 
-        // --- DownloadBytesAsync ---
-
         [Fact]
         public async Task DownloadBytesAsync_RelativeUrl()
         {
@@ -420,8 +412,6 @@ namespace RommPlugin.Tests.Services
 
             Assert.Equal(expectedBytes, result);
         }
-
-        // --- Authentication ---
 
         [Fact]
         public void SetBasicAuthentication_SetsCorrectHeader()

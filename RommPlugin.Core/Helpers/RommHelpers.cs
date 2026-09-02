@@ -4,8 +4,16 @@ using RommPlugin.Core.Logging;
 
 namespace RommPlugin.Core.Helpers
 {
+    /// <summary>
+    /// Provides helper methods for resolving LaunchBox directory paths.
+    /// </summary>
     public static class RommHelpers
     {
+        /// <summary>
+        /// Gets the root directory of the LaunchBox installation.
+        /// Navigates three levels up from the executing assembly's location.
+        /// </summary>
+        /// <returns>The full path to the LaunchBox root directory.</returns>
         public static string GetLaunchBoxRoot()
         {
             var assemblyPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
@@ -16,6 +24,10 @@ namespace RommPlugin.Core.Helpers
             return level3;
         }
 
+        /// <summary>
+        /// Gets the path to the LaunchBox Images folder.
+        /// </summary>
+        /// <returns>The full path to the Images folder within the LaunchBox installation.</returns>
         public static string GetLaunchBoxImagesFolder()
         {
             var root = GetLaunchBoxRoot();

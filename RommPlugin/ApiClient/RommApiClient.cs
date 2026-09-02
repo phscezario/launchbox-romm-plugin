@@ -14,10 +14,21 @@ using RommPlugin.Core.Models;
 
 namespace RommPlugin.ApiClient
 {
+    /// <summary>
+    /// Represents an error returned by the Romm API with an associated HTTP status code.
+    /// </summary>
     public class ClientErrorException : Exception
     {
+        /// <summary>
+        /// Gets the HTTP status code of the error response.
+        /// </summary>
         public int StatusCode { get; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ClientErrorException"/> class.
+        /// </summary>
+        /// <param name="statusCode">The HTTP status code of the error response.</param>
+        /// <param name="message">A description of the error.</param>
         public ClientErrorException(int statusCode, string message)
             : base(message)
         {
@@ -25,10 +36,17 @@ namespace RommPlugin.ApiClient
         }
     }
 
+    /// <summary>
+    /// Provides methods for interacting with a Romm server API.
+    /// </summary>
     public class RommApiClient : IRommApiClient
     {
         private readonly HttpClient _http;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RommApiClient"/> class.
+        /// </summary>
+        /// <param name="baseUrl">The base URL of the Romm server.</param>
         public RommApiClient(string baseUrl)
         {
             _http = new HttpClient
@@ -43,11 +61,13 @@ namespace RommPlugin.ApiClient
             _http = httpClient;
         }
 
+        /// <inheritdoc/>
         public void Dispose()
         {
             _http?.Dispose();
         }
 
+        /// <inheritdoc/>
         public void SetBasicAuthentication(string username, string password)
         {
             var credentials = $"{username}:{password}";
@@ -57,12 +77,14 @@ namespace RommPlugin.ApiClient
                 new AuthenticationHeaderValue("Basic", base64);
         }
 
+        /// <inheritdoc/>
         public void SetBearerAuthentication(string token)
         {
             _http.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", token);
         }
 
+        /// <inheritdoc/>
         public void ApplyAuthentication(RommPluginSettings settings)
         {
             if (!string.IsNullOrWhiteSpace(settings.ClientApiToken))
@@ -75,6 +97,7 @@ namespace RommPlugin.ApiClient
             }
         }
 
+        /// <inheritdoc/>
         public async Task<List<RommPlatform>> GetPlatformsAsync()
         {
             using (var response = await _http.GetAsync("/api/platforms"))
@@ -86,6 +109,7 @@ namespace RommPlugin.ApiClient
             }
         }
 
+        /// <inheritdoc/>
         public async Task<List<RommGame>> GetAllGamesByPlatformAsync(int platformId)
         {
             var allGames = new List<RommGame>();
@@ -134,6 +158,7 @@ namespace RommPlugin.ApiClient
             return allGames;
         }
 
+        /// <inheritdoc/>
         public async Task<RommGame> GetGameByIdAsync(int gameId)
         {
             using (var response = await _http.GetAsync($"/api/roms/{gameId}"))
@@ -145,6 +170,7 @@ namespace RommPlugin.ApiClient
             }
         }
 
+        /// <inheritdoc/>
         public async Task UpdateGameById(int gameId, RommUpdateGameRequest request)
         {
             const int maxAttempts = RommConstants.MaxRetryAttempts;
@@ -265,6 +291,7 @@ namespace RommPlugin.ApiClient
             }
         }
 
+        /// <inheritdoc/>
         public async Task RemoveGameMetadataById(int gameId)
         {
             const int maxAttempts = RommConstants.MaxRetryAttempts;
@@ -299,6 +326,7 @@ namespace RommPlugin.ApiClient
             }
         }
 
+        /// <inheritdoc/>
         public async Task<byte[]> DownloadBytesAsync(string url)
         {
             url = url.Replace(" ", "%20");
@@ -319,6 +347,7 @@ namespace RommPlugin.ApiClient
             }
         }
 
+        /// <inheritdoc/>
         public async Task<int> UploadScreenshotAsync(int gameId, string filePath)
         {
             return await ExecuteWithRetryAsync(async () =>
@@ -348,12 +377,15 @@ namespace RommPlugin.ApiClient
             });
         }
 
+        /// <inheritdoc/>
         public async Task SetScreenshotPublicAsync(int screenshotId)
         {
             await ExecuteWithRetryAsync(async () =>
             {
-                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(RommConstants.HttpTimeoutSeconds)))
+                using (var cts = CancellationTokenSource.CreateLinkedTokenSource(ct))
                 {
+                    cts.CancelAfter(TimeSpan.FromSeconds(RommConstants.HttpTimeoutSeconds));
+
                     var json = JsonConvert.SerializeObject(new { is_public = true });
                     using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
                     using (var response = await _http.PutAsync(
@@ -366,6 +398,7 @@ namespace RommPlugin.ApiClient
             });
         }
 
+        /// <inheritdoc/>
         public async Task<List<PlaySessionSchema>> GetPlaySessionsAsync(int romId)
         {
             return await ExecuteWithRetryAsync(async () =>
@@ -380,6 +413,7 @@ namespace RommPlugin.ApiClient
             });
         }
 
+        /// <inheritdoc/>
         public async Task<PlaySessionIngestResponse> IngestPlaySessionsAsync(PlaySessionIngestPayload payload)
         {
             return await ExecuteWithRetryAsync(async () =>
@@ -395,6 +429,7 @@ namespace RommPlugin.ApiClient
             });
         }
 
+        /// <inheritdoc/>
         public async Task UpdateGameLastPlayedAsync(int gameId)
         {
             await ExecuteWithRetryAsync(async () =>
@@ -528,6 +563,7 @@ namespace RommPlugin.ApiClient
                 }
             }
 
+        /// <inheritdoc/>
         public async Task DownloadScreenshotAsync(int screenshotId, string targetPath, CancellationToken ct = default)
         {
             using (var cts = CancellationTokenSource.CreateLinkedTokenSource(ct))

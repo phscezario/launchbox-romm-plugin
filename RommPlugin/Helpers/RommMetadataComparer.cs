@@ -8,26 +8,64 @@ using Unbroken.LaunchBox.Plugins.Data;
 
 namespace RommPlugin.Helpers
 {
+    /// <summary>
+    /// Specifies the direction in which metadata should be synchronized.
+    /// </summary>
     public enum SyncDirection
     {
+        /// <summary>No synchronization is required.</summary>
         None,
+
+        /// <summary>Metadata should be pushed from LaunchBox to RomM.</summary>
         PushToRomm,
+
+        /// <summary>Metadata should be pulled from RomM to LaunchBox.</summary>
         PullFromRomm
     }
 
+    /// <summary>
+    /// Represents the result of comparing metadata between a LaunchBox game and a RomM game.
+    /// </summary>
     public class MetadataComparisonResult
     {
+        /// <summary>Gets or sets the determined sync direction.</summary>
         public SyncDirection Direction { get; set; }
+
+        /// <summary>Gets or sets the list of field names that differ between local and remote metadata.</summary>
         public List<string> ChangedFields { get; set; } = new List<string>();
+
+        /// <summary>Gets or sets a value indicating whether any metadata fields have changed.</summary>
         public bool MetadataChanged { get; set; }
+
+        /// <summary>Gets or sets a value indicating whether artwork availability differs between local and remote.</summary>
         public bool ArtworkChanged { get; set; }
+
+        /// <summary>Gets or sets a value indicating whether the screenshot count differs between local and remote.</summary>
         public bool ScreenshotsChanged { get; set; }
+
+        /// <summary>Gets or sets a value indicating whether local artwork exists.</summary>
         public bool HasLocalArtwork { get; set; }
+
+        /// <summary>Gets or sets a value indicating whether remote artwork exists.</summary>
         public bool HasRemoteArtwork { get; set; }
     }
 
+    /// <summary>
+    /// Compares metadata between LaunchBox games and RomM games to determine synchronization direction.
+    /// </summary>
     public static class RommMetadataComparer
     {
+        /// <summary>
+        /// Compares local LaunchBox metadata with remote RomM metadata and determines the sync direction.
+        /// </summary>
+        /// <param name="game">The local LaunchBox game.</param>
+        /// <param name="remote">The remote RomM game data.</param>
+        /// <param name="lastSyncedAt">The timestamp of the last synchronization, or <c>null</c> if never synced.</param>
+        /// <param name="localScreenshotCount">The number of local screenshots.</param>
+        /// <param name="remoteScreenshotCount">The number of remote screenshots.</param>
+        /// <param name="hasLocalArtwork">Whether local artwork exists.</param>
+        /// <param name="hasRemoteArtwork">Whether remote artwork exists.</param>
+        /// <returns>A <see cref="MetadataComparisonResult"/> describing the differences and recommended sync direction.</returns>
         public static MetadataComparisonResult Compare(
             IGame game,
             RommGame remote,
@@ -141,6 +179,11 @@ namespace RommPlugin.Helpers
             }
         }
 
+        /// <summary>
+        /// Builds a <see cref="MetadataSnapshot"/> from a LaunchBox game's properties.
+        /// </summary>
+        /// <param name="game">The LaunchBox game to snapshot.</param>
+        /// <returns>A <see cref="MetadataSnapshot"/> populated with the game's metadata.</returns>
         public static MetadataSnapshot BuildLaunchBoxSnapshot(IGame game)
         {
             var genres = new List<string>();
@@ -188,6 +231,11 @@ namespace RommPlugin.Helpers
             };
         }
 
+        /// <summary>
+        /// Builds a <see cref="MetadataSnapshot"/> from a RomM game, merging data from multiple metadata sources.
+        /// </summary>
+        /// <param name="remote">The remote RomM game to snapshot.</param>
+        /// <returns>A <see cref="MetadataSnapshot"/> populated with the merged remote metadata.</returns>
         public static MetadataSnapshot BuildRommSnapshot(RommGame remote)
         {
             var lb = remote.LaunchBoxMetadata;
@@ -259,6 +307,11 @@ namespace RommPlugin.Helpers
             };
         }
 
+        /// <summary>
+        /// Computes a SHA-256 hash of the essential remote metadata fields for change detection.
+        /// </summary>
+        /// <param name="remote">The remote RomM game.</param>
+        /// <returns>A Base64-encoded SHA-256 hash string.</returns>
         public static string ComputeRemoteMetadataHash(RommGame remote)
         {
             var pathCover = StripQueryString(remote.PathCoverSmall ?? "");
@@ -290,6 +343,12 @@ namespace RommPlugin.Helpers
             return Regex.Replace(html, "<[^>]+>", "").Trim();
         }
 
+        /// <summary>
+        /// Computes a SHA-256 hash of the local LaunchBox game metadata for change detection.
+        /// </summary>
+        /// <param name="game">The local LaunchBox game.</param>
+        /// <param name="screenshotFingerprints">Optional screenshot fingerprint string to include in the hash payload.</param>
+        /// <returns>A Base64-encoded SHA-256 hash string.</returns>
         public static string ComputeLocalMetadataHash(IGame game, string screenshotFingerprints = "")
         {
             var snapshot = BuildLaunchBoxSnapshot(game);
@@ -334,21 +393,51 @@ namespace RommPlugin.Helpers
         }
     }
 
+    /// <summary>
+    /// Represents a snapshot of game metadata fields used for comparison between local and remote sources.
+    /// </summary>
     public class MetadataSnapshot
     {
+        /// <summary>Gets or sets the game title.</summary>
         public string Name { get; set; }
+
+        /// <summary>Gets or sets the game notes or description.</summary>
         public string Notes { get; set; }
+
+        /// <summary>Gets or sets the release date as a Unix timestamp in seconds, or <c>null</c> if unknown.</summary>
         public long? ReleaseDate { get; set; }
+
+        /// <summary>Gets or sets the maximum number of supported players, or <c>null</c> if unknown.</summary>
         public int? MaxPlayers { get; set; }
+
+        /// <summary>Gets or sets the release type (e.g., "Full Game", "Demo").</summary>
         public string ReleaseType { get; set; }
+
+        /// <summary>Gets or sets the play mode (e.g., "Cooperative").</summary>
         public string PlayMode { get; set; }
+
+        /// <summary>Gets or sets the URL to a gameplay video.</summary>
         public string VideoUrl { get; set; }
+
+        /// <summary>Gets or sets the community rating score.</summary>
         public float CommunityRating { get; set; }
+
+        /// <summary>Gets or sets the total number of community votes, or <c>null</c> if unavailable.</summary>
         public int? CommunityStarRatingTotalVotes { get; set; }
+
+        /// <summary>Gets or sets the Wikipedia page URL for the game.</summary>
         public string WikipediaUrl { get; set; }
+
+        /// <summary>Gets or sets the content rating (e.g., ESRB rating).</summary>
         public string Rating { get; set; }
+
+        /// <summary>Gets or sets the list of genre names.</summary>
         public List<string> Genres { get; set; }
+
+        /// <summary>Gets or sets the list of developer names.</summary>
         public List<string> Developers { get; set; }
+
+        /// <summary>Gets or sets the list of publisher names.</summary>
         public List<string> Publishers { get; set; }
     }
 }

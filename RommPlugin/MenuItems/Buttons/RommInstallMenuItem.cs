@@ -19,22 +19,30 @@ using Unbroken.LaunchBox.Plugins.Data;
 
 namespace RommPlugin.MenuItems.Buttons
 {
+    /// <summary>
+    /// Context menu item that queues a game for installation from the RomM server.
+    /// </summary>
     public class RommInstallMenuItem : RommMenuItem, IGameMenuItemPlugin
     {
+        /// <inheritdoc/>
         public override string Caption => LocaleManager.Get("context.install");
 
+        /// <inheritdoc/>
         public bool SupportsMultipleGames => false;
 
+        /// <inheritdoc/>
         public bool GetIsValidForGame(IGame selectedGame)
         {
             return RommGameHelpers.TryGetRommId(selectedGame, out _)
                 && selectedGame.Installed != true;
         }
 
+        /// <inheritdoc/>
         public override void OnSelected()
         {
         }
 
+        /// <inheritdoc/>
         public void OnSelected(IGame selectedGame)
         {
             if (!RommGameHelpers.TryGetRommId(selectedGame, out var rommId))
@@ -65,7 +73,6 @@ namespace RommPlugin.MenuItems.Buttons
 
             var pluginDir = RommPaths.PluginFolder;
 
-            // Validação 1: já instalado via installed-games.json
             var installedService = ServiceLocator.GetService<IInstalledGamesService>();
             if (installedService.IsInstalled(rommId))
             {
@@ -74,7 +81,6 @@ namespace RommPlugin.MenuItems.Buttons
                 return;
             }
 
-            // Validação 2: já na fila de download (download-queue.json)
             var queueFilePath = Path.Combine(pluginDir, RommConstants.DownloadQueueFile);
             if (File.Exists(queueFilePath))
             {
@@ -93,7 +99,6 @@ namespace RommPlugin.MenuItems.Buttons
                 }
             }
 
-            // Validação 3: já em download ativo (download-state.json)
             var stateFilePath = Path.Combine(pluginDir, RommConstants.DownloadStateFile);
             if (File.Exists(stateFilePath))
             {
@@ -120,7 +125,6 @@ namespace RommPlugin.MenuItems.Buttons
                 }
             }
 
-            // Validação 4: arquivo local já existe no disco
             var localFile = Path.Combine(settings.RomsPath, RommConstants.RomsSubfolder, remotePath.Replace("/", "\\"), fileName);
 
             if (File.Exists(localFile) || Directory.Exists(localFile))
@@ -131,8 +135,6 @@ namespace RommPlugin.MenuItems.Buttons
                     if (form.ShowDialog() != DialogResult.OK) return;
                 }
             }
-
-            // Tudo OK: adicionar à fila de download
 
             var queueActions = new List<QueueAction>();
             if (File.Exists(queueFilePath))
@@ -168,11 +170,13 @@ namespace RommPlugin.MenuItems.Buttons
             GameManagerLauncher.EnsureOpen();
         }
 
+        /// <inheritdoc/>
         public bool GetIsValidForGames(IGame[] selectedGames)
         {
             return false;
         }
 
+        /// <inheritdoc/>
         public void OnSelected(IGame[] selectedGames)
         {
         }
