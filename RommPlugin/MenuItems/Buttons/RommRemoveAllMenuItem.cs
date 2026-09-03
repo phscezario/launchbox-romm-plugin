@@ -42,7 +42,10 @@ namespace RommPlugin.MenuItems.Buttons
                 if (!File.Exists(cliPath))
                 {
                     RommLogger.LogError($"CLI not found at {cliPath}");
-                    MessageBox.Show("CLI not found", RommConstants.RootCategoryName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    using (var form = new ConfirmForm("CLI not found"))
+                    {
+                        form.ShowDialog();
+                    }
                     return;
                 }
 
@@ -84,18 +87,21 @@ namespace RommPlugin.MenuItems.Buttons
                     }
                     else
                     {
-                        MessageBox.Show(
-                            $"CLI exited with code {process.ExitCode}\n{error.ToString()}",
-                            RommConstants.RootCategoryName,
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Error);
+                        using (var form = new ConfirmForm(
+                            $"CLI exited with code {process.ExitCode}\n{error.ToString()}"))
+                        {
+                            form.ShowDialog();
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
                 RommLogger.LogError($"[RommPlugin] RemoveAll error: {ex}");
-                MessageBox.Show(ex.Message, RommConstants.RootCategoryName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                using (var form = new ConfirmForm(ex.Message))
+                {
+                    form.ShowDialog();
+                }
             }
         }
     }

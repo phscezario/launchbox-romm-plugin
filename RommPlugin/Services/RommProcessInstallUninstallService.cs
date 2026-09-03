@@ -14,6 +14,7 @@ using RommPlugin.Core.Models;
 using RommPlugin.Core.Storage;
 using RommPlugin.Helpers;
 using RommPlugin.UI.Helpers;
+using RommPlugin.UI.Forms;
 using Unbroken.LaunchBox.Plugins;
 using Unbroken.LaunchBox.Plugins.Data;
 
@@ -38,7 +39,10 @@ namespace RommPlugin.Services
                     {
                         if (showEmptyMessage)
                         {
-                            MessageBox.Show(LocaleManager.Get("progress.no_pending"));
+                            using (var form = new ConfirmForm(LocaleManager.Get("progress.no_pending")))
+                            {
+                                form.ShowDialog();
+                            }
                         }
                         return;
                     }
@@ -62,7 +66,10 @@ namespace RommPlugin.Services
                     {
                         if (showEmptyMessage)
                         {
-                            MessageBox.Show(LocaleManager.Get("progress.no_pending"));
+                            using (var form = new ConfirmForm(LocaleManager.Get("progress.no_pending")))
+                            {
+                                form.ShowDialog();
+                            }
                         }
                         return;
                     }
@@ -262,7 +269,10 @@ namespace RommPlugin.Services
 
                     if (showEmptyMessage)
                     {
-                        MessageBox.Show("RomM finish all pending install");
+                        using (var form = new ConfirmForm("RomM finish all pending install"))
+                        {
+                            form.ShowDialog();
+                        }
                     }
                 }
             );

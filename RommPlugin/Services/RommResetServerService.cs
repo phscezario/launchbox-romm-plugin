@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using RommPlugin.ApiClient;
 using RommPlugin.Core.Logging;
 using RommPlugin.UI.Helpers;
+using RommPlugin.UI.Forms;
 
 namespace RommPlugin.Services
 {
@@ -79,7 +80,10 @@ namespace RommPlugin.Services
                     }
 
                     RommLogger.Log("Remove all server metadata completed successfully");
-                    MessageBox.Show("All metadata has been deleted from RomM server");
+                    using (var form = new ConfirmForm("All metadata has been deleted from RomM server"))
+                    {
+                        form.ShowDialog();
+                    }
                 }
             );
         }

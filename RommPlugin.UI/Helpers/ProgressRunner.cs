@@ -53,12 +53,12 @@ namespace RommPlugin.UI.Helpers
                         }
                         catch (Exception ex)
                         {
-                            MessageBox.Show(
+                            using (var form = new ConfirmForm(
                                 ex.ToString(),
-                                LocaleManager.Get("progress.error"),
-                                MessageBoxButtons.OK,
-                                MessageBoxIcon.Error
-                            );
+                                null))
+                            {
+                                form.ShowDialog();
+                            }
                         }
                         finally
                         {

@@ -8,6 +8,7 @@ using RommPlugin.Core.Constants;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Storage;
 using RommPlugin.Services;
+using RommPlugin.UI.Forms;
 using Unbroken.LaunchBox.Plugins;
 
 namespace RommPlugin.MenuItems.Buttons
@@ -27,9 +28,10 @@ namespace RommPlugin.MenuItems.Buttons
         {
             if (Interlocked.CompareExchange(ref _isRunning, 1, 0) != 0)
             {
-                MessageBox.Show(
-                    LocaleManager.Get("sync.already_running"),
-                    RommConstants.RootCategoryName);
+                using (var form = new ConfirmForm(LocaleManager.Get("sync.already_running")))
+                {
+                    form.ShowDialog();
+                }
                 return;
             }
 
@@ -39,10 +41,10 @@ namespace RommPlugin.MenuItems.Buttons
 
                 if (string.IsNullOrWhiteSpace(settings.RommBaseUrl))
                 {
-                    System.Windows.MessageBox.Show(
-                        LocaleManager.Get("error.not_configured"),
-                        LocaleManager.Get("settings.title_box")
-                    );
+                    using (var form = new ConfirmForm(LocaleManager.Get("error.not_configured")))
+                    {
+                        form.ShowDialog();
+                    }
                     return;
                 }
 
@@ -67,11 +69,10 @@ namespace RommPlugin.MenuItems.Buttons
                 catch (Exception ex)
                 {
                     RommLogger.LogError("[RommPlugin] reset server error: " + ex);
-                    MessageBox.Show(
-                        ex.Message,
-                        LocaleManager.Get("settings.title_box"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
+                    using (var form = new ConfirmForm(ex.Message))
+                    {
+                        form.ShowDialog();
+                    }
                 }
             }
             catch (Exception ex)

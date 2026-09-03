@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Xml.Linq;
 using Newtonsoft.Json;
@@ -33,6 +34,7 @@ namespace RommPlugin.CLI
             {
                 Console.Error.WriteLine("Usage: RommPlugin.CLI.exe <pending_hierarchy.json>");
                 Console.Error.WriteLine("       RommPlugin.CLI.exe --remove-all <dataDir> [--restart <launchBoxExe>]");
+                Console.Error.WriteLine("       RommPlugin.CLI.exe --apply-update <updateDir> <pluginDir> <launchBoxExe>");
                 return 1;
             }
 
@@ -41,6 +43,11 @@ namespace RommPlugin.CLI
                 var restart = args.Contains("--restart");
                 var launchBoxExe = restart && args.Length >= 4 ? args[3] : null;
                 return RemoveAllRommFull(args[1], restart, launchBoxExe);
+            }
+
+            if (args[0] == "--apply-update" && args.Length >= 4)
+            {
+                return ApplyPluginUpdate(args[1], args[2], args[3]);
             }
 
             var jsonPath = args[0];
@@ -1074,6 +1081,165 @@ namespace RommPlugin.CLI
             {
                 Console.WriteLine($"Warning: could not delete roms folder: {ex.Message}");
                 LogToFile($"RemoveAllRommFull: failed to delete roms folder: {ex.Message}");
+            }
+        }
+
+        static int ApplyPluginUpdate(string updateDir, string pluginDir, string launchBoxExe)
+        {
+            LogToFile($"ApplyUpdate started: updateDir={updateDir}, pluginDir={pluginDir}, launchBoxExe={launchBoxExe}");
+            Console.WriteLine("RomM Plugin Update - Applying pending update...");
+
+            var zipPath = Path.Combine(updateDir, "pending.zip");
+            if (!File.Exists(zipPath))
+            {
+                Console.Error.WriteLine($"Update archive not found: {zipPath}");
+                LogToFile($"ApplyUpdate failed: archive not found: {zipPath}");
+                return 1;
+            }
+
+            var extractDir = Path.Combine(updateDir, "extracted");
+
+            try
+            {
+                if (Directory.Exists(extractDir))
+                    Directory.Delete(extractDir, true);
+                Directory.CreateDirectory(extractDir);
+
+                ZipFile.ExtractToDirectory(zipPath, extractDir);
+                Console.WriteLine("Update archive extracted");
+                LogToFile("ApplyUpdate: archive extracted");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Could not extract update: {ex.Message}");
+                LogToFile($"ApplyUpdate failed to extract: {ex.Message}");
+                CleanupUpdateDir(updateDir);
+                return 2;
+            }
+
+            var sourceDir = FindUpdatePluginDirectory(extractDir);
+            if (sourceDir == null)
+            {
+                Console.Error.WriteLine("Could not find plugin directory in downloaded archive");
+                LogToFile("ApplyUpdate failed: plugin directory not found in archive");
+                CleanupUpdateDir(updateDir);
+                return 3;
+            }
+
+            Console.WriteLine("Waiting for LaunchBox to close...");
+            LogToFile("ApplyUpdate: killing LaunchBox processes");
+            KillLaunchBox();
+            WaitForLaunchBoxExit();
+
+            var copied = CopyDirectoryWithRetry(sourceDir, pluginDir);
+            if (!copied)
+            {
+                Console.Error.WriteLine("Could not copy update files (files still locked)");
+                LogToFile("ApplyUpdate failed: could not copy files after retries (pending kept for next launch)");
+                StartLaunchBoxIfExists(launchBoxExe);
+                return 4;
+            }
+
+            Console.WriteLine("Update files copied");
+            LogToFile("ApplyUpdate: files copied successfully");
+
+            StartLaunchBoxIfExists(launchBoxExe);
+
+            CleanupUpdateDir(updateDir);
+            Console.WriteLine("Update applied and staging files removed");
+            LogToFile("ApplyUpdate completed successfully, update dir removed");
+            return 0;
+        }
+
+        static string FindUpdatePluginDirectory(string rootDir)
+        {
+            const string pluginName = "RomM LaunchBox Integration";
+
+            var directPath = Path.Combine(rootDir, pluginName);
+            if (Directory.Exists(directPath))
+                return directPath;
+
+            var found = Directory.GetDirectories(rootDir, pluginName, SearchOption.AllDirectories);
+            if (found.Length > 0)
+                return found[0];
+
+            var dllPaths = Directory.GetFiles(rootDir, "RommPlugin.dll", SearchOption.AllDirectories);
+            if (dllPaths.Length > 0)
+                return Path.GetDirectoryName(dllPaths[0]);
+
+            return null;
+        }
+
+        static void WaitForLaunchBoxExit()
+        {
+            for (var i = 0; i < 60; i++)
+            {
+                var remaining = Process.GetProcessesByName("LaunchBox");
+                if (remaining.Length == 0)
+                    return;
+                System.Threading.Thread.Sleep(500);
+            }
+
+            LogToFile("ApplyUpdate: LaunchBox processes still alive after 30s, forcing kill");
+            foreach (var proc in Process.GetProcessesByName("LaunchBox"))
+            {
+                try { proc.Kill(); } catch { }
+            }
+            System.Threading.Thread.Sleep(2000);
+        }
+
+        static bool CopyDirectoryWithRetry(string sourceDir, string destDir)
+        {
+            for (var attempt = 0; attempt < 60; attempt++)
+            {
+                try
+                {
+                    foreach (var dir in Directory.GetDirectories(sourceDir, "*", SearchOption.AllDirectories))
+                        Directory.CreateDirectory(dir.Replace(sourceDir, destDir));
+                    Directory.CreateDirectory(destDir);
+
+                    foreach (var file in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
+                        File.Copy(file, file.Replace(sourceDir, destDir), true);
+
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    if (attempt == 0)
+                        LogToFile($"ApplyUpdate: copy attempt failed, retrying up to 30s: {ex.Message}");
+                    System.Threading.Thread.Sleep(500);
+                }
+            }
+
+            return false;
+        }
+
+        static void StartLaunchBoxIfExists(string launchBoxExe)
+        {
+            if (!string.IsNullOrEmpty(launchBoxExe) && File.Exists(launchBoxExe))
+            {
+                StartLaunchBox(launchBoxExe);
+            }
+            else
+            {
+                Console.WriteLine($"LaunchBox.exe NOT FOUND at: {launchBoxExe}");
+                LogToFile($"ApplyUpdate: LaunchBox.exe NOT FOUND at: {launchBoxExe}");
+            }
+        }
+
+        static void CleanupUpdateDir(string updateDir)
+        {
+            try
+            {
+                if (Directory.Exists(updateDir))
+                    Directory.Delete(updateDir, true);
+                Console.WriteLine("Update staging files removed");
+                LogToFile($"ApplyUpdate: removed update dir {updateDir}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: could not remove update dir: {ex.Message}");
+                LogToFile($"ApplyUpdate: could not remove update dir: {ex.Message}");
             }
         }
 

@@ -1,8 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
-using System.Windows;
 using RommPlugin.ApiClient;
 using RommPlugin.Core;
 using RommPlugin.Core.Locale;
@@ -12,6 +10,7 @@ using RommPlugin.Core.Models.Statics;
 using RommPlugin.Core.Services;
 using RommPlugin.Core.Storage;
 using RommPlugin.Services;
+using RommPlugin.UI.Prompts;
 using Unbroken.LaunchBox.Plugins;
 using Unbroken.LaunchBox.Plugins.Data;
 using Microsoft.Extensions.DependencyInjection;
@@ -88,13 +87,13 @@ namespace RommPlugin
 
                 if (GitHubUpdateService.HasPendingUpdate())
                 {
-                    ApplyPendingUpdateOnStartup();
+                    new PluginUpdateOrchestrator(new WinFormsUpdatePrompts()).HandlePendingOnStartup();
                     return;
                 }
 
                 if (settings.AutoUpdateEnabled)
                 {
-                    _ = CheckAndUpdateAsync(settings);
+                    _ = new PluginUpdateOrchestrator(new WinFormsUpdatePrompts()).CheckAndPromptOnStartupAsync();
                 }
 
                 if (settings.ProcessPendingOnStartup)
@@ -331,111 +330,6 @@ namespace RommPlugin
                     _currentGame = null;
                     _currentRommId = 0;
                 }
-            }
-        }
-
-        private async Task CheckAndUpdateAsync(RommPluginSettings settings)
-        {
-            try
-            {
-                var result = await GitHubUpdateService.CheckForUpdateAsync();
-
-                if (!result.UpdateAvailable)
-                    return;
-
-                var version = result.LatestVersion.ToString(3);
-                var currentVersion = result.CurrentVersion.ToString(3);
-
-                var message = string.Format(LocaleManager.Get("update.available"), version, currentVersion);
-
-                if (!string.IsNullOrEmpty(result.ReleaseNotes))
-                {
-                    var notes = result.ReleaseNotes.Length > 500
-                        ? result.ReleaseNotes.Substring(0, 500) + "..."
-                        : result.ReleaseNotes;
-                    message += string.Format(LocaleManager.Get("update.release_notes"), notes);
-                }
-
-                var dialogResult = MessageBox.Show(
-                    message,
-                    LocaleManager.Get("update.title"),
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Information);
-
-                if (dialogResult != MessageBoxResult.Yes)
-                    return;
-
-                var asset = result.ZipAsset ?? result.SetupAsset;
-                if (asset == null)
-                {
-                RommLogger.Log("No downloadable asset found for update");
-                    return;
-                }
-
-                RommLogger.Log("Downloading update: " + asset.Name);
-                var downloaded = await GitHubUpdateService.DownloadUpdateAsync(asset, version);
-
-                if (!downloaded)
-                {
-                    MessageBox.Show(
-                        LocaleManager.Get("update.download_failed"),
-                        LocaleManager.Get("update.error_title"),
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
-                    return;
-                }
-
-                var restartMessage = string.Format(LocaleManager.Get("update.downloaded"), version);
-
-                var restartResult = MessageBox.Show(
-                    restartMessage,
-                    LocaleManager.Get("update.downloaded_title"),
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Information);
-
-                if (restartResult == MessageBoxResult.Yes)
-                {
-                    RommLogger.Log("User chose to restart now");
-                    GitHubUpdateService.ApplyPendingUpdate();
-                }
-                else
-                {
-                    RommLogger.Log("User chose to apply later. Update will be applied on next startup.");
-                }
-            }
-            catch (Exception ex)
-            {
-                RommLogger.LogError("Update check failed: " + ex.Message);
-            }
-        }
-
-        private void ApplyPendingUpdateOnStartup()
-        {
-            try
-            {
-                var version = GitHubUpdateService.GetPendingVersion();
-                var message = string.Format(LocaleManager.Get("update.pending_message"), version);
-
-                var result = MessageBox.Show(
-                    message,
-                    LocaleManager.Get("update.pending_title"),
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Information);
-
-                if (result == MessageBoxResult.Yes)
-                {
-                    RommLogger.Log("Applying pending update: " + version);
-                    GitHubUpdateService.ApplyPendingUpdate();
-                }
-                else
-                {
-                    RommLogger.Log("User deferred pending update. Will apply on next startup.");
-                }
-            }
-            catch (Exception ex)
-            {
-                RommLogger.LogError("Failed to apply pending update: " + ex.Message);
-                GitHubUpdateService.CleanupUpdateDir();
             }
         }
 

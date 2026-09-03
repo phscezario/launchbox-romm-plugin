@@ -1,15 +1,16 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Reflection;
+using RommPlugin.Core.Constants;
 using RommPlugin.Core.Logging;
 
 namespace RommPlugin.Core.Services
 {
     /// <summary>
-    /// Handles the extraction and installation of pending plugin updates from
-    /// a staged zip archive, using a batch script to replace files and restart LaunchBox.
+    /// Hands a staged (downloaded) plugin update to the CLI tool, which kills
+    /// LaunchBox, copies the new files, restarts LaunchBox and removes all
+    /// staging files (including the downloaded zip).
     /// </summary>
     public static class UpdateInstaller
     {
@@ -17,7 +18,6 @@ namespace RommPlugin.Core.Services
         private static string PendingZipPath => Path.Combine(UpdateDir, "pending.zip");
         private static string PendingFlagPath => Path.Combine(UpdateDir, "update.pending");
         private static string PendingVersionPath => Path.Combine(UpdateDir, "pending.version");
-        private static string BatchScriptPath => Path.Combine(UpdateDir, "update.bat");
 
         /// <summary>
         /// Determines whether a previously downloaded update is pending installation
@@ -41,11 +41,11 @@ namespace RommPlugin.Core.Services
         }
 
         /// <summary>
-        /// Applies the pending update by extracting the downloaded archive, locating the
-        /// plugin directory within it, generating a batch script to replace files, and
-        /// launching the script before exiting the current process.
+        /// Applies the pending update by launching the CLI tool in
+        /// <c>--apply-update</c> mode (detached) and exiting the current
+        /// process so LaunchBox can be closed, updated and restarted.
         /// </summary>
-        /// <returns><c>true</c> if the update batch was launched successfully; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if the CLI updater was launched successfully; otherwise, <c>false</c>.</returns>
         public static bool ApplyPendingUpdate()
         {
             try
@@ -58,107 +58,45 @@ namespace RommPlugin.Core.Services
 
                 RommLogger.Log($"Applying pending update {version}...");
 
-                var extractDir = Path.Combine(UpdateDir, "extracted");
-                if (Directory.Exists(extractDir))
-                    Directory.Delete(extractDir, true);
-
-                ZipFile.ExtractToDirectory(PendingZipPath, extractDir);
-
-                var sourceDir = FindPluginDirectory(extractDir);
-                if (sourceDir == null)
+                var cliPath = Path.Combine(pluginDir, RommConstants.CliExecutable);
+                if (!File.Exists(cliPath))
                 {
-                    RommLogger.LogError("Could not find plugin directory in downloaded archive");
-                    CleanupUpdateDir();
+                    RommLogger.LogError($"Update CLI not found at {cliPath}");
                     return false;
                 }
 
-                CreateUpdateBatch(sourceDir, pluginDir, version);
-                return LaunchBatchAndExit();
-            }
-            catch (Exception ex)
-            {
-                RommLogger.LogError($"Failed to apply pending update: {ex.Message}");
-                CleanupUpdateDir();
-                return false;
-            }
-        }
-
-        private static string FindPluginDirectory(string rootDir)
-        {
-            var pluginName = "RomM LaunchBox Integration";
-
-            var directPath = Path.Combine(rootDir, pluginName);
-            if (Directory.Exists(directPath))
-                return directPath;
-
-            var found = Directory.GetDirectories(rootDir, pluginName, SearchOption.AllDirectories);
-            if (found.Length > 0)
-                return found[0];
-
-            var dllPath = Directory.GetFiles(rootDir, "RommPlugin.dll", SearchOption.AllDirectories);
-            if (dllPath.Length > 0)
-                return Path.GetDirectoryName(dllPath[0]);
-
-            return null;
-        }
-
-        private static void CreateUpdateBatch(string sourceDir, string pluginDir, string version)
-        {
-            var source = sourceDir.Replace("\"", "\\\"");
-            var dest = pluginDir.Replace("\"", "\\\"");
-            var launchboxPath = Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                "..", "..", "LaunchBox.exe").Replace("\"", "\\\"");
-
-            var batch = $@"@echo off
-echo RomM Plugin Update - Applying version {version}...
-echo.
-echo Waiting for LaunchBox to close...
-timeout /t 3 /nobreak > nul
-echo.
-echo Copying files...
-xcopy /Y /E ""{source}\*"" ""{dest}\"" > nul 2>&1
-echo.
-echo Cleaning up old files...
-del /Q ""{dest}\*.new"" 2>nul
-echo.
-echo Starting LaunchBox...
-start """" ""{launchboxPath}""
-echo.
-echo Cleaning up update files...
-timeout /t 2 /nobreak > nul
-rmdir /S /Q ""{UpdateDir}"" 2>nul
-del ""%~f0"" 2>nul
-";
-
-            File.WriteAllText(BatchScriptPath, batch);
-        }
-
-        private static bool LaunchBatchAndExit()
-        {
-            try
-            {
-                RommLogger.Log("Launching update batch and exiting...");
-
-                Process.Start(new ProcessStartInfo
+                var launchBoxExe = Path.GetFullPath(Path.Combine(pluginDir, "..", "..", "LaunchBox.exe"));
+                if (!File.Exists(launchBoxExe))
                 {
-                    FileName = BatchScriptPath,
-                    WindowStyle = ProcessWindowStyle.Hidden,
-                    CreateNoWindow = true
-                });
+                    RommLogger.LogError($"LaunchBox.exe not found at {launchBoxExe}");
+                    return false;
+                }
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = cliPath,
+                    Arguments = $"--apply-update \"{UpdateDir}\" \"{pluginDir}\" \"{launchBoxExe}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+
+                Process.Start(psi);
+                RommLogger.Log("Update CLI launched, exiting LaunchBox process...");
 
                 Environment.Exit(0);
                 return true;
             }
             catch (Exception ex)
             {
-                RommLogger.LogError($"Failed to launch update batch: {ex.Message}");
+                RommLogger.LogError($"Failed to launch update CLI: {ex.Message}");
                 return false;
             }
         }
 
         /// <summary>
-        /// Removes the temporary update staging directory and all its contents.
+        /// Removes the temporary update staging directory and all its contents
+        /// (zip archive, flag/version files, extracted files).
         /// </summary>
         public static void CleanupUpdateDir()
         {
