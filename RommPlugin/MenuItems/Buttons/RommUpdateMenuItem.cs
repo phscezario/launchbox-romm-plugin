@@ -10,6 +10,7 @@ using RommPlugin.Core.Models;
 using RommPlugin.Core.Storage;
 using RommPlugin.Helpers;
 using RommPlugin.Services;
+using RommPlugin.UI.Forms;
 using Unbroken.LaunchBox.Plugins;
 using Unbroken.LaunchBox.Plugins.Data;
 
@@ -50,8 +51,10 @@ namespace RommPlugin.MenuItems.Buttons
                 var settings = RommPluginStorage.Load();
                 if (string.IsNullOrWhiteSpace(settings.RommBaseUrl))
                 {
-                    MessageBox.Show(LocaleManager.Get("error.settings_not_configured"),
-                        LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    using (var form = new ConfirmForm(LocaleManager.Get("error.settings_not_configured")))
+                    {
+                        form.ShowDialog();
+                    }
                     return;
                 }
                 var client = (RommApiClient)ServiceLocator.GetService<IRommApiClient>();
@@ -61,9 +64,11 @@ namespace RommPlugin.MenuItems.Buttons
 
                 if (rommGame == null)
                 {
-                    MessageBox.Show(
-                        string.Format(LocaleManager.Get("error.game_not_found"), rommId),
-                        LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    using (var form = new ConfirmForm(
+                        string.Format(LocaleManager.Get("error.game_not_found"), rommId)))
+                    {
+                        form.ShowDialog();
+                    }
                     return;
                 }
 
@@ -83,13 +88,17 @@ namespace RommPlugin.MenuItems.Buttons
                             RommMetadataComparer.ComputeRemoteMetadataHash(rommGame));
 
                         PluginHelper.DataManager.Save();
-                        MessageBox.Show(LocaleManager.Get("progress.finished"),
-                            LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        using (var form = new ConfirmForm(LocaleManager.Get("progress.finished")))
+                        {
+                            form.ShowDialog();
+                        }
                     }
                     else
                     {
-                        MessageBox.Show(LocaleManager.Get("sync.update_metadata_admin_required"),
-                            LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        using (var form = new ConfirmForm(LocaleManager.Get("sync.update_metadata_admin_required")))
+                        {
+                            form.ShowDialog();
+                        }
                     }
                 }
                 else
@@ -104,15 +113,19 @@ namespace RommPlugin.MenuItems.Buttons
                         RommMetadataComparer.ComputeRemoteMetadataHash(rommGame));
 
                     PluginHelper.DataManager.Save();
-                    MessageBox.Show(LocaleManager.Get("progress.finished"),
-                        LocaleManager.Get("confirm.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    using (var form = new ConfirmForm(LocaleManager.Get("progress.finished")))
+                    {
+                        form.ShowDialog();
+                    }
                 }
             }
             catch (Exception ex)
             {
                 RommLogger.LogError("[RommPlugin] update metadata error: " + ex);
-                MessageBox.Show(ex.Message,
-                    LocaleManager.Get("progress.error"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                using (var form = new ConfirmForm(ex.Message))
+                {
+                    form.ShowDialog();
+                }
             }
         }
 

@@ -10,6 +10,8 @@ using RommPlugin.Core.Models;
 using RommPlugin.Core.Services;
 using RommPlugin.Core.Storage;
 using RommPlugin.UI.Helpers;
+using RommPlugin.UI.Prompts;
+using RommPlugin.Core.Services;
 
 namespace RommPlugin.UI.Forms
 {
@@ -118,7 +120,10 @@ namespace RommPlugin.UI.Forms
         {
             if (string.IsNullOrWhiteSpace(txtBaseUrl.Text))
             {
-                MessageBox.Show(LocaleManager.Get("settings.base_url_required"));
+                using (var form = new ConfirmForm(LocaleManager.Get("settings.base_url_required")))
+                {
+                    form.ShowDialog();
+                }
                 return;
             }
 
@@ -128,16 +133,20 @@ namespace RommPlugin.UI.Forms
 
             if (!hasToken && !hasUserPass)
             {
-                MessageBox.Show(
-                    LocaleManager.Get("settings.auth_required")
-                );
+                using (var form = new ConfirmForm(LocaleManager.Get("settings.auth_required")))
+                {
+                    form.ShowDialog();
+                }
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(txtRomsPath.Text) ||
                 !Directory.Exists(txtRomsPath.Text))
             {
-                MessageBox.Show(LocaleManager.Get("settings.roms_path_invalid"));
+                using (var form = new ConfirmForm(LocaleManager.Get("settings.roms_path_invalid")))
+                {
+                    form.ShowDialog();
+                }
                 return;
             }
 
@@ -145,17 +154,13 @@ namespace RommPlugin.UI.Forms
                 (!string.IsNullOrWhiteSpace(txtUsername.Text) ||
                  !string.IsNullOrWhiteSpace(txtPassword.Text)))
             {
-                var choice = MessageBox.Show(
-                    LocaleManager.Get("settings.token_priority"),
-                    LocaleManager.Get("settings.title_box"),
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question
-                );
-
-                if (choice == DialogResult.Yes)
+                using (var form = new ConfirmForm(LocaleManager.Get("settings.token_priority")))
                 {
-                    txtUsername.Clear();
-                    txtPassword.Clear();
+                    if (form.ShowDialog() == DialogResult.OK)
+                    {
+                        txtUsername.Clear();
+                        txtPassword.Clear();
+                    }
                 }
             }
 
@@ -192,12 +197,10 @@ namespace RommPlugin.UI.Forms
             {
             }
 
-            MessageBox.Show(
-                LocaleManager.Get("settings.saved"),
-                LocaleManager.Get("settings.title_box"),
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information
-            );
+            using (var form = new ConfirmForm(LocaleManager.Get("settings.saved")))
+            {
+                form.ShowDialog();
+            }
 
             Close();
         }
@@ -231,7 +234,10 @@ namespace RommPlugin.UI.Forms
         {
             if (string.IsNullOrWhiteSpace(txtBaseUrl.Text))
             {
-                MessageBox.Show(LocaleManager.Get("settings.base_url_required"));
+                using (var form = new ConfirmForm(LocaleManager.Get("settings.base_url_required")))
+                {
+                    form.ShowDialog();
+                }
                 return;
             }
 
@@ -241,9 +247,10 @@ namespace RommPlugin.UI.Forms
 
             if (!hasToken && !hasUserPass)
             {
-                MessageBox.Show(
-                    LocaleManager.Get("settings.auth_required_test")
-                );
+                using (var form = new ConfirmForm(LocaleManager.Get("settings.auth_required_test")))
+                {
+                    form.ShowDialog();
+                }
                 return;
             }
 
@@ -260,20 +267,17 @@ namespace RommPlugin.UI.Forms
                     txtPassword.Text
                 );
 
-                MessageBox.Show(
-                    result.Message,
-                    LocaleManager.Get("settings.title_box"),
-                    MessageBoxButtons.OK,
-                    result.Success ? MessageBoxIcon.Information : MessageBoxIcon.Warning
-                );
+                using (var form = new ConfirmForm(result.Message))
+                {
+                    form.ShowDialog();
+                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    ex.Message,
-                    LocaleManager.Get("update.error_title"),
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                using (var form = new ConfirmForm(ex.Message))
+                {
+                    form.ShowDialog();
+                }
             }
             finally
             {
@@ -292,70 +296,11 @@ namespace RommPlugin.UI.Forms
 
             try
             {
-                var result = await GitHubUpdateService.CheckForUpdateAsync();
-
-                if (!result.UpdateAvailable)
-                {
-                    MessageBox.Show(
-                        string.Format(LocaleManager.Get("update.current_version"), result.CurrentVersion.ToString(3)),
-                        LocaleManager.Get("settings.title_box"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
-                    return;
-                }
-
-                var version = result.LatestVersion.ToString(3);
-                var message = string.Format(LocaleManager.Get("update.available"), version, result.CurrentVersion.ToString(3));
-
-                var dialogResult = MessageBox.Show(
-                    message,
-                    LocaleManager.Get("update.title"),
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Information);
-
-                if (dialogResult != DialogResult.Yes)
-                    return;
-
-                var asset = result.ZipAsset ?? result.SetupAsset;
-                if (asset == null)
-                {
-                    MessageBox.Show(
-                        LocaleManager.Get("update.no_asset"),
-                        LocaleManager.Get("update.error_title"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
-                    return;
-                }
-
-                var downloaded = await GitHubUpdateService.DownloadUpdateAsync(asset, version);
-                if (!downloaded)
-                {
-                    MessageBox.Show(
-                        LocaleManager.Get("update.download_failed"),
-                        LocaleManager.Get("update.error_title"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
-                    return;
-                }
-
-                var restartResult = MessageBox.Show(
-                    string.Format(LocaleManager.Get("update.downloaded"), version),
-                    LocaleManager.Get("update.downloaded_title"),
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Information);
-
-                if (restartResult == DialogResult.Yes)
-                {
-                    GitHubUpdateService.ApplyPendingUpdate();
-                }
+                await new PluginUpdateOrchestrator(new WinFormsUpdatePrompts()).RunManualCheckAsync();
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    LocaleManager.Get("update.download_failed") + ": " + ex.Message,
-                    LocaleManager.Get("update.error_title"),
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                RommLogger.LogError("Manual update check failed: " + ex.Message);
             }
             finally
             {

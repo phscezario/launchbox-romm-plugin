@@ -6,6 +6,7 @@ using RommPlugin.Core.Locale;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Storage;
 using RommPlugin.Services;
+using RommPlugin.UI.Forms;
 using Unbroken.LaunchBox.Plugins;
 
 namespace RommPlugin.MenuItems.Buttons
@@ -27,10 +28,10 @@ namespace RommPlugin.MenuItems.Buttons
 
                 if (string.IsNullOrWhiteSpace(settings.RommBaseUrl))
                 {
-                    MessageBox.Show(
-                        LocaleManager.Get("error.not_configured"),
-                        LocaleManager.Get("settings.title_box")
-                    );
+                    using (var form = new ConfirmForm(LocaleManager.Get("error.not_configured")))
+                    {
+                        form.ShowDialog();
+                    }
                     return;
                 }
 
@@ -43,11 +44,10 @@ namespace RommPlugin.MenuItems.Buttons
             catch (Exception ex)
             {
                 RommLogger.LogError("[RommPlugin] sync error: " + ex);
-                MessageBox.Show(
-                    ex.Message,
-                    LocaleManager.Get("progress.error"),
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                using (var form = new ConfirmForm(ex.Message))
+                {
+                    form.ShowDialog();
+                }
             }
         }
     }
