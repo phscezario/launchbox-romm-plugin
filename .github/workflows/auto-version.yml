@@ -1,8 +1,8 @@
-name: Auto Version Tag from PR Title
+name: Auto Version in PR
 
 on:
   pull_request:
-    types: [closed]
+    types: [opened, synchronize, edited]
     branches:
       - master
 
@@ -10,14 +10,15 @@ permissions:
   contents: write
 
 jobs:
-  create-tag:
-    if: github.event.pull_request.merged == true && !startsWith(github.event.pull_request.title, 'chore:')
+  update-version:
+    if: "!startsWith(github.event.pull_request.title, 'chore:')"
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
 
       - name: Get latest tag
@@ -53,9 +54,26 @@ jobs:
           new_version="v$major.$minor.$patch"
           echo "new_version=$new_version" >> $GITHUB_OUTPUT
 
-      - name: Create and push tag
+      - name: Update VERSION file
+        run: |
+          version="${{ steps.bump.outputs.new_version }}"
+          version="${version#v}"
+          echo "$version" > VERSION
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet VERSION; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push
+        if: steps.changes.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a ${{ steps.bump.outputs.new_version }} -m "Release ${{ steps.bump.outputs.new_version }}"
-          git push origin ${{ steps.bump.outputs.new_version }}
+          git add VERSION
+          git commit -m "chore: update VERSION to ${{ steps.bump.outputs.new_version }}"
+          git push
