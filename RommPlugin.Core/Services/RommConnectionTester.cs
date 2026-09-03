@@ -1,22 +1,46 @@
 using System;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
 using System.Threading.Tasks;
+using RommPlugin.Core.Locale;
 
 namespace RommPlugin.Core.Services
 {
-    public class ConnectionTestResult
+    /// <summary>
+    /// Tests connectivity and authentication against a RomM server instance.
+    /// </summary>
+    public class RommConnectionTester
     {
-        public bool Success { get; set; }
+        private readonly HttpClient _http;
 
-        public string Message { get; set; }
-    }
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RommConnectionTester"/> class
+        /// with a default 15-second HTTP timeout.
+        /// </summary>
+        public RommConnectionTester() : this(new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
+        {
+        }
 
-    public static class RommConnectionTester
-    {
-        public static async Task<ConnectionTestResult> TestAsync(
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RommConnectionTester"/> class
+        /// with the specified HTTP client.
+        /// </summary>
+        /// <param name="httpClient">The HTTP client to use for connection tests.</param>
+        public RommConnectionTester(HttpClient httpClient)
+        {
+            _http = httpClient;
+        }
+
+        /// <summary>
+        /// Tests connectivity and authentication against a RomM server by calling the
+        /// <c>/api/platforms</c> endpoint.
+        /// </summary>
+        /// <param name="baseUrl">The base URL of the RomM server to test.</param>
+        /// <param name="clientApiToken">Optional API token for Bearer authentication.</param>
+        /// <param name="username">Optional username for Basic authentication.</param>
+        /// <param name="password">Optional password for Basic authentication.</param>
+        /// <returns>A <see cref="ConnectionTestResult"/> indicating whether the connection succeeded.</returns>
+        public async Task<ConnectionTestResult> TestAsync(
             string baseUrl,
             string clientApiToken,
             string username,
@@ -27,7 +51,7 @@ namespace RommPlugin.Core.Services
                 return new ConnectionTestResult
                 {
                     Success = false,
-                    Message = "Base URL is required."
+                    Message = LocaleManager.Get("connection.url_required")
                 };
             }
 
@@ -36,66 +60,64 @@ namespace RommPlugin.Core.Services
                 return new ConnectionTestResult
                 {
                     Success = false,
-                    Message = "Base URL is not a valid absolute URL."
+                    Message = LocaleManager.Get("connection.url_invalid")
                 };
             }
 
-            using (var http = new HttpClient
+            try
             {
-                BaseAddress = baseUri,
-                Timeout = TimeSpan.FromSeconds(15)
-            })
-            {
-                if (!string.IsNullOrWhiteSpace(clientApiToken))
+                var requestUri = new Uri(baseUri, "/api/platforms");
+                using (var request = new HttpRequestMessage(HttpMethod.Get, requestUri))
                 {
-                    http.DefaultRequestHeaders.Authorization =
-                        new AuthenticationHeaderValue("Bearer", clientApiToken.Trim());
-                }
-                else
-                {
-                    var credentials = $"{username}:{password}";
-                    var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(credentials));
-                    http.DefaultRequestHeaders.Authorization =
-                        new AuthenticationHeaderValue("Basic", base64);
-                }
-
-                try
-                {
-                    var response = await http.GetAsync("/api/platforms");
-
-                    if (response.IsSuccessStatusCode)
+                    if (!string.IsNullOrWhiteSpace(clientApiToken))
                     {
-                        return new ConnectionTestResult
-                        {
-                            Success = true,
-                            Message = "Connection successful."
-                        };
+                        request.Headers.Authorization =
+                            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", clientApiToken.Trim());
+                    }
+                    else if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
+                    {
+                        var credentials = $"{username}:{password}";
+                        var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(credentials));
+                        request.Headers.Authorization =
+                            new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", base64);
                     }
 
-                    if (response.StatusCode == HttpStatusCode.Unauthorized ||
-                        response.StatusCode == HttpStatusCode.Forbidden)
+                    using (var response = await _http.SendAsync(request))
                     {
+                        if (response.IsSuccessStatusCode)
+                        {
+                            return new ConnectionTestResult
+                            {
+                                Success = true,
+                                Message = LocaleManager.Get("connection.success")
+                            };
+                        }
+
+                        if (response.StatusCode == HttpStatusCode.Unauthorized ||
+                            response.StatusCode == HttpStatusCode.Forbidden)
+                        {
+                            return new ConnectionTestResult
+                            {
+                                Success = false,
+                                Message = LocaleManager.Get("connection.auth_failed")
+                            };
+                        }
+
                         return new ConnectionTestResult
                         {
                             Success = false,
-                            Message = "Authentication failed - check your token or username/password."
+                            Message = LocaleManager.Get("connection.server_error", ((int)response.StatusCode).ToString(), response.ReasonPhrase ?? "")
                         };
                     }
-
-                    return new ConnectionTestResult
-                    {
-                        Success = false,
-                        Message = $"Server returned {(int)response.StatusCode} ({response.ReasonPhrase})."
-                    };
                 }
-                catch (Exception ex)
+            }
+            catch (Exception ex)
+            {
+                return new ConnectionTestResult
                 {
-                    return new ConnectionTestResult
-                    {
-                        Success = false,
-                        Message = "Could not reach the server: " + ex.Message
-                    };
-                }
+                    Success = false,
+                    Message = LocaleManager.Get("connection.unreachable") + " " + ex.Message
+                };
             }
         }
     }

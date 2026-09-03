@@ -7,6 +7,7 @@
 [Oo]bj/
 [Dd]ebug/
 [Rr]elease/
+build/
 x64/
 x86/
 [Aa][Rr][Mm]/
@@ -37,6 +38,7 @@ packages/
 
 # MSBuild
 *.binlog
+*.pdb
 
 # Test Results
 [Tt]est[Rr]esult*/
@@ -50,6 +52,9 @@ CodeCoverage/
 # Publish output
 publish/
 *.publishproj
+
+# Test output
+testout/
 
 # Temporary files
 ~$*
@@ -76,3 +81,6 @@ project.fragment.lock.json
 
 # opencode
 .opencode/
+
+# Plugin settings (may contain credentials)
+settings.json

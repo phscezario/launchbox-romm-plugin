@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirects>false</GenerateBindingRedirects>
+    <GenerateBindingRedirectsFromRuntimeInfo>false</GenerateBindingRedirectsFromRuntimeInfo>
+    <GenerateRuntimeConfigurationFiles>false</GenerateRuntimeConfigurationFiles>
+    <NoWarn>$(NoWarn);NU1605</NoWarn>
+    <DebugType>None</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.8.1" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Moq" Version="4.16.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="Unbroken.LaunchBox.Plugins">
+      <HintPath>..\lib\LaunchBox\Unbroken.LaunchBox.Plugins.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RommPlugin.Core\RommPlugin.Core.csproj" />
+    <ProjectReference Include="..\RommPlugin\RommPlugin.csproj" />
+  </ItemGroup>
+
+  <Target Name="FixBindingRedirects" AfterTargets="Build">
+    <Copy SourceFiles="$(ProjectDir)App.config" DestinationFiles="$(TargetDir)$(AssemblyName).dll.config" SkipUnchangedFiles="false" OverwriteReadOnlyFiles="true" />
+  </Target>
+
+</Project>

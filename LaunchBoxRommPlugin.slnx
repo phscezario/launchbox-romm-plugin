@@ -6,14 +6,17 @@
   <Folder Name="/Solution Items/.github/" />
   <Folder Name="/Solution Items/.github/workflows/">
     <File Path=".github/workflows/auto-tag.yml" />
+    <File Path=".github/workflows/ci.yml" />
     <File Path=".github/workflows/pr-labeler.yml" />
     <File Path=".github/workflows/release.yml" />
+    <File Path=".github/workflows/test.yml" />
   </Folder>
   <Folder Name="/Solution Items/Images/">
     <File Path="Images/ico.png" />
   </Folder>
-  <Project Path="RommPlugin.CLI/RommPlugin.CLI.csproj" Id="71aac390-5ea5-4843-be4c-b27e3598bba1" />
   <Project Path="RommPlugin.Core/RommPlugin.Core.csproj" Id="5c10f607-5822-4931-af7d-5a091dd3a094" />
   <Project Path="RommPlugin.UI/RommPlugin.UI.csproj" Id="2f245f99-b82d-44dc-898d-554d194e55e4" />
   <Project Path="RommPlugin/RommPlugin.csproj" Id="2f182437-32d3-404d-8642-240e4b206d6a" />
+  <Project Path="RommPlugin.Tests/RommPlugin.Tests.csproj" Id="a1b2c3d4-e5f6-7890-abcd-ef1234567890" />
+  <Project Path="RommPlugin.CLI/RommPlugin.CLI.csproj" Id="b2c3d4e5-f6a7-8901-bcde-f12345678901" />
 </Solution>

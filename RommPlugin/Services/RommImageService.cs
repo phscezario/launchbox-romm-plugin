@@ -6,8 +6,18 @@ using System.Runtime.InteropServices;
 
 namespace RommPlugin.Services
 {
+    /// <summary>
+    /// Provides image processing utilities for converting images to RGB JPEG format and calculating visible content bounds.
+    /// </summary>
     public static class RommImageService
     {
+        /// <summary>
+        /// Ensures an image file is saved as an RGB JPEG (no alpha channel). If the image has transparency
+        /// or uses an indexed pixel format, it is converted to RGB JPEG by compositing onto a black background
+        /// and cropping to visible content bounds.
+        /// </summary>
+        /// <param name="originalPath">The file path of the original image.</param>
+        /// <returns>The path of the converted RGB JPEG file. If no conversion was needed, returns the original path.</returns>
         public static string EnsureRgbJpeg(string originalPath)
         {
             using (var img = Image.FromFile(originalPath))
@@ -19,7 +29,7 @@ namespace RommPlugin.Services
 
                 if (hasAlpha || isIndexed)
                 {
-                    var temp = Path.GetTempFileName() + ".jpg";
+                    var temp = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".jpg");
 
                     using (var src = new Bitmap(img))
                     {
@@ -43,6 +53,12 @@ namespace RommPlugin.Services
             return originalPath;
         }
 
+        /// <summary>
+        /// Calculates the bounding rectangle of all non-transparent pixels in a bitmap.
+        /// Used to crop transparent borders from images with alpha channels.
+        /// </summary>
+        /// <param name="bmp">The bitmap to analyze for visible content bounds.</param>
+        /// <returns>A <see cref="Rectangle"/> encompassing all non-transparent pixels, or the full image bounds if none found.</returns>
         public static Rectangle GetVisibleBounds(Bitmap bmp)
         {
             int minX = bmp.Width, minY = bmp.Height;

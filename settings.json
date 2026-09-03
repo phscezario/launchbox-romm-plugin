@@ -6,8 +6,14 @@
   "RomsPath": "",
   "KeepLocalData": false,
   "SaveLogs": false,
+  "LogRetentionDays": 7,
   "ProcessPendingOnStartup": true,
-  "LoginFormUseConfiguredAccount": false,
-  "LoginFormSaveAdminAccount": false,
+  "PublicScreenshots": true,
+  "ForceFullResync": false,
+  "Language": "en",
+  "UpdateStatsOnGameLaunch": false,
+  "DetailedSyncLogs": false,
+  "IsAdmin": false,
+  "AutoUpdateEnabled": true,
   "CurrentPlatforms": []
 }
