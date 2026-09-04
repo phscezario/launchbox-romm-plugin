@@ -71,6 +71,7 @@ namespace RommPlugin.Tests.Services
                 prompts.Object,
                 hasPendingUpdate: () => true,
                 getPendingVersion: () => "1.1.0",
+                getCurrentVersion: () => new Version(1, 0, 0),
                 applyPendingUpdate: () => { applied = true; return true; });
 
             Assert.True(orchestrator.HandlePendingOnStartup());
@@ -86,6 +87,7 @@ namespace RommPlugin.Tests.Services
                 prompts.Object,
                 hasPendingUpdate: () => true,
                 getPendingVersion: () => "1.1.0",
+                getCurrentVersion: () => new Version(1, 0, 0),
                 applyPendingUpdate: () => { applied = true; return true; });
 
             Assert.True(orchestrator.HandlePendingOnStartup());
@@ -100,6 +102,7 @@ namespace RommPlugin.Tests.Services
                 prompts.Object,
                 hasPendingUpdate: () => true,
                 getPendingVersion: () => "1.1.0",
+                getCurrentVersion: () => new Version(1, 0, 0),
                 applyPendingUpdate: () => false);
 
             Assert.True(orchestrator.HandlePendingOnStartup());
@@ -237,6 +240,98 @@ namespace RommPlugin.Tests.Services
             prompts.Verify(p => p.ShowInfo(It.IsAny<string>()), Times.Once);
             prompts.Verify(p => p.DownloadWithProgressAsync(
                 It.IsAny<GitHubReleaseAsset>(), It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public void HandlePending_StalePendingVersion_CleansUpWithoutPrompt()
+        {
+            var prompts = CreatePrompts();
+            var cleaned = false;
+            var orchestrator = new PluginUpdateOrchestrator(
+                prompts.Object,
+                hasPendingUpdate: () => true,
+                getPendingVersion: () => "2.0.0",
+                getCurrentVersion: () => new Version(2, 0, 1),
+                cleanupUpdateDir: () => { cleaned = true; });
+
+            Assert.True(orchestrator.HandlePendingOnStartup());
+            Assert.True(cleaned);
+            prompts.Verify(p => p.ConfirmUpdateNow(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+            prompts.Verify(p => p.ShowInfo(It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public void HandlePending_EqualVersion_CleansUpWithoutPrompt()
+        {
+            var prompts = CreatePrompts();
+            var cleaned = false;
+            var orchestrator = new PluginUpdateOrchestrator(
+                prompts.Object,
+                hasPendingUpdate: () => true,
+                getPendingVersion: () => "2.0.1",
+                getCurrentVersion: () => new Version(2, 0, 1),
+                cleanupUpdateDir: () => { cleaned = true; });
+
+            Assert.True(orchestrator.HandlePendingOnStartup());
+            Assert.True(cleaned);
+            prompts.Verify(p => p.ConfirmUpdateNow(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public void HandlePending_NewerPending_PromptsNormally()
+        {
+            var prompts = CreatePrompts(confirmResult: false);
+            var cleaned = false;
+            var orchestrator = new PluginUpdateOrchestrator(
+                prompts.Object,
+                hasPendingUpdate: () => true,
+                getPendingVersion: () => "2.0.2",
+                getCurrentVersion: () => new Version(2, 0, 1),
+                cleanupUpdateDir: () => { cleaned = true; });
+
+            Assert.True(orchestrator.HandlePendingOnStartup());
+            Assert.False(cleaned);
+            prompts.Verify(p => p.ConfirmUpdateNow(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        }
+
+        [Fact]
+        public void HandlePending_UnparseableVersion_PromptsNormally()
+        {
+            var prompts = CreatePrompts(confirmResult: false);
+            var orchestrator = new PluginUpdateOrchestrator(
+                prompts.Object,
+                hasPendingUpdate: () => true,
+                getPendingVersion: () => "not-a-version",
+                getCurrentVersion: () => new Version(2, 0, 1));
+
+            Assert.True(orchestrator.HandlePendingOnStartup());
+            prompts.Verify(p => p.ConfirmUpdateNow(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        }
+
+        [Fact]
+        public void HandlePending_FailureMarker_ShowsInfoAndCleansWithoutPrompt()
+        {
+            var prompts = CreatePrompts();
+            var cleaned = false;
+            var applied = false;
+            var orchestrator = new PluginUpdateOrchestrator(
+                prompts.Object,
+                hasPendingUpdate: () => true,
+                getPendingVersion: () => "2.0.1",
+                applyPendingUpdate: () => { applied = true; return true; },
+                cleanupUpdateDir: () => { cleaned = true; },
+                hasFailedMarker: () => true);
+
+            Assert.True(orchestrator.HandlePendingOnStartup());
+            Assert.True(cleaned);
+            Assert.False(applied);
+            prompts.Verify(p => p.ShowInfo(It.IsAny<string>()), Times.Once);
+            prompts.Verify(p => p.ConfirmUpdateNow(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
     }
 }
