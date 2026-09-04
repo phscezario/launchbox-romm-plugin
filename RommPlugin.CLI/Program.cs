@@ -7,12 +7,28 @@ using System.Linq;
 using System.Xml.Linq;
 using Newtonsoft.Json;
 using RommPlugin.Core.Constants;
+using RommPlugin.Core.Services;
 
 namespace RommPlugin.CLI
 {
     class Program
     {
         private static string _logDir;
+        private static Action _closeStatusForm;
+
+        static void CloseStatusForm()
+        {
+            try
+            {
+                var close = _closeStatusForm;
+                _closeStatusForm = null;
+                if (close != null)
+                    close();
+            }
+            catch
+            {
+            }
+        }
 
         static void LogToFile(string message)
         {
@@ -1086,14 +1102,38 @@ namespace RommPlugin.CLI
 
         static int ApplyPluginUpdate(string updateDir, string pluginDir, string launchBoxExe)
         {
+            bool createdNew;
+            using (var mutex = new System.Threading.Mutex(true, @"Global\RomMPlugin_Update", out createdNew))
+            {
+                if (!createdNew)
+                {
+                    Console.WriteLine("Another update is already in progress, exiting.");
+                    LogToFile("ApplyUpdate: another updater instance is already running, exiting.");
+                    return 0;
+                }
+
+                return ApplyPluginUpdateCore(updateDir, pluginDir, launchBoxExe);
+            }
+        }
+
+        static int ApplyPluginUpdateCore(string updateDir, string pluginDir, string launchBoxExe)
+        {
             LogToFile($"ApplyUpdate started: updateDir={updateDir}, pluginDir={pluginDir}, launchBoxExe={launchBoxExe}");
             Console.WriteLine("RomM Plugin Update - Applying pending update...");
 
-            var zipPath = Path.Combine(updateDir, "pending.zip");
+            var shown = UpdateStatusForm.ShowOnDedicatedThread();
+            var progress = shown.Item1;
+            _closeStatusForm = shown.Item2;
+            if (progress != null)
+                progress.Indeterminate("Iniciando atualização...");
+
+            var zipPath = Path.Combine(updateDir, UpdateInstaller.PendingZipFileName);
+            var version = ReadPendingVersion(updateDir);
             if (!File.Exists(zipPath))
             {
                 Console.Error.WriteLine($"Update archive not found: {zipPath}");
                 LogToFile($"ApplyUpdate failed: archive not found: {zipPath}");
+                CloseStatusForm();
                 return 1;
             }
 
@@ -1114,6 +1154,7 @@ namespace RommPlugin.CLI
                 Console.Error.WriteLine($"Could not extract update: {ex.Message}");
                 LogToFile($"ApplyUpdate failed to extract: {ex.Message}");
                 CleanupUpdateDir(updateDir);
+                CloseStatusForm();
                 return 2;
             }
 
@@ -1123,19 +1164,25 @@ namespace RommPlugin.CLI
                 Console.Error.WriteLine("Could not find plugin directory in downloaded archive");
                 LogToFile("ApplyUpdate failed: plugin directory not found in archive");
                 CleanupUpdateDir(updateDir);
+                CloseStatusForm();
                 return 3;
             }
 
             Console.WriteLine("Waiting for LaunchBox to close...");
             LogToFile("ApplyUpdate: killing LaunchBox processes");
+            if (progress != null)
+                progress.Indeterminate("Fechando o LaunchBox, aguarde...");
             KillLaunchBox();
             WaitForLaunchBoxExit();
 
-            var copied = CopyDirectoryWithRetry(sourceDir, pluginDir);
+            if (progress != null)
+                progress.Indeterminate("Copiando arquivos da atualização...");
+            var copied = CopyDirectoryWithRetry(sourceDir, pluginDir, progress);
             if (!copied)
             {
                 Console.Error.WriteLine("Could not copy update files (files still locked)");
-                LogToFile("ApplyUpdate failed: could not copy files after retries (pending kept for next launch)");
+                LogToFile("ApplyUpdate failed: could not copy files after retries");
+                MarkApplyFailed(updateDir);
                 StartLaunchBoxIfExists(launchBoxExe);
                 return 4;
             }
@@ -1143,12 +1190,41 @@ namespace RommPlugin.CLI
             Console.WriteLine("Update files copied");
             LogToFile("ApplyUpdate: files copied successfully");
 
+            if (progress != null)
+                progress.Indeterminate("Verificando arquivos instalados...");
+            if (!VerifyInstalledVersion(pluginDir, version))
+            {
+                Console.Error.WriteLine($"Installed files do not match update {version}");
+                LogToFile($"ApplyUpdate failed: installed version mismatch for update {version}");
+                MarkApplyFailed(updateDir);
+                StartLaunchBoxIfExists(launchBoxExe);
+                return 5;
+            }
+
+            LogToFile($"ApplyUpdate: installed version verified ({version})");
+
             StartLaunchBoxIfExists(launchBoxExe);
 
             CleanupUpdateDir(updateDir);
             Console.WriteLine("Update applied and staging files removed");
             LogToFile("ApplyUpdate completed successfully, update dir removed");
             return 0;
+        }
+
+        static string ReadPendingVersion(string updateDir)
+        {
+            try
+            {
+                var path = Path.Combine(updateDir, UpdateInstaller.PendingVersionFileName);
+                if (File.Exists(path))
+                    return File.ReadAllText(path).Trim();
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"ApplyUpdate: could not read pending version: {ex.Message}");
+            }
+
+            return null;
         }
 
         static string FindUpdatePluginDirectory(string rootDir)
@@ -1188,8 +1264,19 @@ namespace RommPlugin.CLI
             System.Threading.Thread.Sleep(2000);
         }
 
-        static bool CopyDirectoryWithRetry(string sourceDir, string destDir)
+        static bool CopyDirectoryWithRetry(string sourceDir, string destDir, UpdateStatusForm.Reporter progress = null)
         {
+            string[] files;
+            try
+            {
+                files = Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories);
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"ApplyUpdate: could not list update files: {ex.Message}");
+                return false;
+            }
+
             for (var attempt = 0; attempt < 60; attempt++)
             {
                 try
@@ -1198,8 +1285,16 @@ namespace RommPlugin.CLI
                         Directory.CreateDirectory(dir.Replace(sourceDir, destDir));
                     Directory.CreateDirectory(destDir);
 
-                    foreach (var file in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
+                    var done = 0;
+                    foreach (var file in files)
+                    {
                         File.Copy(file, file.Replace(sourceDir, destDir), true);
+                        done++;
+                        if (progress != null)
+                            progress.Progress(
+                                $"Copiando arquivos da atualização... ({done}/{files.Length})",
+                                done, files.Length);
+                    }
 
                     return true;
                 }
@@ -1216,6 +1311,8 @@ namespace RommPlugin.CLI
 
         static void StartLaunchBoxIfExists(string launchBoxExe)
         {
+            CloseStatusForm();
+
             if (!string.IsNullOrEmpty(launchBoxExe) && File.Exists(launchBoxExe))
             {
                 StartLaunchBox(launchBoxExe);
@@ -1224,6 +1321,46 @@ namespace RommPlugin.CLI
             {
                 Console.WriteLine($"LaunchBox.exe NOT FOUND at: {launchBoxExe}");
                 LogToFile($"ApplyUpdate: LaunchBox.exe NOT FOUND at: {launchBoxExe}");
+            }
+        }
+
+        static void MarkApplyFailed(string updateDir)
+        {
+            try
+            {
+                File.WriteAllText(
+                    Path.Combine(updateDir, UpdateInstaller.FailedMarkerFileName),
+                    DateTime.UtcNow.ToString("o"));
+                LogToFile("ApplyUpdate: failure marker written");
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"ApplyUpdate: could not write failure marker: {ex.Message}");
+            }
+        }
+
+        static bool VerifyInstalledVersion(string pluginDir, string expectedVersion)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(expectedVersion))
+                    return true;
+
+                Version expected;
+                if (!Version.TryParse(expectedVersion, out expected))
+                    return true;
+
+                var installed = System.Reflection.AssemblyName
+                    .GetAssemblyName(Path.Combine(pluginDir, "RommPlugin.Core.dll")).Version;
+                if (installed == null)
+                    return true;
+
+                return installed.ToString(3) == expected.ToString(3);
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"ApplyUpdate: could not verify installed version: {ex.Message}");
+                return true;
             }
         }
 

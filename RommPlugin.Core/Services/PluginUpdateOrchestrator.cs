@@ -1,7 +1,8 @@
 using System;
+using System.IO;
 using System.Threading.Tasks;
-using RommPlugin.Core.Locale;
 using RommPlugin.Core.Interfaces;
+using RommPlugin.Core.Locale;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 
@@ -21,6 +22,9 @@ namespace RommPlugin.Core.Services
         private readonly Func<bool> _hasPendingUpdate;
         private readonly Func<string> _getPendingVersion;
         private readonly Func<bool> _applyPendingUpdate;
+        private readonly Func<Version> _getCurrentVersion;
+        private readonly Action _cleanupUpdateDir;
+        private readonly Func<bool> _hasFailedMarker;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="PluginUpdateOrchestrator"/> class.
@@ -30,32 +34,59 @@ namespace RommPlugin.Core.Services
         /// <param name="hasPendingUpdate">Pending detection. Defaults to <see cref="GitHubUpdateService.HasPendingUpdate"/>.</param>
         /// <param name="getPendingVersion">Pending version lookup. Defaults to <see cref="GitHubUpdateService.GetPendingVersion"/>.</param>
         /// <param name="applyPendingUpdate">Update applier. Defaults to <see cref="GitHubUpdateService.ApplyPendingUpdate"/>.</param>
+        /// <param name="getCurrentVersion">Installed version lookup. Defaults to <see cref="GitHubUpdateService.GetCurrentVersion"/>.</param>
+        /// <param name="cleanupUpdateDir">Staging cleanup. Defaults to <see cref="GitHubUpdateService.CleanupUpdateDir"/>.</param>
+        /// <param name="hasFailedMarker">Failure marker detection. Defaults to checking the staging directory.</param>
         public PluginUpdateOrchestrator(
             IUpdatePrompts prompts,
             Func<Task<UpdateCheckResult>> checkForUpdateAsync = null,
             Func<bool> hasPendingUpdate = null,
             Func<string> getPendingVersion = null,
-            Func<bool> applyPendingUpdate = null)
+            Func<bool> applyPendingUpdate = null,
+            Func<Version> getCurrentVersion = null,
+            Action cleanupUpdateDir = null,
+            Func<bool> hasFailedMarker = null)
         {
             _prompts = prompts ?? throw new ArgumentNullException(nameof(prompts));
             _checkForUpdateAsync = checkForUpdateAsync ?? GitHubUpdateService.CheckForUpdateAsync;
             _hasPendingUpdate = hasPendingUpdate ?? GitHubUpdateService.HasPendingUpdate;
             _getPendingVersion = getPendingVersion ?? GitHubUpdateService.GetPendingVersion;
             _applyPendingUpdate = applyPendingUpdate ?? GitHubUpdateService.ApplyPendingUpdate;
+            _getCurrentVersion = getCurrentVersion ?? GitHubUpdateService.GetCurrentVersion;
+            _cleanupUpdateDir = cleanupUpdateDir ?? GitHubUpdateService.CleanupUpdateDir;
+            _hasFailedMarker = hasFailedMarker ?? (() => File.Exists(UpdateInstaller.FailedMarkerPath));
         }
 
         /// <summary>
         /// Handles a pending (already downloaded) update on LaunchBox startup.
+        /// A previous failed attempt is reported once and cleaned up, and a
+        /// stale pending (not newer than installed, e.g. after a manual update)
+        /// is cleaned up silently so the prompt loop ends.
         /// </summary>
         /// <returns><c>true</c> if a pending update was found (and handled); otherwise, <c>false</c>.</returns>
         public bool HandlePendingOnStartup()
         {
             try
             {
+                if (_hasFailedMarker())
+                {
+                    RommLogger.Log("Previous update attempt failed. Showing one-shot info and cleaning up.");
+                    _prompts.ShowInfo(LocaleManager.Get("update.apply_failed"));
+                    _cleanupUpdateDir();
+                    return true;
+                }
+
                 if (!_hasPendingUpdate())
                     return false;
 
                 var version = _getPendingVersion() ?? "?";
+
+                if (IsStalePending(version))
+                {
+                    RommLogger.Log($"Pending update {version} is not newer than installed. Cleaning up without prompting.");
+                    _cleanupUpdateDir();
+                    return true;
+                }
                 var message = string.Format(LocaleManager.Get("update.pending_message"), version);
 
                 if (_prompts.ConfirmUpdateNow(
@@ -78,8 +109,33 @@ namespace RommPlugin.Core.Services
             catch (Exception ex)
             {
                 RommLogger.LogError("Failed to handle pending update: " + ex.Message);
-                GitHubUpdateService.CleanupUpdateDir();
+                _cleanupUpdateDir();
                 return true;
+            }
+        }
+
+        /// <summary>
+        /// Determines whether a pending update version is stale, i.e. not newer
+        /// than the installed version (e.g. the user already updated manually).
+        /// Unparseable versions are never considered stale.
+        /// </summary>
+        private bool IsStalePending(string pendingVersion)
+        {
+            try
+            {
+                Version pending;
+                if (!Version.TryParse(pendingVersion, out pending))
+                    return false;
+
+                var current = _getCurrentVersion();
+                if (current == null)
+                    return false;
+
+                return pending <= current;
+            }
+            catch
+            {
+                return false;
             }
         }
 

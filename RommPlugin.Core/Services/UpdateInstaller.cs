@@ -15,9 +15,27 @@ namespace RommPlugin.Core.Services
     public static class UpdateInstaller
     {
         private static string UpdateDir => Path.Combine(Path.GetTempPath(), "RomMPlugin_Update");
-        private static string PendingZipPath => Path.Combine(UpdateDir, "pending.zip");
-        private static string PendingFlagPath => Path.Combine(UpdateDir, "update.pending");
-        private static string PendingVersionPath => Path.Combine(UpdateDir, "pending.version");
+        private static string PendingZipPath => Path.Combine(UpdateDir, PendingZipFileName);
+        private static string PendingFlagPath => Path.Combine(UpdateDir, PendingFlagFileName);
+        private static string PendingVersionPath => Path.Combine(UpdateDir, PendingVersionFileName);
+
+        /// <summary>Staging directory for pending updates (shared with the CLI updater).</summary>
+        public static string UpdateDirectory => UpdateDir;
+
+        /// <summary>Staged update archive filename.</summary>
+        public const string PendingZipFileName = "pending.zip";
+
+        /// <summary>Flag filename marking a staged update as pending.</summary>
+        public const string PendingFlagFileName = "update.pending";
+
+        /// <summary>Filename holding the pending update version.</summary>
+        public const string PendingVersionFileName = "pending.version";
+
+        /// <summary>Marker filename written by the CLI when applying fails.</summary>
+        public const string FailedMarkerFileName = "update.failed";
+
+        /// <summary>Full path of the failure marker file.</summary>
+        public static string FailedMarkerPath => Path.Combine(UpdateDir, FailedMarkerFileName);
 
         /// <summary>
         /// Determines whether a previously downloaded update is pending installation
@@ -41,9 +59,12 @@ namespace RommPlugin.Core.Services
         }
 
         /// <summary>
-        /// Applies the pending update by launching the CLI tool in
-        /// <c>--apply-update</c> mode (detached) and exiting the current
+        /// Applies the pending update by staging the CLI tool outside the plugin
+        /// folder (so it holds no locks on the files being replaced), consuming
+        /// the pending flag to prevent overlapping runs, then launching the CLI
+        /// in <c>--apply-update</c> mode (detached) and exiting the current
         /// process so LaunchBox can be closed, updated and restarted.
+        /// If the CLI cannot be launched, the pending flag is restored.
         /// </summary>
         /// <returns><c>true</c> if the CLI updater was launched successfully; otherwise, <c>false</c>.</returns>
         public static bool ApplyPendingUpdate()
@@ -72,16 +93,31 @@ namespace RommPlugin.Core.Services
                     return false;
                 }
 
+                var stagedCliPath = StageCliOutsidePluginFolder(cliPath);
+                if (stagedCliPath == null)
+                    return false;
+
+                ConsumePendingFlag();
+
                 var psi = new ProcessStartInfo
                 {
-                    FileName = cliPath,
+                    FileName = stagedCliPath,
                     Arguments = $"--apply-update \"{UpdateDir}\" \"{pluginDir}\" \"{launchBoxExe}\"",
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden
                 };
 
-                Process.Start(psi);
+                try
+                {
+                    Process.Start(psi);
+                }
+                catch
+                {
+                    RestorePendingFlag();
+                    throw;
+                }
+
                 RommLogger.Log("Update CLI launched, exiting LaunchBox process...");
 
                 Environment.Exit(0);
@@ -91,6 +127,78 @@ namespace RommPlugin.Core.Services
             {
                 RommLogger.LogError($"Failed to launch update CLI: {ex.Message}");
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Copies the CLI updater and its full dependency closure (config, Core,
+        /// Newtonsoft) into the staging directory so the updater process holds
+        /// no file locks inside the plugin folder it is about to replace.
+        /// </summary>
+        /// <returns>Full path of the staged CLI executable, or <c>null</c> on failure.</returns>
+        private static string StageCliOutsidePluginFolder(string cliPath)
+        {
+            try
+            {
+                var stageBinDir = Path.Combine(UpdateDir, "bin");
+                Directory.CreateDirectory(stageBinDir);
+
+                var stagedCliPath = Path.Combine(stageBinDir, RommConstants.CliExecutable);
+                File.Copy(cliPath, stagedCliPath, true);
+
+                var pluginDir = Path.GetDirectoryName(cliPath);
+                foreach (var file in new[]
+                {
+                    RommConstants.CliExecutable + ".config",
+                    "RommPlugin.Core.dll",
+                    "Newtonsoft.Json.dll"
+                })
+                {
+                    var source = Path.Combine(pluginDir, file);
+                    if (File.Exists(source))
+                        File.Copy(source, Path.Combine(stageBinDir, file), true);
+                }
+
+                return stagedCliPath;
+            }
+            catch (Exception ex)
+            {
+                RommLogger.LogError($"Failed to stage update CLI: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Deletes the pending flag to claim the update and prevent overlapping
+        /// updater runs. The staged CLI recreates it if applying fails.
+        /// </summary>
+        private static void ConsumePendingFlag()
+        {
+            try
+            {
+                if (File.Exists(PendingFlagPath))
+                    File.Delete(PendingFlagPath);
+            }
+            catch (Exception ex)
+            {
+                RommLogger.LogError($"Failed to consume pending flag: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Recreates the pending flag when the updater could not be launched,
+        /// so the update is offered again on the next startup.
+        /// </summary>
+        private static void RestorePendingFlag()
+        {
+            try
+            {
+                if (File.Exists(PendingZipPath) && !File.Exists(PendingFlagPath))
+                    File.WriteAllText(PendingFlagPath, "pending");
+            }
+            catch (Exception ex)
+            {
+                RommLogger.LogError($"Failed to restore pending flag: {ex.Message}");
             }
         }
 

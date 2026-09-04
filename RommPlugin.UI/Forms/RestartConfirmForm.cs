@@ -51,19 +51,21 @@ namespace RommPlugin.UI.Forms
 
         private void AutoSizeMessage()
         {
+            // Grows the message label and the form. Buttons are anchored to the
+            // bottom edge, so they follow the form growth automatically.
+            // Never adjust button Top manually: it double-shifts with the anchor
+            // and pushes the buttons outside the visible area.
             using (var g = CreateGraphics())
             {
                 var size = g.MeasureString(lblMessage.Text, lblMessage.Font, lblMessage.Width);
                 var needed = (int)System.Math.Ceiling(size.Height) + 8;
                 const int minHeight = 60;
-                const int maxHeight = 160;
+                const int maxHeight = 220;
                 var clamped = System.Math.Max(minHeight, System.Math.Min(maxHeight, needed));
                 var delta = clamped - lblMessage.Height;
                 if (delta > 0)
                 {
                     lblMessage.Height = clamped;
-                    btnRestartNow.Top += delta;
-                    btnRestartLater.Top += delta;
                     ClientSize = new System.Drawing.Size(ClientSize.Width, ClientSize.Height + delta);
                 }
             }
