@@ -16,6 +16,7 @@ Welcome to the developer documentation for the **LaunchBox RomM Plugin**. This f
 | [Release Process](release-process.md) | How versioning, tagging, and GitHub Releases work end-to-end |
 | [Localization](localization.md) | i18n system: locale JSON files, adding new languages, fallback chain |
 | [API Integration](api-integration.md) | RomM REST API endpoints, authentication, data models, and error handling |
+| [Game Manager](game-manager.md) | Game Manager dialog, orphan cleanup, corrupt-archive recovery |
 
 ## Quick Start
 

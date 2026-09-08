@@ -71,6 +71,12 @@ namespace RommPlugin.Core.Models
         public int RetryCount { get; set; }
 
         /// <summary>
+        /// Gets or sets how many times this item was re-downloaded because the
+        /// archive turned out to be corrupt. Reset when a fresh item is enqueued.
+        /// </summary>
+        public int CorruptArchiveAttempts { get; set; }
+
+        /// <summary>
         /// Gets or sets the timestamp when the download was added to the queue.
         /// </summary>
         public DateTime AddedAt { get; set; }
