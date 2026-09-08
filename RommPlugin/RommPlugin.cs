@@ -10,6 +10,7 @@ using RommPlugin.Core.Models.Statics;
 using RommPlugin.Core.Services;
 using RommPlugin.Core.Storage;
 using RommPlugin.Services;
+using RommPlugin.UI.Helpers;
 using RommPlugin.UI.Prompts;
 using Unbroken.LaunchBox.Plugins;
 using Unbroken.LaunchBox.Plugins.Data;
@@ -120,6 +121,18 @@ namespace RommPlugin
                     {
                         RommLogger.LogError("[RommPlugin] Startup pending check error: " + ex);
                     }
+                }
+
+                try
+                {
+                    var installedService = ServiceLocator.GetService<IInstalledGamesService>();
+                    var queueService = ServiceLocator.GetService<IDownloadQueueService>();
+                    queueService.LoadState();
+                    InstallFlagRepairRunner.RepairAll(installedService, queueService);
+                }
+                catch (Exception ex)
+                {
+                    RommLogger.LogError("[RommPlugin] Startup repair error: " + ex);
                 }
 
                 try

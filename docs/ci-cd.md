@@ -80,9 +80,7 @@ launchbox-romm-plugin-{version}.zip
     ├── Newtonsoft.Json.dll
     ├── Images/
     │   ├── ico.ico
-    │   ├── ico.png
-    │   ├── Installed.png
-    │   └── Installed Games.png
+    │   └── ico.png
     └── Locales/
         ├── en.json
         └── pt-BR.json

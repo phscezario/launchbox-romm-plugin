@@ -43,12 +43,20 @@ launchbox-romm-plugin-{version}.zip
     ├── Newtonsoft.Json.dll         # JSON dependency
     ├── Images/
     │   ├── ico.ico                 # Plugin icon (ICO)
-    │   ├── ico.png                 # Plugin icon (PNG, used in menus)
-    │   ├── Installed.png           # Installed game icon
-    │   └── Installed Games.png     # Installed games playlist icon
+    │   └── ico.png                 # Plugin icon (PNG, used in menus)
     └── Locales/
         ├── en.json                 # English strings
         └── pt-BR.json              # Portuguese (Brazil) strings
+```
+
+## Idempotent Updates
+
+Applying an update copies the package over the plugin folder and then reconciles it (`UpdateReconcile`, executed by `RommPlugin.CLI.exe`): deployed files that are neither part of the package nor protected runtime data (`settings.json`, `download-state.json`, `installed-games.json`, `sync_information.json`, `pending_hierarchy.json`, `Logs/`) are removed, and directories left empty are pruned. Running the same update twice changes nothing — the updater never leaves obsolete files behind.
+
+To audit without changing anything:
+
+```bash
+RommPlugin.CLI.exe --reconcile-dry-run "<pluginDir>" "<packageDir>"
 ```
 
 ## Installation

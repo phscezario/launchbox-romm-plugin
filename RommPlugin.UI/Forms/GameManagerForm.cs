@@ -110,6 +110,7 @@ namespace RommPlugin.UI.Forms
         {
             _queueService.LoadState();
             _installedService.Load();
+            RepairInstalledFlags();
             RefreshList();
             _queueService.StartNext();
             _uiTimer.Start();
@@ -121,6 +122,15 @@ namespace RommPlugin.UI.Forms
             {
                 var _ = AutoInstallAsync();
             }
+        }
+
+        /// <summary>
+        /// Reconciles installed-games records with the LaunchBox-side fields on every
+        /// open (shared runner, also executed at LaunchBox startup).
+        /// </summary>
+        private void RepairInstalledFlags()
+        {
+            InstallFlagRepairRunner.RepairAll(_installedService, _queueService);
         }
 
         private void ProcessExistingQueueFile()

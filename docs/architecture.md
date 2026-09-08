@@ -41,7 +41,7 @@ LaunchBoxRommPlugin.slnx
 │   └── Services/                # API client, metadata mapper, sync stats tests
 │
 ├── lib/LaunchBox/               # LaunchBox plugin SDK (vendored DLL)
-├── Images/                      # Plugin icons (ico.ico, ico.png, Installed.png)
+├── Images/                      # Plugin icons (ico.ico, ico.png)
 ├── .github/workflows/           # CI/CD pipelines (5 workflows)
 ├── Directory.Build.props        # Shared MSBuild properties
 ├── VERSION                      # Current version: 1.0.3

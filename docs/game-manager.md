@@ -11,6 +11,16 @@ The Game Manager (`RommPlugin.UI/Forms/GameManagerForm.cs`) is the dialog that t
 | `Uninstall` / `Uninstall All` | Deletes the game files, clears LaunchBox metadata, and marks the record uninstalled. Leftover staging artifacts of that game are cleaned up automatically. |
 | `Clear` | **Always enabled.** Clears completed/failed/cancelled queue entries, purges uninstalled records, and runs the full orphan sweep (below). No confirmation dialog: it only removes plugin-owned leftovers, never user data. |
 
+## Installed-flags repair (automatic on startup and on open)
+
+Records are reconciled with the LaunchBox-side fields (`ApplicationPath` / `Installed`) at LaunchBox startup (`RommMenuPlugin.OnEventRaised`, before auto-sync) and every time the Game Manager opens. Both call the shared `InstallFlagRepairRunner.RepairAll()` (`RommPlugin.UI/Helpers/InstallFlagRepairRunner.cs`), decided per record by `InstallFlagRepairDecider` (`RommPlugin.Core/Services/InstallFlagRepairDecider.cs`). Silent, no setting, never blocks startup:
+
+- record active and files present on disk, but LaunchBox fields wrong or empty → fields are rewritten from the record (silent, logged as `[Repair]`);
+- record active but files gone from disk → the game is re-queued for download using the record's own location data;
+- game no longer in LaunchBox → logged and skipped.
+
+This heals "phantom installs" (records marked installed whose install actually failed before the LaunchBox fields were written).
+
 ## Orphan cleanup
 
 Failed or partial install/uninstall attempts must never leave trash behind (stray extracted files, half-created folders, stale temp dirs). Cleanup runs in two modes, both implemented by `RommOrphanCleanupService` (`RommPlugin.Core/Services/RommOrphanCleanupService.cs`, helpers in `RommPlugin.Core/Helpers/RommArchiveHelper.cs`):
