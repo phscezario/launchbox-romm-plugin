@@ -5,6 +5,7 @@
 ![Platform](https://img.shields.io/badge/platform-LaunchBox-orange)
 ![Integration](https://img.shields.io/badge/integration-RomM-green)
 ![Version](https://img.shields.io/badge/version-1.0.3-green)
+[![LaunchBox Forum](https://img.shields.io/badge/forum-LaunchBox-orange)](https://forums.launchbox-app.com/files/file/5616-romm-server-plugin/)
 
 > Sync, install and manage your RomM library directly from LaunchBox and BigBox.
 
@@ -147,7 +148,7 @@ If a sync is interrupted, the plugin saves the state and offers to resume on the
 
 ### 1. Download the Plugin
 
-Download the latest release from the [GitHub Releases](https://github.com/phscezario/launchbox-romm-plugin/releases) page.
+Download the latest release from the [GitHub Releases](https://github.com/phscezario/launchbox-romm-plugin/releases) page. Also available on the [LaunchBox Forum](https://forums.launchbox-app.com/files/file/5616-romm-server-plugin/).
 
 ### 2. Extract Into LaunchBox
 
@@ -339,7 +340,7 @@ Se uma sincronização for interrompida, o plugin salva o estado e oferece retom
 
 ### 1. Baixe o Plugin
 
-Faça download da versão mais recente na página de [Releases do GitHub](https://github.com/phscezario/launchbox-romm-plugin/releases).
+Faça download da versão mais recente na página de [Releases do GitHub](https://github.com/phscezario/launchbox-romm-plugin/releases). Também disponível no [Fórum do LaunchBox](https://forums.launchbox-app.com/files/file/5616-romm-server-plugin/).
 
 ### 2. Extraia Dentro do LaunchBox
 
