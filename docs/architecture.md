@@ -17,14 +17,14 @@ LaunchBoxRommPlugin.slnx
 │
 ├── RommPlugin.Core/             # Shared core library (net48)
 │   ├── Constants/               # All constants (prefixes, filenames, limits)
-│   ├── Helpers/                 # Auth, file writing, credential storage
+│   ├── Helpers/                 # Auth, file writing, credential storage, archive helpers
 │   ├── Interfaces/              # IProgressReporter
 │   ├── Locale/                  # i18n locale manager
 │   ├── Locales/                 # JSON locale files (en, pt-BR)
 │   ├── Logging/                 # File-based logger with auto-cleanup
 │   ├── Models/                  # All data models (21 files)
 │   │   └── Statics/             # Static constants (custom fields, extensions)
-│   ├── Services/                # Download queue, installed games, updates
+│   ├── Services/                # Download queue, installed games, updates, orphan cleanup
 │   └── Storage/                 # Settings, paths, sync state persistence
 │
 ├── RommPlugin.UI/               # Windows Forms UI library (net48)
@@ -41,7 +41,7 @@ LaunchBoxRommPlugin.slnx
 │   └── Services/                # API client, metadata mapper, sync stats tests
 │
 ├── lib/LaunchBox/               # LaunchBox plugin SDK (vendored DLL)
-├── Images/                      # Plugin icons (ico.ico, ico.png, Installed.png)
+├── Images/                      # Plugin icons (ico.ico, ico.png)
 ├── .github/workflows/           # CI/CD pipelines (5 workflows)
 ├── Directory.Build.props        # Shared MSBuild properties
 ├── VERSION                      # Current version: 1.0.3
@@ -147,6 +147,8 @@ All major services have interface + implementation pairs:
 | `IDownloadQueueService` | `DownloadQueueService` | Download queue management |
 | `IInstalledGamesService` | `InstalledGamesService` | Installed games tracking |
 
+Static (no interface) core services: `RommOrphanCleanupService` (scoped/full orphan sweep, see [Game Manager](game-manager.md)) and `RommArchiveHelper` (zip readability checks, lock-tolerant deletion).
+
 ### Hash-Based Sync Optimization
 
 Each game's remote metadata is hashed. During sync, if the hash hasn't changed since the last sync, the game is skipped entirely (zero API calls). This reduces API calls from ~24,000 to ~51 for a library of 8,000 games with 50 changes.
@@ -172,6 +174,7 @@ Passwords and API tokens are encrypted at rest using Windows DPAPI via `SecureCr
 | `sync_information.json` | Sync resume state (completed platforms/games) | RommSyncService |
 | `installed-games.json` | Persistent install state | InstalledGamesService |
 | `download-state.json` | Download queue state (resume after restart) | DownloadQueueService |
+| `download-state.*.tmp` / `_temp_*` / `*.part` | Transient extraction/download artifacts, removed by the orphan sweep | RommOrphanCleanupService |
 | `pending_hierarchy.json` | Pending Parents.xml fixes | RommHierarchyCli |
 | `installed-games.xml` | LaunchBox installed games playlist | RommSyncService |
 
@@ -210,6 +213,8 @@ Defined in `RommPlugin.Core/Constants/RommConstants.cs`:
 | `MaxConcurrentDownloads` | `5` | Max simultaneous downloads |
 | `ApiPageSize` | `1000` | Games per API page |
 | `MaxRetryAttempts` | `5` | Download retry limit |
+| `MaxCorruptArchiveRedownloads` | `3` | Auto re-downloads for corrupt archives before giving up |
+| `CorruptArchiveMarker` | `"CorruptArchive"` | `DownloadItem.Error` marker for unreadable zips |
 | `HttpTimeoutSeconds` | `120` | HTTP request timeout |
 | `UploadTimeoutSeconds` | `300` | Upload timeout |
 | `MaxXmlBackups` | `5` | Max XML backup files |

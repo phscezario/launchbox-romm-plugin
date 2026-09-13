@@ -86,5 +86,11 @@ namespace RommPlugin.Core.Constants
 
         /// <summary>Base delay in milliseconds between retry attempts (exponential backoff).</summary>
         public const int RetryBaseDelayMs = 1000;
+
+        /// <summary>Marker stored in DownloadItem.Error when the install failed because the zip is unreadable.</summary>
+        public const string CorruptArchiveMarker = "CorruptArchive";
+
+        /// <summary>Maximum automatic re-downloads for a corrupt archive before giving up as Failed.</summary>
+        public const int MaxCorruptArchiveRedownloads = 3;
     }
 }

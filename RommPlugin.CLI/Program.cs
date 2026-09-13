@@ -51,7 +51,13 @@ namespace RommPlugin.CLI
                 Console.Error.WriteLine("Usage: RommPlugin.CLI.exe <pending_hierarchy.json>");
                 Console.Error.WriteLine("       RommPlugin.CLI.exe --remove-all <dataDir> [--restart <launchBoxExe>]");
                 Console.Error.WriteLine("       RommPlugin.CLI.exe --apply-update <updateDir> <pluginDir> <launchBoxExe>");
+                Console.Error.WriteLine("       RommPlugin.CLI.exe --reconcile-dry-run <pluginDir> <packageDir>");
                 return 1;
+            }
+
+            if (args[0] == "--reconcile-dry-run" && args.Length >= 3)
+            {
+                return ReconcileDryRun(args[1], args[2]);
             }
 
             if (args[0] == "--remove-all" && args.Length >= 2)
@@ -1190,6 +1196,8 @@ namespace RommPlugin.CLI
             Console.WriteLine("Update files copied");
             LogToFile("ApplyUpdate: files copied successfully");
 
+            ReconcileObsoleteFiles(sourceDir, pluginDir, dryRun: false);
+
             if (progress != null)
                 progress.Indeterminate("Verificando arquivos instalados...");
             if (!VerifyInstalledVersion(pluginDir, version))
@@ -1307,6 +1315,126 @@ namespace RommPlugin.CLI
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Makes the update idempotent: removes deployed files that are neither part
+        /// of the update package nor protected runtime data. Directories left empty
+        /// are removed as well (never the plugin dir itself or protected dirs).
+        /// </summary>
+        static void ReconcileObsoleteFiles(string sourceDir, string pluginDir, bool dryRun)
+        {
+            try
+            {
+                if (!Directory.Exists(sourceDir) || !Directory.Exists(pluginDir))
+                    return;
+
+                var package = Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories)
+                    .Select(f => GetRelativePath(sourceDir, f));
+                var deployed = Directory.GetFiles(pluginDir, "*", SearchOption.AllDirectories)
+                    .Select(f => GetRelativePath(pluginDir, f));
+
+                var obsolete = UpdateReconcile.ComputeObsoleteFiles(deployed, package);
+
+                foreach (var rel in obsolete)
+                {
+                    var full = Path.Combine(pluginDir, rel);
+                    if (dryRun)
+                    {
+                        Console.WriteLine($"[dry-run] Would remove obsolete '{rel}'");
+                        continue;
+                    }
+
+                    try
+                    {
+                        File.Delete(full);
+                        Console.WriteLine($"Removed obsolete '{rel}'");
+                        LogToFile($"ApplyUpdate: removed obsolete '{rel}'");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Warning: could not remove obsolete '{rel}': {ex.Message}");
+                        LogToFile($"ApplyUpdate: could not remove obsolete '{rel}': {ex.Message}");
+                    }
+                }
+
+                if (!dryRun)
+                    RemoveEmptyDirs(pluginDir, pluginDir);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: reconcile failed: {ex.Message}");
+                LogToFile($"ApplyUpdate: reconcile failed: {ex.Message}");
+            }
+        }
+
+        static int ReconcileDryRun(string pluginDir, string packageDir)
+        {
+            if (!Directory.Exists(pluginDir))
+            {
+                Console.Error.WriteLine($"Plugin directory not found: {pluginDir}");
+                return 1;
+            }
+            if (!Directory.Exists(packageDir))
+            {
+                Console.Error.WriteLine($"Package directory not found: {packageDir}");
+                return 1;
+            }
+
+            ReconcileObsoleteFiles(packageDir, pluginDir, dryRun: true);
+            return 0;
+        }
+
+        static string GetRelativePath(string root, string full)
+        {
+            var rootFull = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            var fullPath = Path.GetFullPath(full);
+            return fullPath.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase)
+                ? fullPath.Substring(rootFull.Length)
+                : fullPath;
+        }
+
+        static void RemoveEmptyDirs(string root, string dir)
+        {
+            string[] subdirs = new string[0];
+            try
+            {
+                subdirs = Directory.GetDirectories(dir);
+            }
+            catch
+            {
+                return;
+            }
+
+            foreach (var sub in subdirs)
+                RemoveEmptyDirs(root, sub);
+
+            if (!string.Equals(
+                    Path.GetFullPath(dir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    StringComparison.OrdinalIgnoreCase)
+                && !IsProtectedDir(root, dir)
+                && Directory.Exists(dir)
+                && Directory.GetFiles(dir).Length == 0
+                && Directory.GetDirectories(dir).Length == 0)
+            {
+                try
+                {
+                    Directory.Delete(dir);
+                    Console.WriteLine($"Removed empty directory '{GetRelativePath(root, dir)}'");
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        static bool IsProtectedDir(string root, string dir)
+        {
+            var rel = GetRelativePath(root, dir).Replace('/', '\\').Trim('\\');
+            return UpdateReconcile.ProtectedDirs
+                .Any(p => string.Equals(rel, p.Replace('/', '\\').Trim('\\'), StringComparison.OrdinalIgnoreCase));
         }
 
         static void StartLaunchBoxIfExists(string launchBoxExe)

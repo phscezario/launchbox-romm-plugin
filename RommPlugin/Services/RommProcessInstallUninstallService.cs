@@ -8,7 +8,9 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using Newtonsoft.Json;
 using RommPlugin.Core.Constants;
+using RommPlugin.Core.Helpers;
 using RommPlugin.Core.Logging;
+using RommPlugin.Core.Services;
 using RommPlugin.Core.Locale;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Storage;
@@ -98,6 +100,10 @@ namespace RommPlugin.Services
                     {
                         progress.SetStatus($"Processing: {completedItems} of {totalItems}");
 
+                        string attemptZipPath = null;
+                        string attemptExtractDir = null;
+                        bool attemptExtractExisted = false;
+
                         try
                         {
                             if (!gamesById.TryGetValue(item.GameId, out var game))
@@ -171,6 +177,9 @@ namespace RommPlugin.Services
 
                             if (!File.Exists(zipPath) && !isFolderGame)
                             {
+                                RommLogger.LogError($"[Install] Game {item.GameId} '{item.GameName}': ROM file not found at '{zipPath}', marking as failed");
+                                item.Status = DownloadStatus.Failed;
+                                item.Error = "ROM file not found";
                                 completedItems++;
                                 continue;
                             }
@@ -179,6 +188,10 @@ namespace RommPlugin.Services
                                 Path.GetDirectoryName(zipPath),
                                 Path.GetFileNameWithoutExtension(zipPath)
                             );
+
+                            attemptZipPath = zipPath;
+                            attemptExtractDir = extractDir;
+                            attemptExtractExisted = Directory.Exists(extractDir);
 
                             if (isFolderGame)
                             {
@@ -241,9 +254,39 @@ namespace RommPlugin.Services
                         }
                         catch (Exception ex)
                         {
-                            RommLogger.LogException(ex);
-                            item.Status = DownloadStatus.Failed;
-                            item.Error = ex.Message;
+                            var context = $"[Install] Game {item.GameId} '{item.GameName}' zip='{attemptZipPath ?? "(unknown)"}'";
+                            if (ex is InvalidDataException)
+                            {
+                                RommLogger.LogError($"{context} archive is unreadable (corrupt/truncated): {ex.Message}");
+                                RommOrphanCleanupService.CleanInstallAttempt(
+                                    settings.RomsPath,
+                                    item.GameId,
+                                    item.GameName,
+                                    null,
+                                    attemptExtractDir,
+                                    !attemptExtractExisted,
+                                    item.PartFilePath,
+                                    attemptZipPath,
+                                    true);
+                                item.Status = DownloadStatus.Failed;
+                                item.Error = RommConstants.CorruptArchiveMarker;
+                            }
+                            else
+                            {
+                                RommLogger.LogError($"{context} failed: {ex}");
+                                RommOrphanCleanupService.CleanInstallAttempt(
+                                    settings.RomsPath,
+                                    item.GameId,
+                                    item.GameName,
+                                    null,
+                                    attemptExtractDir,
+                                    !attemptExtractExisted,
+                                    item.PartFilePath,
+                                    attemptZipPath,
+                                    false);
+                                item.Status = DownloadStatus.Failed;
+                                item.Error = ex.Message;
+                            }
                         }
                     }
 
@@ -378,40 +421,62 @@ namespace RommPlugin.Services
         {
             var rootFolder = Path.GetFileNameWithoutExtension(zipPath);
 
-            using (var archive = ZipFile.OpenRead(zipPath))
+            // Extract into staging first so a mid-extraction failure never leaves
+            // a partial folder behind; publish with an atomic move on success.
+            var stagingDir = extractDir + "._tmp_" + Guid.NewGuid().ToString("N");
+
+            try
             {
-                var entryList = archive.Entries.ToList();
-
-                foreach (var entry in entryList)
+                using (var archive = ZipFile.OpenRead(zipPath))
                 {
-                    if (string.IsNullOrWhiteSpace(entry.Name))
-                    {
-                        continue;
-                    }
+                    var entryList = archive.Entries.ToList();
 
-                    var parts = entry.FullName
-                        .Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries)
-                        .SkipWhile(p => p != rootFolder)
-                        .Skip(1)
-                        .ToArray();
-
-                    if (parts.Length == 0)
+                    foreach (var entry in entryList)
                     {
-                        parts = entry.FullName
+                        if (string.IsNullOrWhiteSpace(entry.Name))
+                        {
+                            continue;
+                        }
+
+                        var parts = entry.FullName
                             .Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries)
+                            .SkipWhile(p => p != rootFolder)
+                            .Skip(1)
                             .ToArray();
+
+                        if (parts.Length == 0)
+                        {
+                            parts = entry.FullName
+                                .Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries)
+                                .ToArray();
+                        }
+
+                        var relativePath = Path.Combine(parts);
+                        var destinationPath = Path.Combine(stagingDir, relativePath);
+
+                        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
+
+                        entry.ExtractToFile(destinationPath, true);
                     }
+                }
 
-                    var relativePath = Path.Combine(parts);
-                    var destinationPath = Path.Combine(extractDir, relativePath);
+                if (Directory.Exists(extractDir))
+                {
+                    Directory.Delete(extractDir, true);
+                }
 
-                    Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
+                Directory.Move(stagingDir, extractDir);
 
-                    entry.ExtractToFile(destinationPath, true);
+                if (!RommArchiveHelper.DeleteFileWithRetry(zipPath))
+                {
+                    throw new IOException($"Could not delete source archive after extraction: {zipPath}");
                 }
             }
-
-            File.Delete(zipPath);
+            catch
+            {
+                RommArchiveHelper.DeleteDirectoryRobust(stagingDir);
+                throw;
+            }
         }
 
         private void UnzipAndFlatten(string zipPath)
@@ -432,6 +497,10 @@ namespace RommPlugin.Services
             }
 
             Directory.CreateDirectory(tempExtract);
+
+            // Every file copied out of temp is tracked so a failure between the
+            // copy and the zip deletion leaves no orphans behind.
+            var copiedFiles = new List<string>();
 
             try
             {
@@ -462,9 +531,13 @@ namespace RommPlugin.Services
                         var dest = Path.Combine(Path.GetDirectoryName(zipPath), rel);
                         Directory.CreateDirectory(Path.GetDirectoryName(dest));
                         File.Copy(file, dest, true);
+                        copiedFiles.Add(dest);
                     }
 
-                    File.Delete(zipPath);
+                    if (!RommArchiveHelper.DeleteFileWithRetry(zipPath))
+                    {
+                        throw new IOException($"Could not delete source archive after extraction: {zipPath}");
+                    }
                 }
                 else if (allFiles.Length == 1)
                 {
@@ -482,13 +555,25 @@ namespace RommPlugin.Services
                             Path.GetFileName(innerFile)
                         );
                         File.Copy(innerFile, targetPath, true);
-                        File.Delete(zipPath);
+                        copiedFiles.Add(targetPath);
+                        if (!RommArchiveHelper.DeleteFileWithRetry(zipPath))
+                        {
+                            throw new IOException($"Could not delete source archive after extraction: {zipPath}");
+                        }
                     }
                 }
             }
+            catch
+            {
+                foreach (var copied in copiedFiles)
+                {
+                    RommArchiveHelper.DeleteFileWithRetry(copied, 1, 0);
+                }
+                throw;
+            }
             finally
             {
-                try { Directory.Delete(tempExtract, true); } catch { }
+                RommArchiveHelper.DeleteDirectoryRobust(tempExtract);
             }
         }
     }
