@@ -17,6 +17,7 @@ Welcome to the developer documentation for the **LaunchBox RomM Plugin**. This f
 | [Localization](localization.md) | i18n system: locale JSON files, adding new languages, fallback chain |
 | [API Integration](api-integration.md) | RomM REST API endpoints, authentication, data models, and error handling |
 | [Game Manager](game-manager.md) | Game Manager dialog, orphan cleanup, corrupt-archive recovery |
+| [Folder Games](folder-games.md) | `_launchbox.json` reference: folder-as-game, DLC entries, wrapper hints |
 
 ## Quick Start
 

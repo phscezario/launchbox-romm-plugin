@@ -18,6 +18,13 @@ namespace RommPlugin.Core.Models
         public bool? HasDLC { get; set; } = null;
 
         /// <summary>
+        /// Gets or sets whether _DLCs entries must launch through the game's
+        /// emulator instead of running the file directly. Parsed and documented
+        /// here; honored by emulator wrapper tooling, not by the sync itself.
+        /// </summary>
+        public bool? DlcUseEmulator { get; set; } = null;
+
+        /// <summary>
         /// Gets or sets the list of additional applications (e.g., configuration tools).
         /// </summary>
         public List<AdditionalApplications> AdditionalApplications { get; set; } = null;

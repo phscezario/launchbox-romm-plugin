@@ -103,6 +103,19 @@ Advanced LaunchBox integration via per-game `_launchbox.json`:
 - Additional applications
 - Custom command line arguments (`%romsFolder%` variable)
 - DLC handling
+- Folder-as-game reference: empty `DefaultFileName` points `ApplicationPath` at the folder itself
+- `DlcUseEmulator` hint for emulator wrapper tooling (e.g. PS3 `.pkg` files, which RPCS3 refuses to install in `--no-gui` mode):
+
+```json
+{
+    "DefaultFileName": "",
+    "HasDLC": true,
+    "DlcUseEmulator": true,
+    "AdditionalApplications": []
+}
+```
+
+Full reference: [`docs/folder-games.md`](docs/folder-games.md).
 
 ### Admin vs Non-Admin
 
@@ -295,6 +308,19 @@ Integração avançada via `_launchbox.json` por jogo:
 - Aplicações adicionais
 - Argumentos personalizados de linha de comando (variável `%romsFolder%`)
 - Suporte a DLC
+- Pasta como referência do jogo: `DefaultFileName` vazio aponta o `ApplicationPath` pra própria pasta
+- Hint `DlcUseEmulator` pro ferramental do wrapper (ex. `.pkg` de PS3, que o RPCS3 recusa instalar em modo `--no-gui`):
+
+```json
+{
+    "DefaultFileName": "",
+    "HasDLC": true,
+    "DlcUseEmulator": true,
+    "AdditionalApplications": []
+}
+```
+
+Referência completa: [`docs/folder-games.md`](docs/folder-games.md).
 
 ### Admin vs Non-Admin
 

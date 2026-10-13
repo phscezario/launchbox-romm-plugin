@@ -337,6 +337,12 @@ namespace RommPlugin.Services
             {
                 game.ApplicationPath = Path.GetFullPath(Path.Combine(baseFolder, config.DefaultFileName));
             }
+            else
+            {
+                // Empty DefaultFileName: the folder itself is the game reference
+                // (e.g. PS3 disc folders booted in place by an emulator wrapper).
+                game.ApplicationPath = Path.GetFullPath(baseFolder);
+            }
 
             var existingPaths = new HashSet<string>(
                 game.GetAllAdditionalApplications()
