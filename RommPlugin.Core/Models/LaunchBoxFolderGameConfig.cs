@@ -18,6 +18,15 @@ namespace RommPlugin.Core.Models
         public bool? HasDLC { get; set; } = null;
 
         /// <summary>
+        /// Gets or sets whether _DLCs entries must launch through the game's
+        /// emulator (UseEmulator) instead of running the file directly.
+        /// Needed when the emulator (or a wrapper) must resolve the file to the
+        /// game folder first — e.g. PS3 .pkg files, which RPCS3 refuses to
+        /// install in --no-gui mode. Defaults to direct launch.
+        /// </summary>
+        public bool? DlcUseEmulator { get; set; } = null;
+
+        /// <summary>
         /// Gets or sets the list of additional applications (e.g., configuration tools).
         /// </summary>
         public List<AdditionalApplications> AdditionalApplications { get; set; } = null;

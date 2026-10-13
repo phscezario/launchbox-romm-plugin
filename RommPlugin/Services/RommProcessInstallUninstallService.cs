@@ -333,13 +333,10 @@ namespace RommPlugin.Services
 
             RommGameHelpers.ClearGameAdditionalApplications(game, baseFolder);
 
-            if (!string.IsNullOrWhiteSpace(config.DefaultFileName))
-            {
-                game.ApplicationPath = Path.GetFullPath(Path.Combine(baseFolder, config.DefaultFileName));
-            }
+            var initialApps = game.GetAllAdditionalApplications().ToList();
 
             var existingPaths = new HashSet<string>(
-                game.GetAllAdditionalApplications()
+                initialApps
                     .Where(a => !string.IsNullOrEmpty(a.ApplicationPath))
                     .Select(a => a.ApplicationPath),
                 StringComparer.OrdinalIgnoreCase);
@@ -392,26 +389,43 @@ namespace RommPlugin.Services
                 }
             }
 
+            var dlcFiles = new List<string>();
             if (config.HasDLC == true)
             {
                 var dlcFolder = Path.Combine(baseFolder, "_DLCs");
 
                 if (Directory.Exists(dlcFolder))
+                    dlcFiles.AddRange(Directory.GetFiles(dlcFolder));
+            }
+
+            var plan = FolderGameLaunchDecider.Decide(baseFolder, config, game.EmulatorId, dlcFiles);
+
+            if (plan.ApplicationPath != null)
+                game.ApplicationPath = plan.ApplicationPath;
+
+            var initialByPath = initialApps
+                .Where(a => !string.IsNullOrEmpty(a.ApplicationPath))
+                .GroupBy(a => a.ApplicationPath, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in plan.DlcEntries)
+            {
+                if (initialByPath.TryGetValue(entry.ApplicationPath, out var current))
                 {
-                    var files = Directory.GetFiles(dlcFolder);
-
-                    int index = 1;
-                    foreach (var file in files)
-                    {
-                        if (existingPaths.Contains(file)) continue;
-
-                        var add = game.AddNewAdditionalApplication();
-                        add.Name = $"{RommConstants.PlatformPrefix}DLC {index}";
-                        add.ApplicationPath = file;
-                        existingPaths.Add(file);
-                        index++;
-                    }
+                    // Align router flags so re-syncs and flag flips converge
+                    // instead of leaving stale entries behind.
+                    current.UseEmulator = entry.UseEmulator;
+                    current.EmulatorId = entry.EmulatorId;
+                    current.WaitForExit = entry.WaitForExit;
+                    continue;
                 }
+
+                var add = game.AddNewAdditionalApplication();
+                add.Name = entry.Name;
+                add.ApplicationPath = entry.ApplicationPath;
+                add.UseEmulator = entry.UseEmulator;
+                add.EmulatorId = entry.EmulatorId;
+                add.WaitForExit = entry.WaitForExit;
             }
         }
 
