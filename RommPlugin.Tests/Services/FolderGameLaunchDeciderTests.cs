@@ -107,5 +107,62 @@ namespace RommPlugin.Tests.Services
 
             Assert.Empty(plan.DlcEntries);
         }
+
+        [Fact]
+        public void DlcOptIn_RoutesConfigAppsViaEmulator()
+        {
+            var config = new LaunchBoxFolderGameConfig { DefaultFileName = "", DlcUseEmulator = true };
+
+            var plan = FolderGameLaunchDecider.Decide(BaseFolder, config, "emu-id", null);
+
+            Assert.True(plan.RouteConfigAppsViaEmulator);
+        }
+
+        [Fact]
+        public void DlcOptOut_ConfigAppsLaunchDirectly()
+        {
+            var config = new LaunchBoxFolderGameConfig { DefaultFileName = "" };
+
+            var plan = FolderGameLaunchDecider.Decide(BaseFolder, config, "emu-id", null);
+
+            Assert.False(plan.RouteConfigAppsViaEmulator);
+        }
+
+        [Fact]
+        public void EmptyDefaultFileName_AllowsShortcutsCleanup()
+        {
+            var config = new LaunchBoxFolderGameConfig { DefaultFileName = "" };
+
+            Assert.True(FolderGameLaunchDecider.ShouldRemoveShortcutsFolder(BaseFolder, config));
+        }
+
+        [Fact]
+        public void SetDefaultFileName_KeepsShortcutsFolder()
+        {
+            var config = new LaunchBoxFolderGameConfig { DefaultFileName = "shortcuts/Game.lnk" };
+
+            Assert.False(FolderGameLaunchDecider.ShouldRemoveShortcutsFolder(BaseFolder, config));
+        }
+
+        [Fact]
+        public void ConfigEntryUnderShortcuts_KeepsShortcutsFolder()
+        {
+            var config = new LaunchBoxFolderGameConfig
+            {
+                DefaultFileName = "",
+                AdditionalApplications = new System.Collections.Generic.List<AdditionalApplications>
+                {
+                    new AdditionalApplications { Name = "Tool", Path = "shortcuts/Tool.lnk" },
+                },
+            };
+
+            Assert.False(FolderGameLaunchDecider.ShouldRemoveShortcutsFolder(BaseFolder, config));
+        }
+
+        [Fact]
+        public void NullConfig_KeepsShortcutsFolder()
+        {
+            Assert.False(FolderGameLaunchDecider.ShouldRemoveShortcutsFolder(BaseFolder, null));
+        }
     }
 }

@@ -115,6 +115,8 @@ Advanced LaunchBox integration via per-game `_launchbox.json`:
 }
 ```
 
+Full reference: [`docs/folder-games.md`](docs/folder-games.md).
+
 ### Admin vs Non-Admin
 
 | Operation | Admin | Non-Admin |
@@ -317,6 +319,8 @@ Integração avançada via `_launchbox.json` por jogo:
     "AdditionalApplications": []
 }
 ```
+
+Referência completa: [`docs/folder-games.md`](docs/folder-games.md).
 
 ### Admin vs Non-Admin
 

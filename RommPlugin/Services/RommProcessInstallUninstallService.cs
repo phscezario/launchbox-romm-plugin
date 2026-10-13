@@ -341,6 +341,20 @@ namespace RommPlugin.Services
                     .Select(a => a.ApplicationPath),
                 StringComparer.OrdinalIgnoreCase);
 
+            var dlcFiles = new List<string>();
+            if (config.HasDLC == true)
+            {
+                var dlcFolder = Path.Combine(baseFolder, "_DLCs");
+
+                if (Directory.Exists(dlcFolder))
+                    dlcFiles.AddRange(Directory.GetFiles(dlcFolder));
+            }
+
+            var plan = FolderGameLaunchDecider.Decide(baseFolder, config, game.EmulatorId, dlcFiles);
+
+            if (plan.ApplicationPath != null)
+                game.ApplicationPath = plan.ApplicationPath;
+
             if (config.AdditionalApplications != null)
             {
                 foreach (var app in config.AdditionalApplications)
@@ -352,6 +366,12 @@ namespace RommPlugin.Services
                     add.Name = $"{RommConstants.PlatformPrefix}{app.Name}";
                     add.ApplicationPath = resolvedPath;
                     add.CommandLine = app.CommandLine;
+                    if (plan.RouteConfigAppsViaEmulator)
+                    {
+                        add.UseEmulator = true;
+                        add.EmulatorId = game.EmulatorId;
+                        add.WaitForExit = true;
+                    }
                     existingPaths.Add(resolvedPath);
                 }
             }
@@ -389,20 +409,6 @@ namespace RommPlugin.Services
                 }
             }
 
-            var dlcFiles = new List<string>();
-            if (config.HasDLC == true)
-            {
-                var dlcFolder = Path.Combine(baseFolder, "_DLCs");
-
-                if (Directory.Exists(dlcFolder))
-                    dlcFiles.AddRange(Directory.GetFiles(dlcFolder));
-            }
-
-            var plan = FolderGameLaunchDecider.Decide(baseFolder, config, game.EmulatorId, dlcFiles);
-
-            if (plan.ApplicationPath != null)
-                game.ApplicationPath = plan.ApplicationPath;
-
             var initialByPath = initialApps
                 .Where(a => !string.IsNullOrEmpty(a.ApplicationPath))
                 .GroupBy(a => a.ApplicationPath, StringComparer.OrdinalIgnoreCase)
@@ -426,6 +432,23 @@ namespace RommPlugin.Services
                 add.UseEmulator = entry.UseEmulator;
                 add.EmulatorId = entry.EmulatorId;
                 add.WaitForExit = entry.WaitForExit;
+            }
+
+            if (FolderGameLaunchDecider.ShouldRemoveShortcutsFolder(baseFolder, config))
+            {
+                var shortcutsDir = Path.Combine(baseFolder, "shortcuts");
+                if (Directory.Exists(shortcutsDir))
+                {
+                    try
+                    {
+                        Directory.Delete(shortcutsDir, true);
+                        RommLogger.Log($"[RommPlugin] Removed obsolete shortcuts folder: {shortcutsDir}");
+                    }
+                    catch (Exception ex)
+                    {
+                        RommLogger.LogError($"[RommPlugin] Failed to remove shortcuts folder '{shortcutsDir}': {ex.Message}");
+                    }
+                }
             }
         }
 
