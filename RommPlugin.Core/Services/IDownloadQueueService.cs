@@ -74,6 +74,14 @@ namespace RommPlugin.Core.Services
         void Cancel(int gameId);
 
         /// <summary>
+        /// Drops a game's queue item entirely (memory + persisted state), e.g. after
+        /// a successful uninstall left a dead Failed entry behind. Active transfers
+        /// are aborted. No-op when absent.
+        /// </summary>
+        /// <param name="gameId">The RomM game ID to drop.</param>
+        void Remove(int gameId);
+
+        /// <summary>
         /// Cancels all active and pending downloads in the queue.
         /// </summary>
         void CancelAll();

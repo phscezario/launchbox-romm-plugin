@@ -30,6 +30,12 @@ namespace RommPlugin.Core.Services
         private readonly object _lock = new object();
         private CancellationTokenSource _cts;
 
+        /// <summary>
+        /// No data received for this long aborts the download as stalled.
+        /// Applies per read chunk (sliding), so slow connections survive.
+        /// </summary>
+        private static readonly TimeSpan StallTimeout = TimeSpan.FromMinutes(5);
+
         /// <inheritdoc/>
         public event Action<DownloadItem> ItemStateChanged;
 
@@ -167,13 +173,28 @@ namespace RommPlugin.Core.Services
                 }
                 catch (OperationCanceledException)
                 {
-                    try { if (File.Exists(item.PartFilePath)) File.Delete(item.PartFilePath); }
-                    catch { }
+                    // User cancel deletes the .part; a stall timeout (fired from
+                    // the linked token below) keeps it for resume and fails cleanly.
+                    bool userCancel = false;
+                    try { userCancel = item.Cts?.IsCancellationRequested == true; } catch { }
+
+                    if (!userCancel)
+                    {
+                        item.Status = DownloadStatus.Failed;
+                        item.Error = "Download stalled (no data received)";
+                        ItemStateChanged?.Invoke(item);
+                    }
+                    else
+                    {
+                        try { if (File.Exists(item.PartFilePath)) File.Delete(item.PartFilePath); }
+                        catch { }
+                    }
                 }
                 catch (Exception ex)
                 {
-                    try { if (File.Exists(item.PartFilePath)) File.Delete(item.PartFilePath); }
-                    catch { }
+                    // Keep the .part file: only user cancel, corrupt archives and
+                    // uninstall/clear flows delete it, so the next retry resumes
+                    // instead of restarting large downloads from zero.
                     item.Status = DownloadStatus.Failed;
                     item.Error = ex.Message;
                     ItemStateChanged?.Invoke(item);
@@ -209,6 +230,12 @@ namespace RommPlugin.Core.Services
                 using (var response = await _http.SendAsync(request,
                     HttpCompletionOption.ResponseHeadersRead, ct))
                 {
+                    RommLogger.Log($"[Download] Game {item.GameId} '{item.GameName}': HTTP {(int)response.StatusCode} {response.StatusCode} (resuming from {existingBytes} bytes)");
+                    response.EnsureSuccessStatusCode();
+                    if (existingBytes > 0 && response.StatusCode != HttpStatusCode.PartialContent)
+                    {
+                        RommLogger.Log($"[Download] Game {item.GameId} '{item.GameName}': server ignored Range, restarting from zero");
+                    }
                     if (response.StatusCode == HttpStatusCode.PartialContent)
                     {
                         mode = FileMode.Append;
@@ -229,13 +256,21 @@ namespace RommPlugin.Core.Services
 
                     using (var stream = await response.Content.ReadAsStreamAsync())
                     using (var file = new FileStream(item.PartFilePath, mode, FileAccess.Write, FileShare.None))
+                    using (var stallCts = new CancellationTokenSource())
+                    using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, stallCts.Token))
                     {
                         var buffer = new byte[RommConstants.HttpBufferSize];
                         int bytesRead;
                         var lastProgressUpdate = DateTime.UtcNow;
 
-                        while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
+                        // Sliding stall timeout: a hung connection aborts even though
+                        // the client has no overall timeout (large ROMs need it).
+                        // Reset on every chunk; the .part file is kept for resume.
+                        stallCts.CancelAfter(StallTimeout);
+
+                        while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, linkedCts.Token)) > 0)
                         {
+                            stallCts.CancelAfter(StallTimeout);
                             await file.WriteAsync(buffer, 0, bytesRead, ct);
                             item.BytesReceived += bytesRead;
 
@@ -351,6 +386,32 @@ namespace RommPlugin.Core.Services
 
                 ItemStateChanged?.Invoke(item);
             }
+            SaveState();
+        }
+
+        /// <inheritdoc/>
+        public void Remove(int gameId)
+        {
+            DownloadItem removed = null;
+            lock (_lock)
+            {
+                var item = _items.FirstOrDefault(i => i.GameId == gameId);
+                if (item == null) return;
+
+                try { item.Cts?.Cancel(); } catch { }
+                _items.Remove(item);
+                removed = item;
+            }
+
+            if (removed != null
+                && !string.IsNullOrEmpty(removed.PartFilePath)
+                && File.Exists(removed.PartFilePath))
+            {
+                try { File.Delete(removed.PartFilePath); } catch { }
+            }
+
+            SaveState();
+            ItemStateChanged?.Invoke(null);
         }
 
         /// <inheritdoc/>
@@ -411,6 +472,7 @@ namespace RommPlugin.Core.Services
                     ItemStateChanged?.Invoke(item);
                 }
             }
+            SaveState();
         }
 
         /// <inheritdoc/>
@@ -426,6 +488,7 @@ namespace RommPlugin.Core.Services
                     ItemStateChanged?.Invoke(item);
                 }
             }
+            SaveState();
         }
 
         /// <inheritdoc/>
@@ -468,25 +531,17 @@ namespace RommPlugin.Core.Services
                 var item = _items.FirstOrDefault(i => i.GameId == gameId && (i.Status == DownloadStatus.Failed || i.Status == DownloadStatus.Cancelled));
                 if (item != null)
                 {
-                    if (File.Exists(item.PartFilePath))
-                    {
-                        try { File.Delete(item.PartFilePath); }
-            catch (Exception ex)
-            {
-                RommLogger.LogError($"[RommPlugin] Failed to read file header for extension detection: {ex.Message}");
-            }
-                    }
-
+                    // Keep any existing .part: resume continues where it stopped.
+                    // A corrupt archive is handled by deleting FilePath first.
                     item.Status = DownloadStatus.Pending;
                     item.Error = null;
                     item.RetryCount = 0;
-                    item.BytesReceived = 0;
-                    item.TotalBytes = 0;
                     item.Cts?.Dispose();
                     item.Cts = new CancellationTokenSource();
                     ItemStateChanged?.Invoke(item);
                 }
             }
+            SaveState();
             StartNext();
         }
 

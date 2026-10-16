@@ -103,10 +103,11 @@ namespace RommPlugin.Services
                         string attemptZipPath = null;
                         string attemptExtractDir = null;
                         bool attemptExtractExisted = false;
+                        IGame game = null;
 
                         try
                         {
-                            if (!gamesById.TryGetValue(item.GameId, out var game))
+                            if (!gamesById.TryGetValue(item.GameId, out game))
                             {
                                 item.Status = DownloadStatus.Failed;
                                 item.Error = "Game not found in LaunchBox";
@@ -195,6 +196,18 @@ namespace RommPlugin.Services
 
                             if (isFolderGame)
                             {
+                                // The archive must be a real file: when only the folder
+                                // exists (incomplete download), opening it as a zip
+                                // throws access-denied noise. Fail fast instead.
+                                if (!File.Exists(zipPath))
+                                {
+                                    RommLogger.LogError($"[Install] Game {item.GameId} '{item.GameName}': archive not found at '{zipPath}' (incomplete download?). Delete the game folder, requeue the download and retry.");
+                                    item.Status = DownloadStatus.Failed;
+                                    item.Error = "Archive missing - delete folder and requeue download";
+                                    completedItems++;
+                                    continue;
+                                }
+
                                 UnzipAndDelete(zipPath, extractDir);
 
                                     var jsonPath = Path.Combine(extractDir, RommConstants.LaunchboxConfigFile);
@@ -255,6 +268,11 @@ namespace RommPlugin.Services
                         catch (Exception ex)
                         {
                             var context = $"[Install] Game {item.GameId} '{item.GameName}' zip='{attemptZipPath ?? "(unknown)"}'";
+                            // A failed attempt must never leave the game flagged as installed.
+                            if (game != null)
+                            {
+                                try { game.Installed = false; } catch { }
+                            }
                             if (ex is InvalidDataException)
                             {
                                 RommLogger.LogError($"{context} archive is unreadable (corrupt/truncated): {ex.Message}");
@@ -281,7 +299,10 @@ namespace RommPlugin.Services
                                     null,
                                     attemptExtractDir,
                                     !attemptExtractExisted,
-                                    item.PartFilePath,
+                                    // Keep the .part so the retry resumes instead of
+                                    // restarting large downloads from zero. Only corrupt
+                                    // archives (above) drop it for a clean redownload.
+                                    null,
                                     attemptZipPath,
                                     false);
                                 item.Status = DownloadStatus.Failed;
@@ -344,23 +365,51 @@ namespace RommPlugin.Services
                 game.ApplicationPath = Path.GetFullPath(baseFolder);
             }
 
+            var initialApps = game.GetAllAdditionalApplications().ToList();
+
             var existingPaths = new HashSet<string>(
-                game.GetAllAdditionalApplications()
+                initialApps
                     .Where(a => !string.IsNullOrEmpty(a.ApplicationPath))
                     .Select(a => a.ApplicationPath),
                 StringComparer.OrdinalIgnoreCase);
 
             if (config.AdditionalApplications != null)
             {
+                var route = DlcEntryRouting.Decide(config.DlcUseEmulator, game.EmulatorId);
+                var initialByPath = initialApps
+                    .Where(a => !string.IsNullOrEmpty(a.ApplicationPath))
+                    .GroupBy(a => a.ApplicationPath, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
                 foreach (var app in config.AdditionalApplications)
                 {
                     var resolvedPath = RommGameHelpers.ResolvePath(baseFolder, app.Path, false);
-                    if (existingPaths.Contains(resolvedPath)) continue;
+                    if (existingPaths.Contains(resolvedPath))
+                    {
+                        // Align pre-existing entries (e.g. created direct by an
+                        // older version) to the routed form. Never touches
+                        // pre/post loaders sharing a path.
+                        if (route.UseEmulator
+                            && initialByPath.TryGetValue(resolvedPath, out var current)
+                            && current.AutoRunBefore != true
+                            && current.AutoRunAfter != true)
+                        {
+                            current.UseEmulator = true;
+                            current.EmulatorId = route.EmulatorId;
+                            current.WaitForExit = true;
+                        }
+                        continue;
+                    }
 
                     var add = game.AddNewAdditionalApplication();
                     add.Name = $"{RommConstants.PlatformPrefix}{app.Name}";
                     add.ApplicationPath = resolvedPath;
                     add.CommandLine = app.CommandLine;
+                    if (route.UseEmulator)
+                    {
+                        add.UseEmulator = true;
+                        add.EmulatorId = route.EmulatorId;
+                        add.WaitForExit = true;
+                    }
                     existingPaths.Add(resolvedPath);
                 }
             }
@@ -405,6 +454,7 @@ namespace RommPlugin.Services
                 if (Directory.Exists(dlcFolder))
                 {
                     var files = Directory.GetFiles(dlcFolder);
+                    var route = DlcEntryRouting.Decide(config.DlcUseEmulator, game.EmulatorId);
 
                     int index = 1;
                     foreach (var file in files)
@@ -414,8 +464,31 @@ namespace RommPlugin.Services
                         var add = game.AddNewAdditionalApplication();
                         add.Name = $"{RommConstants.PlatformPrefix}DLC {index}";
                         add.ApplicationPath = file;
+                        if (route.UseEmulator)
+                        {
+                            add.UseEmulator = true;
+                            add.EmulatorId = route.EmulatorId;
+                            add.WaitForExit = true;
+                        }
                         existingPaths.Add(file);
                         index++;
+                    }
+
+                    // Align pre-existing _DLCs entries (e.g. created direct by an
+                    // older version) to the routed form. Only ever moves toward
+                    // routed; direct entries are left alone otherwise.
+                    if (route.UseEmulator)
+                    {
+                        string dlcRoot = Path.GetFullPath(dlcFolder) + Path.DirectorySeparatorChar;
+                        foreach (var current in initialApps)
+                        {
+                            if (string.IsNullOrEmpty(current.ApplicationPath)) continue;
+                            if (!current.ApplicationPath.StartsWith(dlcRoot, StringComparison.OrdinalIgnoreCase)) continue;
+                            if (current.AutoRunBefore == true || current.AutoRunAfter == true) continue;
+                            current.UseEmulator = true;
+                            current.EmulatorId = route.EmulatorId;
+                            current.WaitForExit = true;
+                        }
                     }
                 }
             }
@@ -426,6 +499,12 @@ namespace RommPlugin.Services
         private void UnzipAndDelete(string zipPath, string extractDir)
         {
             var rootFolder = Path.GetFileNameWithoutExtension(zipPath);
+
+            // Fail fast when the destination is not writable instead of dying
+            // gigabytes into the extraction.
+            var parentDir = Path.GetDirectoryName(Path.GetFullPath(extractDir));
+            if (!string.IsNullOrEmpty(parentDir))
+                RommArchiveHelper.EnsureWritableDirectory(parentDir);
 
             // Extract into staging first so a mid-extraction failure never leaves
             // a partial folder behind; publish with an atomic move on success.
@@ -462,20 +541,43 @@ namespace RommPlugin.Services
 
                         Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
 
-                        entry.ExtractToFile(destinationPath, true);
+                        // Transient locks (antivirus/indexer grabbing new files)
+                        // must slow extraction down, not kill a multi-GB run.
+                        var entryAttempts = 0;
+                        while (true)
+                        {
+                            try
+                            {
+                                entry.ExtractToFile(destinationPath, true);
+                                break;
+                            }
+                            catch (IOException) when (entryAttempts < 2)
+                            {
+                                entryAttempts++;
+                                Thread.Sleep(500);
+                            }
+                            catch (UnauthorizedAccessException) when (entryAttempts < 2)
+                            {
+                                entryAttempts++;
+                                Thread.Sleep(500);
+                            }
+                        }
                     }
                 }
 
                 if (Directory.Exists(extractDir))
                 {
-                    Directory.Delete(extractDir, true);
+                    if (!RommArchiveHelper.DeleteDirectoryRobust(extractDir))
+                        throw new IOException($"Could not clear existing folder '{extractDir}' (locked?). Close other programs and retry.");
                 }
 
                 Directory.Move(stagingDir, extractDir);
 
                 if (!RommArchiveHelper.DeleteFileWithRetry(zipPath))
                 {
-                    throw new IOException($"Could not delete source archive after extraction: {zipPath}");
+                    // Extraction already succeeded: a locked zip must not fail
+                    // the whole install. It can be removed manually later.
+                    RommLogger.LogError($"[Install] Extracted '{extractDir}' but could not delete source archive '{zipPath}' (locked?). Delete it manually when possible.");
                 }
             }
             catch
@@ -491,6 +593,10 @@ namespace RommPlugin.Services
             {
                 return;
             }
+
+            var parentDir = Path.GetDirectoryName(Path.GetFullPath(zipPath));
+            if (!string.IsNullOrEmpty(parentDir))
+                RommArchiveHelper.EnsureWritableDirectory(parentDir);
 
             var tempExtract = Path.Combine(
                 Path.GetDirectoryName(zipPath),
@@ -535,8 +641,7 @@ namespace RommPlugin.Services
                         }
 
                         var dest = Path.Combine(Path.GetDirectoryName(zipPath), rel);
-                        Directory.CreateDirectory(Path.GetDirectoryName(dest));
-                        File.Copy(file, dest, true);
+                        RommArchiveHelper.CopyFileRobust(file, dest);
                         copiedFiles.Add(dest);
                     }
 
@@ -552,7 +657,7 @@ namespace RommPlugin.Services
 
                     if (innerExt == ".zip")
                     {
-                        File.Copy(innerFile, zipPath, true);
+                        RommArchiveHelper.CopyFileRobust(innerFile, zipPath);
                     }
                     else
                     {
@@ -560,7 +665,7 @@ namespace RommPlugin.Services
                             Path.GetDirectoryName(zipPath),
                             Path.GetFileName(innerFile)
                         );
-                        File.Copy(innerFile, targetPath, true);
+                        RommArchiveHelper.CopyFileRobust(innerFile, targetPath);
                         copiedFiles.Add(targetPath);
                         if (!RommArchiveHelper.DeleteFileWithRetry(zipPath))
                         {

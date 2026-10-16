@@ -259,6 +259,9 @@ namespace RommPlugin.UI.Forms
         private async Task AutoInstallAsync()
         {
             if (_isProcessing) return;
+            // Cross-process single-flight: two LaunchBox instances (or overlapping
+            // manual/automatic runs) must never process the same queue.
+            if (!InstallProcessLock.TryEnter()) return;
             _isProcessing = true;
             try
             {
@@ -342,6 +345,19 @@ namespace RommPlugin.UI.Forms
                     changed = true;
                 }
 
+                // Second-chance registration: if the folder completed late and
+                // the first pass found it incomplete, heal now so the row shows
+                // the category without reopening the manager.
+                foreach (var id in processedIds)
+                {
+                    if (!_installedService.IsInstalled(id))
+                    {
+                        RegisterInstalledGame(id, settings);
+                        if (_installedService.IsInstalled(id))
+                            changed = true;
+                    }
+                }
+
                 if (changed)
                 {
                     _queueService.SaveState();
@@ -358,6 +374,7 @@ namespace RommPlugin.UI.Forms
             finally
             {
                 _isProcessing = false;
+                InstallProcessLock.Exit();
                 if (!_formClosing && !IsDisposed && _onApplyPending != null &&
                     _queueService.Items.Any(i => i.Status == DownloadStatus.WaitingInstall))
                 {
@@ -466,6 +483,26 @@ namespace RommPlugin.UI.Forms
                 {
                     var item = entry.QueueItem;
                     var category = GetCategory(item.FsPath);
+                    if (string.IsNullOrEmpty(category))
+                    {
+                        // Prefer the record's platform when one exists: the queue
+                        // item may hold a stale/empty remote path.
+                        var recordPlatform = entry.Installed?.Platform ?? "";
+                        if (!string.IsNullOrEmpty(recordPlatform))
+                        {
+                            category = recordPlatform.StartsWith(RommConstants.PlatformPrefix)
+                                ? recordPlatform.Substring(RommConstants.PlatformPrefix.Length)
+                                : recordPlatform;
+                        }
+                        else
+                        {
+                            var lbGame = FindGameByRommId(entry.GameId);
+                            var platform = lbGame?.Platform ?? "";
+                            category = platform.StartsWith(RommConstants.PlatformPrefix)
+                                ? platform.Substring(RommConstants.PlatformPrefix.Length)
+                                : platform;
+                        }
+                    }
                     var idx = dgvGames.Rows.Add(
                         item.GameName,
                         category,
@@ -495,7 +532,7 @@ namespace RommPlugin.UI.Forms
 
                     var platformName = record.Platform ?? "";
                     var category = platformName.StartsWith(RommConstants.PlatformPrefix)
-                        ? platformName.Substring(7)
+                        ? platformName.Substring(RommConstants.PlatformPrefix.Length)
                         : platformName;
 
                     var isPending = pendingUninstalls.Contains(record.RommGameId);
@@ -776,7 +813,24 @@ namespace RommPlugin.UI.Forms
                 .Select(r => r.Installed)
                 .ToList();
 
-            if (selectedRecords.Count == 0) return;
+            if (selectedRecords.Count == 0)
+            {
+                // No record (registration was skipped) but files on disk: adopt
+                // valid installs so uninstall works instead of doing nothing.
+                foreach (var entry in GetSelectedRows())
+                {
+                    if (entry.Installed != null) continue;
+                    var adopted = AdoptRecordIfMissing(entry.GameId);
+                    if (adopted != null)
+                        selectedRecords.Add(adopted);
+                }
+            }
+
+            if (selectedRecords.Count == 0)
+            {
+                DropDeadQueueItems();
+                return;
+            }
 
             _isUninstalling = true;
             try
@@ -799,14 +853,16 @@ namespace RommPlugin.UI.Forms
                         game.Installed = false;
                     }
 
-                    var filesDeleted = TryDeleteGameFiles(record);
+                    var deleteOutcome = TryDeleteGameFiles(record);
 
-                    if (!filesDeleted)
+                    if (deleteOutcome == GamePathDeleteOutcome.Failed)
                     {
                         filesNotFound.Add(record.Title ?? record.RommGameId.ToString());
+                        continue;
                     }
 
                     _installedService.MarkUninstalled(record.RommGameId);
+                    _queueService.Remove(record.RommGameId);
                     CleanupAfterUninstall(record);
                 }
 
@@ -817,7 +873,7 @@ namespace RommPlugin.UI.Forms
                         names += string.Format("\n... and {0} more", filesNotFound.Count - 10);
 
                     using (var form = new ConfirmForm(
-                        string.Format(LocaleManager.Get("uninstall.files_not_found_batch"), filesNotFound.Count, names)))
+                        string.Format(LocaleManager.Get("uninstall.files_delete_failed_batch"), filesNotFound.Count, names)))
                         form.ShowDialog();
                 }
 
@@ -832,6 +888,60 @@ namespace RommPlugin.UI.Forms
             {
                 _isUninstalling = false;
             }
+        }
+
+        /// <summary>
+        /// Drops stuck queue-only rows (Failed/Cancelled items with no record)
+        /// so a selection without anything installed still does something
+        /// visible instead of silently doing nothing. Active transfers are left
+        /// alone (use Cancel for those).
+        /// </summary>
+        private void DropDeadQueueItems()
+        {
+            var ids = GetSelectedRows().Select(r => r.GameId).Distinct().ToList();
+            var dropped = 0;
+
+            foreach (var id in ids)
+            {
+                var item = _queueService.Items.FirstOrDefault(i => i.GameId == id);
+                if (item == null) continue;
+                if (item.Status != DownloadStatus.Failed && item.Status != DownloadStatus.Cancelled) continue;
+
+                _queueService.Remove(id);
+                RommLogger.Log($"[GameManager] Dropped dead queue item: {item.GameName} (GameId={id}, status={item.Status})");
+                dropped++;
+            }
+
+            if (dropped > 0)
+            {
+                RefreshList();
+            }
+            else if (ids.Count > 0)
+            {
+                using (var form = new ConfirmForm(LocaleManager.Get("uninstall.nothing_to_uninstall")))
+                    form.ShowDialog();
+            }
+        }
+
+        /// <summary>
+        /// Returns the active record for an uninstall, adopting a valid install
+        /// found on disk when no record exists (e.g. registration was skipped).
+        /// Returns null when there is nothing installed to delete — callers must
+        /// not log success in that case.
+        /// </summary>
+        private InstalledGameRecord AdoptRecordIfMissing(int gameId)
+        {
+            var record = _installedService.GetByGameId(gameId);
+            if (record != null && !record.UninstalledAt.HasValue)
+                return record;
+
+            RegisterInstalledGame(gameId, RommPluginStorage.Load());
+
+            record = _installedService.GetByGameId(gameId);
+            if (record != null && !record.UninstalledAt.HasValue)
+                return record;
+
+            return null;
         }
 
         private void BtnUninstallAll_Click(object sender, EventArgs e)
@@ -865,14 +975,16 @@ namespace RommPlugin.UI.Forms
                         game.Installed = false;
                     }
 
-                    var filesDeleted = TryDeleteGameFiles(record);
+                    var deleteOutcome = TryDeleteGameFiles(record);
 
-                    if (!filesDeleted)
+                    if (deleteOutcome == GamePathDeleteOutcome.Failed)
                     {
                         filesNotFound.Add(record.Title ?? record.RommGameId.ToString());
+                        continue;
                     }
 
                     _installedService.MarkUninstalled(record.RommGameId);
+                    _queueService.Remove(record.RommGameId);
                     CleanupAfterUninstall(record);
                 }
 
@@ -883,7 +995,7 @@ namespace RommPlugin.UI.Forms
                         names += string.Format("\n... and {0} more", filesNotFound.Count - 10);
 
                     using (var form = new ConfirmForm(
-                        string.Format(LocaleManager.Get("uninstall.files_not_found_batch"), filesNotFound.Count, names)))
+                        string.Format(LocaleManager.Get("uninstall.files_delete_failed_batch"), filesNotFound.Count, names)))
                         form.ShowDialog();
                 }
 
@@ -931,7 +1043,12 @@ namespace RommPlugin.UI.Forms
         {
             try
             {
-                var record = _installedService.GetByGameId(action.GameId);
+                var record = AdoptRecordIfMissing(action.GameId);
+                if (record == null)
+                {
+                    RommLogger.Log($"[Uninstall] Nothing installed to delete for {action.GameName} (GameId={action.GameId})");
+                    return;
+                }
 
                 var game = FindGameByRommId(action.GameId);
                 if (game != null)
@@ -941,13 +1058,15 @@ namespace RommPlugin.UI.Forms
                     game.Installed = false;
                 }
 
-                var filesDeleted = TryDeleteGameFiles(record);
-                if (!filesDeleted)
+                var deleteOutcome = TryDeleteGameFiles(record);
+                if (deleteOutcome == GamePathDeleteOutcome.Failed)
                 {
-                    RommLogger.Log($"[Uninstall] Files not found for {action.GameName} (GameId={action.GameId}), proceeding anyway");
+                    RommLogger.LogError($"[Uninstall] Files could not be deleted for {action.GameName} (GameId={action.GameId}), leaving uninstall pending");
+                    return;
                 }
 
                 _installedService.MarkUninstalled(action.GameId);
+                _queueService.Remove(action.GameId);
                 CleanupAfterUninstall(record);
                 PluginHelper.DataManager.Save();
                 RommLogger.Log($"[Uninstall] Completed: {action.GameName} (GameId={action.GameId})");
@@ -976,7 +1095,14 @@ namespace RommPlugin.UI.Forms
 
                 foreach (var item in pendingItems)
                 {
-                    var record = _installedService.GetByGameId(item.GameId);
+                    var record = AdoptRecordIfMissing(item.GameId);
+                    if (record == null)
+                    {
+                        RommLogger.Log($"[Uninstall] Nothing installed to delete for GameId={item.GameId}, dropping request");
+                        item.Status = DownloadStatus.Completed;
+                        item.CompletedAt = DateTime.UtcNow;
+                        continue;
+                    }
 
                     var game = FindGameByRommId(item.GameId);
                     if (game != null)
@@ -986,16 +1112,22 @@ namespace RommPlugin.UI.Forms
                         game.Installed = false;
                     }
 
-                    var filesDeleted = TryDeleteGameFiles(record);
+                    var deleteOutcome = TryDeleteGameFiles(record);
 
-                    if (!filesDeleted)
+                    if (deleteOutcome == GamePathDeleteOutcome.Failed)
                     {
+                        RommLogger.LogError($"[Uninstall] Files could not be deleted for GameId={item.GameId}, leaving uninstall pending");
+                        continue;
                     }
 
                     _installedService.MarkUninstalled(item.GameId);
+                    _queueService.Remove(item.GameId);
                     CleanupAfterUninstall(record);
                     item.Status = DownloadStatus.Completed;
                     item.CompletedAt = DateTime.UtcNow;
+                    // Drop from the persisted queue as well, or the save below
+                    // would resurrect the row on next load.
+                    state.Items?.Remove(item);
                 }
 
                 var updatedJson = JsonConvert.SerializeObject(state, Formatting.Indented);
@@ -1035,29 +1167,28 @@ namespace RommPlugin.UI.Forms
                 fields.TryGetValue(GameCustomFields.RemotePath, out var remotePath);
                 fields.TryGetValue(GameCustomFields.FileName, out var fileName);
                 fields.TryGetValue(GameCustomFields.IsFolderGame, out var folderValue);
-                var isFolderGame = folderValue == bool.TrueString;
-
-                var localFile = Path.Combine(
-                    settings.RomsPath, RommConstants.RomsSubfolder,
-                    (remotePath ?? "").Replace("/", "\\"),
-                    fileName ?? ""
-                );
-
-                string installedPath;
-                if (isFolderGame)
+                var isFolderGame = InstallValidation.IsFolderGameEffective(
+                    folderValue == bool.TrueString, settings.RomsPath, remotePath, fileName);
+                if (isFolderGame && folderValue != bool.TrueString)
                 {
-                    installedPath = Path.Combine(
-                        Path.GetDirectoryName(localFile),
-                        Path.GetFileNameWithoutExtension(localFile));
+                    // Disk evidence overrides the stale sync flag; write it back
+                    // so every other flow sees the folder game as such.
+                    InstallFlagRepairRunner.BackfillFolderFlag(game);
+                    RommLogger.Log($"[RommPlugin] Corrected stale folder flag: {game.Title} (ID: {gameId})");
                 }
-                else
+
+                var installedPath = InstallValidation.ResolveInstalledPath(
+                    settings.RomsPath, remotePath, fileName, isFolderGame);
+
+                // Never register failed/partial installs: a previous error must
+                // not leave the game marked as installed.
+                bool valid = isFolderGame
+                    ? InstallValidation.IsFolderInstallValid(installedPath)
+                    : InstallValidation.IsFileInstallValid(installedPath);
+                if (!valid)
                 {
-                    if (File.Exists(localFile))
-                        installedPath = localFile;
-                    else if (File.Exists(localFile + ".zip"))
-                        installedPath = localFile + ".zip";
-                    else
-                        installedPath = localFile;
+                    RommLogger.Log($"[RommPlugin] Not registering installed (missing or incomplete): {game.Title} (ID: {gameId})");
+                    return;
                 }
 
                 _installedService.MarkInstalled(new InstalledGameRecord
@@ -1080,77 +1211,67 @@ namespace RommPlugin.UI.Forms
             }
         }
 
-        private bool TryDeleteGameFiles(InstalledGameRecord record)
+        private GamePathDeleteOutcome TryDeleteGameFiles(InstalledGameRecord record)
         {
             if (record == null)
             {
-                return true;
+                return GamePathDeleteOutcome.AlreadyGone;
             }
 
             var settings = RommPluginStorage.Load();
-            var deleted = false;
+            var outcomes = new List<GamePathDeleteOutcome>();
 
             RommLogger.Log($"[Uninstall] Trying to delete files for: {record.Title} (GameId={record.RommGameId})");
 
             if (!string.IsNullOrEmpty(record.InstalledPath))
             {
                 RommLogger.Log($"[Uninstall] Trying InstalledPath: {record.InstalledPath}");
-                if (Directory.Exists(record.InstalledPath))
-                {
-                    try { Directory.Delete(record.InstalledPath, true); deleted = true; RommLogger.Log($"[Uninstall] Deleted folder: {record.InstalledPath}"); }
-                    catch (Exception ex) { RommLogger.LogError($"[Uninstall] Failed to delete folder {record.InstalledPath}: {ex.Message}"); }
-                }
-                else if (File.Exists(record.InstalledPath))
-                {
-                    try { File.Delete(record.InstalledPath); deleted = true; RommLogger.Log($"[Uninstall] Deleted file: {record.InstalledPath}"); }
-                    catch (Exception ex) { RommLogger.LogError($"[Uninstall] Failed to delete file {record.InstalledPath}: {ex.Message}"); }
-                }
-                else
-                {
-                    RommLogger.Log($"[Uninstall] InstalledPath not found on disk: {record.InstalledPath}");
-                }
+                outcomes.Add(DeleteCandidate(record.InstalledPath));
             }
 
-            if (!deleted && !string.IsNullOrEmpty(record.RemotePath) && !string.IsNullOrEmpty(record.FileName))
+            if (!string.IsNullOrEmpty(record.RemotePath) && !string.IsNullOrEmpty(record.FileName))
             {
                 var localFile = Path.Combine(settings.RomsPath, RommConstants.RomsSubfolder, record.RemotePath.Replace("/", "\\"), record.FileName);
                 RommLogger.Log($"[Uninstall] Trying constructed path: {localFile}");
+                outcomes.Add(DeleteCandidate(localFile));
 
-                if (Directory.Exists(localFile))
-                {
-                    try { Directory.Delete(localFile, true); deleted = true; RommLogger.Log($"[Uninstall] Deleted folder: {localFile}"); }
-                    catch (Exception ex) { RommLogger.LogError($"[Uninstall] Failed to delete folder {localFile}: {ex.Message}"); }
-                }
-
-                if (File.Exists(localFile))
-                {
-                    try { File.Delete(localFile); deleted = true; RommLogger.Log($"[Uninstall] Deleted file: {localFile}"); }
-                    catch (Exception ex) { RommLogger.LogError($"[Uninstall] Failed to delete file {localFile}: {ex.Message}"); }
-                }
-
-                if (File.Exists(localFile + ".zip"))
-                {
-                    try { File.Delete(localFile + ".zip"); deleted = true; RommLogger.Log($"[Uninstall] Deleted file: {localFile}.zip"); }
-                    catch (Exception ex) { RommLogger.LogError($"[Uninstall] Failed to delete file {localFile}.zip: {ex.Message}"); }
-                }
+                if (File.Exists(localFile + ".zip") || Directory.Exists(localFile + ".zip"))
+                    outcomes.Add(DeleteCandidate(localFile + ".zip"));
 
                 if (record.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 {
                     var withoutZip = localFile.Substring(0, localFile.Length - 4);
-                    if (File.Exists(withoutZip))
-                    {
-                        try { File.Delete(withoutZip); deleted = true; RommLogger.Log($"[Uninstall] Deleted file (without .zip): {withoutZip}"); }
-                        catch (Exception ex) { RommLogger.LogError($"[Uninstall] Failed to delete file {withoutZip}: {ex.Message}"); }
-                    }
+                    if (File.Exists(withoutZip) || Directory.Exists(withoutZip))
+                        outcomes.Add(DeleteCandidate(withoutZip));
                 }
             }
 
-            if (!deleted)
+            if (outcomes.Any(o => o == GamePathDeleteOutcome.Failed))
+                return GamePathDeleteOutcome.Failed;
+            if (outcomes.Any(o => o == GamePathDeleteOutcome.Deleted))
+                return GamePathDeleteOutcome.Deleted;
+
+            RommLogger.Log($"[Uninstall] No files found to delete for: {record.Title}");
+            return GamePathDeleteOutcome.AlreadyGone;
+        }
+
+        private static GamePathDeleteOutcome DeleteCandidate(string path)
+        {
+            var outcome = RommArchiveHelper.DeleteGamePath(path);
+            switch (outcome)
             {
-                RommLogger.Log($"[Uninstall] No files found to delete for: {record.Title}");
+                case GamePathDeleteOutcome.Deleted:
+                    RommLogger.Log($"[Uninstall] Deleted: {path}");
+                    break;
+                case GamePathDeleteOutcome.Failed:
+                    RommLogger.LogError($"[Uninstall] Failed to delete {path}: locked or access denied");
+                    break;
+                default:
+                    RommLogger.Log($"[Uninstall] Not found on disk: {path}");
+                    break;
             }
 
-            return deleted;
+            return outcome;
         }
 
         private IGame FindGameByRommId(int rommId)
@@ -1200,11 +1321,25 @@ namespace RommPlugin.UI.Forms
                     if (!string.IsNullOrEmpty(loader.Path))
                         jsonPaths.Add(ResolveAdditionalAppPath(installedPath, loader.Path, loader.FromLaunchBoxRoot ?? false));
 
+            // _DLCs entries are created from a folder scan, not from listed paths.
+            // Match by path prefix so cleanup works even after the folder is gone.
+            // No name guard here: older entries ship without the platform prefix.
+            string dlcRoot = null;
+            if (config.HasDLC == true)
+                dlcRoot = Path.GetFullPath(Path.Combine(installedPath, "_DLCs"))
+                    + Path.DirectorySeparatorChar;
+
             var apps = game.GetAllAdditionalApplications().ToList();
             foreach (var app in apps)
             {
-                if (!string.IsNullOrEmpty(app.ApplicationPath) && jsonPaths.Contains(app.ApplicationPath)
+                if (string.IsNullOrEmpty(app.ApplicationPath)) continue;
+
+                if (jsonPaths.Contains(app.ApplicationPath)
                     && app.Name?.StartsWith(RommConstants.PlatformPrefix) == true)
+                {
+                    game.TryRemoveAdditionalApplication(app);
+                }
+                else if (dlcRoot != null && app.ApplicationPath.StartsWith(dlcRoot, StringComparison.OrdinalIgnoreCase))
                 {
                     game.TryRemoveAdditionalApplication(app);
                 }

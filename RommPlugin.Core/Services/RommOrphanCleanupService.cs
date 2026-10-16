@@ -182,7 +182,8 @@ namespace RommPlugin.Core.Services
                 IEnumerable<string> parts = Enumerable.Empty<string>();
                 try
                 {
-                    dirs = Directory.EnumerateDirectories(romsRoot, "_temp_*", SearchOption.AllDirectories);
+                    dirs = Directory.EnumerateDirectories(romsRoot, "_temp_*", SearchOption.AllDirectories)
+                        .Concat(Directory.EnumerateDirectories(romsRoot, "*._tmp_*", SearchOption.AllDirectories));
                 }
                 catch (Exception ex)
                 {
@@ -299,10 +300,14 @@ namespace RommPlugin.Core.Services
 
         private static IEnumerable<string> FindStaleTempDirs(string parentDir, TimeSpan staleAge)
         {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             string[] dirs = new string[0];
             try
             {
-                dirs = Directory.GetDirectories(parentDir, "_temp_*");
+                dirs = Directory.GetDirectories(parentDir, "_temp_*")
+                    .Concat(Directory.GetDirectories(parentDir, "*._tmp_*"))
+                    .Where(d => seen.Add(d))
+                    .ToArray();
             }
             catch
             {
