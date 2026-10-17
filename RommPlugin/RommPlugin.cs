@@ -70,6 +70,9 @@ namespace RommPlugin
                     services.AddSingleton<IRommStatsService>(sp =>
                         new RommStatsService(sp.GetRequiredService<IRommApiClient>()));
                     services.AddSingleton<IRommSyncService, RommSyncService>();
+                    services.AddSingleton<ILaunchBoxGameGateway, LaunchBoxGameGateway>();
+                    services.AddSingleton<IGameFileDeleter, GameFileDeleter>();
+                    services.AddSingleton<IGameUninstaller, GameUninstaller>();
                     services.AddSingleton<IRommResetServerService, RommResetServerService>();
                     services.AddSingleton<IRommProcessInstallUninstallService, RommProcessInstallUninstallService>();
                     services.AddSingleton<RommConnectionTester>();

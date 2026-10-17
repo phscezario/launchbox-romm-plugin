@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using RommPlugin.Core.Logging;
 
-namespace RommPlugin.Core.Services
+namespace RommPlugin.Core.Helpers
 {
     /// <summary>
     /// Cross-process single-flight guard for install processing. Two LaunchBox

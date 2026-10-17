@@ -1,4 +1,4 @@
-namespace RommPlugin.Core.Services
+namespace RommPlugin.Core.Decisions
 {
     /// <summary>
     /// Desired router flags for DLC/game-content entries. Pure data so it can

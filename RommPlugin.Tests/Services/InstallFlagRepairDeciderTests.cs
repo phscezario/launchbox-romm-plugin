@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using RommPlugin.Core.Decisions;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Services;
 using Xunit;
@@ -42,6 +43,7 @@ namespace RommPlugin.Tests.Services
             Assert.True(decision.RepairFields);
             Assert.True(decision.UpdateApplicationPath);
             Assert.False(decision.RequeueDownload);
+            Assert.False(decision.ClearRecord);
         }
 
         [Fact]
@@ -69,12 +71,13 @@ namespace RommPlugin.Tests.Services
         }
 
         [Fact]
-        public void Decide_MissingFiles_RequeuesDownload()
+        public void Decide_MissingFiles_RequeuesDownloadAndClearsRecord()
         {
             var decision = InstallFlagRepairDecider.Decide(
                 ActiveRecord(Path.Combine(_root, "gone.zip")), null, false);
 
             Assert.True(decision.RequeueDownload);
+            Assert.True(decision.ClearRecord);
             Assert.False(decision.RepairFields);
         }
 

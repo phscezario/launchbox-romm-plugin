@@ -1,7 +1,7 @@
 using System.IO;
 using RommPlugin.Core.Models;
 
-namespace RommPlugin.Core.Services
+namespace RommPlugin.Core.Decisions
 {
     /// <summary>
     /// Decision of the installed-flags repair for a single record.
@@ -17,8 +17,15 @@ namespace RommPlugin.Core.Services
         /// <summary>Whether the game files are gone and a re-download must be queued.</summary>
         public bool RequeueDownload { get; set; }
 
+        /// <summary>
+        /// Whether the installed-games record is stale (files gone) and must be
+        /// dropped so the Game Manager stops reporting the game as installed.
+        /// Without this the record survives forever and re-queues on every start.
+        /// </summary>
+        public bool ClearRecord { get; set; }
+
         /// <summary>Whether any action is required at all.</summary>
-        public bool NeedsAction => RepairFields || RequeueDownload;
+        public bool NeedsAction => RepairFields || RequeueDownload || ClearRecord;
     }
 
     /// <summary>
@@ -46,7 +53,10 @@ namespace RommPlugin.Core.Services
 
             if (!InstalledPathExists(record.InstalledPath))
             {
+                // Files are gone: this record is a ghost. Drop it as well as
+                // re-queueing, otherwise the row keeps showing as installed.
                 decision.RequeueDownload = true;
+                decision.ClearRecord = true;
                 return decision;
             }
 

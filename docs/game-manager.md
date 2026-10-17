@@ -13,7 +13,7 @@ The Game Manager (`RommPlugin.UI/Forms/GameManagerForm.cs`) is the dialog that t
 
 ## Installed-flags repair (automatic on startup and on open)
 
-Records are reconciled with the LaunchBox-side fields (`ApplicationPath` / `Installed`) at LaunchBox startup (`RommMenuPlugin.OnEventRaised`, before auto-sync) and every time the Game Manager opens. Both call the shared `InstallFlagRepairRunner.RepairAll()` (`RommPlugin.UI/Helpers/InstallFlagRepairRunner.cs`), decided per record by `InstallFlagRepairDecider` (`RommPlugin.Core/Services/InstallFlagRepairDecider.cs`). Silent, no setting, never blocks startup:
+Records are reconciled with the LaunchBox-side fields (`ApplicationPath` / `Installed`) at LaunchBox startup (`RommMenuPlugin.OnEventRaised`, before auto-sync) and every time the Game Manager opens. Both call the shared `InstallFlagRepairRunner.RepairAll()` (`RommPlugin.UI/Helpers/InstallFlagRepairRunner.cs`), decided per record by `InstallFlagRepairDecider` (`RommPlugin.Core/Decisions/InstallFlagRepairDecider.cs`). Silent, no setting, never blocks startup:
 
 - record active and files present on disk, but LaunchBox fields wrong or empty → fields are rewritten from the record (silent, logged as `[Repair]`);
 - record active but files gone from disk → the game is re-queued for download using the record's own location data;

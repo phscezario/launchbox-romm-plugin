@@ -30,6 +30,7 @@
     "dm.retry": "Retry",
     "dm.cancel": "Cancel",
     "dm.cancel_all": "Cancel All",
+    "dm.cancelled": "Cancelled: {0}",
     "dm.clear": "Clear",
     "dm.col_name": "Name",
     "dm.col_category": "Category",

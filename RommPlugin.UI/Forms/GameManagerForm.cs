@@ -10,6 +10,7 @@ using System.Windows.Forms;
 using Newtonsoft.Json;
 using RommPlugin.UI.Helpers;
 using RommPlugin.Core;
+using RommPlugin.Core.Decisions;
 using RommPlugin.Core.Helpers;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Services;
@@ -17,8 +18,6 @@ using RommPlugin.Core.Storage;
 using RommPlugin.Core.Locale;
 using RommPlugin.Core.Constants;
 using RommPlugin.Core.Logging;
-using Unbroken.LaunchBox.Plugins;
-using Unbroken.LaunchBox.Plugins.Data;
 using Timer = System.Timers.Timer;
 
 namespace RommPlugin.UI.Forms
@@ -30,6 +29,8 @@ namespace RommPlugin.UI.Forms
     {
         private readonly DownloadQueueService _queueService;
         private readonly InstalledGamesService _installedService;
+        private readonly IGameUninstaller _uninstaller;
+        private readonly ILaunchBoxGameGateway _gateway;
         private readonly QueueFileWatcher _queueWatcher;
         private readonly Timer _uiTimer;
         private readonly Mutex _mutex;
@@ -74,6 +75,9 @@ namespace RommPlugin.UI.Forms
                 _queueService = (DownloadQueueService)ServiceLocator.GetService<IDownloadQueueService>();
 
                 _installedService = (InstalledGamesService)ServiceLocator.GetService<IInstalledGamesService>();
+
+                _uninstaller = ServiceLocator.GetService<IGameUninstaller>();
+                _gateway = ServiceLocator.GetService<ILaunchBoxGameGateway>();
 
                 _queueService.ItemStateChanged += OnItemStateChanged;
                 _queueService.ProgressChanged += OnProgressChanged;
@@ -259,9 +263,8 @@ namespace RommPlugin.UI.Forms
         private async Task AutoInstallAsync()
         {
             if (_isProcessing) return;
-            // Cross-process single-flight: two LaunchBox instances (or overlapping
-            // manual/automatic runs) must never process the same queue.
-            if (!InstallProcessLock.TryEnter()) return;
+            // Cross-process single-flight now lives in the install service
+            // (ProcessInstallUninstallEvents), so every caller is covered.
             _isProcessing = true;
             try
             {
@@ -272,20 +275,9 @@ namespace RommPlugin.UI.Forms
                 // Only items the batch actually marked Installed count as processed.
                 // Items that left WaitingInstall for any other reason (Failed) must
                 // NOT be registered as installed; untouched ones are left for the next run.
-                var processedIds = stateBefore
-                    .Where(kv => kv.Value.Status == DownloadStatus.WaitingInstall
-                        && stateAfter.TryGetValue(kv.Key, out var after)
-                        && after.Status == DownloadStatus.Installed)
-                    .Select(kv => kv.Key)
-                    .ToList();
-
-                var failedIds = stateBefore
-                    .Where(kv => kv.Value.Status == DownloadStatus.WaitingInstall
-                        && stateAfter.TryGetValue(kv.Key, out var after)
-                        && after.Status != DownloadStatus.WaitingInstall
-                        && after.Status != DownloadStatus.Installed)
-                    .Select(kv => kv.Key)
-                    .ToList();
+                var outcome = InstallOutcomeClassifier.Classify(stateBefore, stateAfter);
+                var processedIds = outcome.ProcessedIds;
+                var failedIds = outcome.FailedIds;
 
                 var settings = RommPluginStorage.Load();
                 var changed = false;
@@ -374,7 +366,6 @@ namespace RommPlugin.UI.Forms
             finally
             {
                 _isProcessing = false;
-                InstallProcessLock.Exit();
                 if (!_formClosing && !IsDisposed && _onApplyPending != null &&
                     _queueService.Items.Any(i => i.Status == DownloadStatus.WaitingInstall))
                 {
@@ -475,14 +466,16 @@ namespace RommPlugin.UI.Forms
             dgvGames.Rows.Clear();
 
             var pendingUninstalls = GetPendingUninstallIds();
-            var rows = GameManagerRow.Merge(_queueService.Items, _installedService.GetAll());
+            // Alphabetical, with in-progress/failed games pinned to the top.
+            var rows = GameListOrdering.Order(
+                GameManagerRow.Merge(_queueService.Items, _installedService.GetAll()));
 
             foreach (var entry in rows)
             {
                 if (entry.ShowsQueueDetails)
                 {
                     var item = entry.QueueItem;
-                    var category = GetCategory(item.FsPath);
+                    var category = GetLastPathSegment(item.FsPath);
                     if (string.IsNullOrEmpty(category))
                     {
                         // Prefer the record's platform when one exists: the queue
@@ -496,7 +489,7 @@ namespace RommPlugin.UI.Forms
                         }
                         else
                         {
-                            var lbGame = FindGameByRommId(entry.GameId);
+                            var lbGame = _gateway.FindByRommId(entry.GameId);
                             var platform = lbGame?.Platform ?? "";
                             category = platform.StartsWith(RommConstants.PlatformPrefix)
                                 ? platform.Substring(RommConstants.PlatformPrefix.Length)
@@ -632,7 +625,7 @@ namespace RommPlugin.UI.Forms
             }
         }
 
-        private string GetCategory(string fsPath)
+        private string GetLastPathSegment(string fsPath)
         {
             if (string.IsNullOrWhiteSpace(fsPath)) return "";
             var parts = fsPath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
@@ -672,7 +665,7 @@ namespace RommPlugin.UI.Forms
             var totalSize = items.Where(i => i.Status == DownloadStatus.Downloading || i.Status == DownloadStatus.WaitingInstall)
                 .Sum(i => i.TotalBytes);
 
-            lblSummary.Text = $"{LocaleManager.Get("dm.active", active)} | {LocaleManager.Get("dm.pending", pending)} | {LocaleManager.Get("dm.failed", failed)} | {LocaleManager.Get("gm.status.installing")} {waitingInstall} | {LocaleManager.Get("gm.status.installed")} {installedGames} | Canc: {cancelled} | {LocaleManager.Get("dm.size", FormatSize(totalSize))}";
+            lblSummary.Text = $"{LocaleManager.Get("dm.active", active)} | {LocaleManager.Get("dm.pending", pending)} | {LocaleManager.Get("dm.failed", failed)} | {LocaleManager.Get("gm.status.installing")} {waitingInstall} | {LocaleManager.Get("gm.status.installed")} {installedGames} | {LocaleManager.Get("dm.cancelled", cancelled)} | {LocaleManager.Get("dm.size", FormatSize(totalSize))}";
 
             var selected = GetSelectedRows();
             var selectedRow = selected.FirstOrDefault();
@@ -770,22 +763,36 @@ namespace RommPlugin.UI.Forms
             }
         }
 
-        private void CleanupAfterUninstall(InstalledGameRecord record)
+        /// <summary>
+        /// Uninstalls a batch of records through the shared uninstaller, then
+        /// reports the games whose files could not be removed. Preserves the
+        /// Game Manager cadence: one batch dialog, one LaunchBox save, one refresh.
+        /// </summary>
+        private void UninstallRecords(IList<InstalledGameRecord> records)
         {
-            if (record == null) return;
+            var romsPath = RommPluginStorage.Load().RomsPath;
+            var filesNotFound = new List<string>();
 
-            try
+            foreach (var record in records)
             {
-                var settings = RommPluginStorage.Load();
-                RommOrphanCleanupService.CleanUninstallLeftovers(
-                    settings.RomsPath,
-                    record.RommGameId,
-                    record.Title,
-                    record.InstalledPath);
+                var outcome = _uninstaller.Uninstall(record, romsPath);
+                if (outcome == GamePathDeleteOutcome.Failed)
+                    filesNotFound.Add(record.Title ?? record.RommGameId.ToString());
             }
-            catch
+
+            if (filesNotFound.Count > 0)
             {
+                var names = string.Join("\n", filesNotFound.Take(10));
+                if (filesNotFound.Count > 10)
+                    names += string.Format("\n... and {0} more", filesNotFound.Count - 10);
+
+                using (var form = new ConfirmForm(
+                    string.Format(LocaleManager.Get("uninstall.files_delete_failed_batch"), filesNotFound.Count, names)))
+                    form.ShowDialog();
             }
+
+            _gateway.Save();
+            RefreshList();
         }
 
         private void BtnCancel_Click(object sender, EventArgs e)
@@ -808,27 +815,24 @@ namespace RommPlugin.UI.Forms
         {
             if (_isUninstalling) return;
 
-            var selectedRecords = GetSelectedRows()
-                .Where(r => r.Installed != null && !r.Installed.UninstalledAt.HasValue)
-                .Select(r => r.Installed)
-                .ToList();
+            var selected = GetSelectedRows();
+            var records = UninstallPlanDecider.ActiveRecordsInSelection(selected);
 
-            if (selectedRecords.Count == 0)
+            if (records.Count == 0)
             {
                 // No record (registration was skipped) but files on disk: adopt
                 // valid installs so uninstall works instead of doing nothing.
-                foreach (var entry in GetSelectedRows())
+                foreach (var gameId in UninstallPlanDecider.RowsWithoutRecordInSelection(selected))
                 {
-                    if (entry.Installed != null) continue;
-                    var adopted = AdoptRecordIfMissing(entry.GameId);
+                    var adopted = AdoptRecordIfMissing(gameId);
                     if (adopted != null)
-                        selectedRecords.Add(adopted);
+                        records.Add(adopted);
                 }
             }
 
-            if (selectedRecords.Count == 0)
+            if (records.Count == 0)
             {
-                DropDeadQueueItems();
+                DropDeadQueueItems(selected);
                 return;
             }
 
@@ -836,49 +840,12 @@ namespace RommPlugin.UI.Forms
             try
             {
                 using (var form = new ConfirmForm(
-                    LocaleManager.Get("gm.confirm_uninstall", selectedRecords.Count)))
+                    LocaleManager.Get("gm.confirm_uninstall", records.Count)))
                 {
                     if (form.ShowDialog() != DialogResult.OK) return;
                 }
 
-                var filesNotFound = new List<string>();
-
-                foreach (var record in selectedRecords)
-                {
-                    var game = FindGameByRommId(record.RommGameId);
-                    if (game != null)
-                    {
-                        ClearGameAdditionalApplications(game, record.InstalledPath);
-                        game.ApplicationPath = null;
-                        game.Installed = false;
-                    }
-
-                    var deleteOutcome = TryDeleteGameFiles(record);
-
-                    if (deleteOutcome == GamePathDeleteOutcome.Failed)
-                    {
-                        filesNotFound.Add(record.Title ?? record.RommGameId.ToString());
-                        continue;
-                    }
-
-                    _installedService.MarkUninstalled(record.RommGameId);
-                    _queueService.Remove(record.RommGameId);
-                    CleanupAfterUninstall(record);
-                }
-
-                if (filesNotFound.Count > 0)
-                {
-                    var names = string.Join("\n", filesNotFound.Take(10));
-                    if (filesNotFound.Count > 10)
-                        names += string.Format("\n... and {0} more", filesNotFound.Count - 10);
-
-                    using (var form = new ConfirmForm(
-                        string.Format(LocaleManager.Get("uninstall.files_delete_failed_batch"), filesNotFound.Count, names)))
-                        form.ShowDialog();
-                }
-
-                PluginHelper.DataManager.Save();
-                RefreshList();
+                UninstallRecords(records);
             }
             catch (Exception ex)
             {
@@ -896,27 +863,21 @@ namespace RommPlugin.UI.Forms
         /// visible instead of silently doing nothing. Active transfers are left
         /// alone (use Cancel for those).
         /// </summary>
-        private void DropDeadQueueItems()
+        private void DropDeadQueueItems(IReadOnlyList<GameManagerRow> selected)
         {
-            var ids = GetSelectedRows().Select(r => r.GameId).Distinct().ToList();
-            var dropped = 0;
+            var drops = UninstallPlanDecider.DeadQueueDrops(selected, _queueService.Items);
 
-            foreach (var id in ids)
+            foreach (var item in drops)
             {
-                var item = _queueService.Items.FirstOrDefault(i => i.GameId == id);
-                if (item == null) continue;
-                if (item.Status != DownloadStatus.Failed && item.Status != DownloadStatus.Cancelled) continue;
-
-                _queueService.Remove(id);
-                RommLogger.Log($"[GameManager] Dropped dead queue item: {item.GameName} (GameId={id}, status={item.Status})");
-                dropped++;
+                _queueService.Remove(item.GameId);
+                RommLogger.Log($"[GameManager] Dropped dead queue item: {item.GameName} (GameId={item.GameId}, status={item.Status})");
             }
 
-            if (dropped > 0)
+            if (drops.Count > 0)
             {
                 RefreshList();
             }
-            else if (ids.Count > 0)
+            else if (selected != null && selected.Count > 0)
             {
                 using (var form = new ConfirmForm(LocaleManager.Get("uninstall.nothing_to_uninstall")))
                     form.ShowDialog();
@@ -948,59 +909,19 @@ namespace RommPlugin.UI.Forms
         {
             if (_isUninstalling) return;
 
-            var allRecords = _installedService.GetAll()
-                .Where(r => !r.UninstalledAt.HasValue)
-                .ToList();
-
-            if (allRecords.Count == 0) return;
+            var records = UninstallPlanDecider.ActiveRecords(_installedService.GetAll());
+            if (records.Count == 0) return;
 
             _isUninstalling = true;
             try
             {
                 using (var form = new ConfirmForm(
-                    LocaleManager.Get("gm.confirm_uninstall", allRecords.Count)))
+                    LocaleManager.Get("gm.confirm_uninstall", records.Count)))
                 {
                     if (form.ShowDialog() != DialogResult.OK) return;
                 }
 
-                var filesNotFound = new List<string>();
-
-                foreach (var record in allRecords)
-                {
-                    var game = FindGameByRommId(record.RommGameId);
-                    if (game != null)
-                    {
-                        ClearGameAdditionalApplications(game, record.InstalledPath);
-                        game.ApplicationPath = null;
-                        game.Installed = false;
-                    }
-
-                    var deleteOutcome = TryDeleteGameFiles(record);
-
-                    if (deleteOutcome == GamePathDeleteOutcome.Failed)
-                    {
-                        filesNotFound.Add(record.Title ?? record.RommGameId.ToString());
-                        continue;
-                    }
-
-                    _installedService.MarkUninstalled(record.RommGameId);
-                    _queueService.Remove(record.RommGameId);
-                    CleanupAfterUninstall(record);
-                }
-
-                if (filesNotFound.Count > 0)
-                {
-                    var names = string.Join("\n", filesNotFound.Take(10));
-                    if (filesNotFound.Count > 10)
-                        names += string.Format("\n... and {0} more", filesNotFound.Count - 10);
-
-                    using (var form = new ConfirmForm(
-                        string.Format(LocaleManager.Get("uninstall.files_delete_failed_batch"), filesNotFound.Count, names)))
-                        form.ShowDialog();
-                }
-
-                PluginHelper.DataManager.Save();
-                RefreshList();
+                UninstallRecords(records);
             }
             catch (Exception ex)
             {
@@ -1050,25 +971,14 @@ namespace RommPlugin.UI.Forms
                     return;
                 }
 
-                var game = FindGameByRommId(action.GameId);
-                if (game != null)
-                {
-                    ClearGameAdditionalApplications(game, record?.InstalledPath);
-                    game.ApplicationPath = null;
-                    game.Installed = false;
-                }
-
-                var deleteOutcome = TryDeleteGameFiles(record);
-                if (deleteOutcome == GamePathDeleteOutcome.Failed)
+                var outcome = _uninstaller.Uninstall(record, RommPluginStorage.Load().RomsPath);
+                if (outcome == GamePathDeleteOutcome.Failed)
                 {
                     RommLogger.LogError($"[Uninstall] Files could not be deleted for {action.GameName} (GameId={action.GameId}), leaving uninstall pending");
                     return;
                 }
 
-                _installedService.MarkUninstalled(action.GameId);
-                _queueService.Remove(action.GameId);
-                CleanupAfterUninstall(record);
-                PluginHelper.DataManager.Save();
+                _gateway.Save();
                 RommLogger.Log($"[Uninstall] Completed: {action.GameName} (GameId={action.GameId})");
             }
             catch (Exception ex)
@@ -1104,25 +1014,13 @@ namespace RommPlugin.UI.Forms
                         continue;
                     }
 
-                    var game = FindGameByRommId(item.GameId);
-                    if (game != null)
-                    {
-                        ClearGameAdditionalApplications(game, record?.InstalledPath);
-                        game.ApplicationPath = null;
-                        game.Installed = false;
-                    }
-
-                    var deleteOutcome = TryDeleteGameFiles(record);
-
-                    if (deleteOutcome == GamePathDeleteOutcome.Failed)
+                    var outcome = _uninstaller.Uninstall(record, RommPluginStorage.Load().RomsPath);
+                    if (outcome == GamePathDeleteOutcome.Failed)
                     {
                         RommLogger.LogError($"[Uninstall] Files could not be deleted for GameId={item.GameId}, leaving uninstall pending");
                         continue;
                     }
 
-                    _installedService.MarkUninstalled(item.GameId);
-                    _queueService.Remove(item.GameId);
-                    CleanupAfterUninstall(record);
                     item.Status = DownloadStatus.Completed;
                     item.CompletedAt = DateTime.UtcNow;
                     // Drop from the persisted queue as well, or the save below
@@ -1142,7 +1040,7 @@ namespace RommPlugin.UI.Forms
                     try { File.Delete(tempPath); } catch { }
                 }
 
-                PluginHelper.DataManager.Save();
+                _gateway.Save();
             }
             catch (Exception ex)
             {
@@ -1157,28 +1055,21 @@ namespace RommPlugin.UI.Forms
                 if (_installedService.IsInstalled(gameId))
                     return;
 
-                var game = FindGameByRommId(gameId);
-                if (game == null) return;
+                var snapshot = _gateway.FindByRommId(gameId);
+                if (snapshot == null) return;
 
-                var fields = game.GetAllCustomFields()
-                    .GroupBy(f => f.Name)
-                    .ToDictionary(g => g.Key, g => g.Last().Value);
-
-                fields.TryGetValue(GameCustomFields.RemotePath, out var remotePath);
-                fields.TryGetValue(GameCustomFields.FileName, out var fileName);
-                fields.TryGetValue(GameCustomFields.IsFolderGame, out var folderValue);
                 var isFolderGame = InstallValidation.IsFolderGameEffective(
-                    folderValue == bool.TrueString, settings.RomsPath, remotePath, fileName);
-                if (isFolderGame && folderValue != bool.TrueString)
+                    snapshot.FolderFlagValue == bool.TrueString, settings.RomsPath, snapshot.RemotePath, snapshot.FileName);
+                if (isFolderGame && snapshot.FolderFlagValue != bool.TrueString)
                 {
                     // Disk evidence overrides the stale sync flag; write it back
                     // so every other flow sees the folder game as such.
-                    InstallFlagRepairRunner.BackfillFolderFlag(game);
-                    RommLogger.Log($"[RommPlugin] Corrected stale folder flag: {game.Title} (ID: {gameId})");
+                    _gateway.BackfillFolderFlag(gameId);
+                    RommLogger.Log($"[RommPlugin] Corrected stale folder flag: {snapshot.Title} (ID: {gameId})");
                 }
 
                 var installedPath = InstallValidation.ResolveInstalledPath(
-                    settings.RomsPath, remotePath, fileName, isFolderGame);
+                    settings.RomsPath, snapshot.RemotePath, snapshot.FileName, isFolderGame);
 
                 // Never register failed/partial installs: a previous error must
                 // not leave the game marked as installed.
@@ -1187,170 +1078,28 @@ namespace RommPlugin.UI.Forms
                     : InstallValidation.IsFileInstallValid(installedPath);
                 if (!valid)
                 {
-                    RommLogger.Log($"[RommPlugin] Not registering installed (missing or incomplete): {game.Title} (ID: {gameId})");
+                    RommLogger.Log($"[RommPlugin] Not registering installed (missing or incomplete): {snapshot.Title} (ID: {gameId})");
                     return;
                 }
 
                 _installedService.MarkInstalled(new InstalledGameRecord
                 {
                     RommGameId = gameId,
-                    Title = game.Title,
-                    Platform = game.Platform,
-                    Category = game.Genres?.FirstOrDefault(),
-                    RemotePath = remotePath,
-                    FileName = fileName,
+                    Title = snapshot.Title,
+                    Platform = snapshot.Platform,
+                    Category = snapshot.Genre,
+                    RemotePath = snapshot.RemotePath,
+                    FileName = snapshot.FileName,
                     InstalledPath = installedPath,
                     InstalledAt = DateTime.UtcNow
                 });
 
-                RommLogger.Log($"[RommPlugin] Registered installed: {game.Title} (ID: {gameId})");
+                RommLogger.Log($"[RommPlugin] Registered installed: {snapshot.Title} (ID: {gameId})");
             }
             catch (Exception ex)
             {
                 RommLogger.LogException(ex);
             }
-        }
-
-        private GamePathDeleteOutcome TryDeleteGameFiles(InstalledGameRecord record)
-        {
-            if (record == null)
-            {
-                return GamePathDeleteOutcome.AlreadyGone;
-            }
-
-            var settings = RommPluginStorage.Load();
-            var outcomes = new List<GamePathDeleteOutcome>();
-
-            RommLogger.Log($"[Uninstall] Trying to delete files for: {record.Title} (GameId={record.RommGameId})");
-
-            if (!string.IsNullOrEmpty(record.InstalledPath))
-            {
-                RommLogger.Log($"[Uninstall] Trying InstalledPath: {record.InstalledPath}");
-                outcomes.Add(DeleteCandidate(record.InstalledPath));
-            }
-
-            if (!string.IsNullOrEmpty(record.RemotePath) && !string.IsNullOrEmpty(record.FileName))
-            {
-                var localFile = Path.Combine(settings.RomsPath, RommConstants.RomsSubfolder, record.RemotePath.Replace("/", "\\"), record.FileName);
-                RommLogger.Log($"[Uninstall] Trying constructed path: {localFile}");
-                outcomes.Add(DeleteCandidate(localFile));
-
-                if (File.Exists(localFile + ".zip") || Directory.Exists(localFile + ".zip"))
-                    outcomes.Add(DeleteCandidate(localFile + ".zip"));
-
-                if (record.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                {
-                    var withoutZip = localFile.Substring(0, localFile.Length - 4);
-                    if (File.Exists(withoutZip) || Directory.Exists(withoutZip))
-                        outcomes.Add(DeleteCandidate(withoutZip));
-                }
-            }
-
-            if (outcomes.Any(o => o == GamePathDeleteOutcome.Failed))
-                return GamePathDeleteOutcome.Failed;
-            if (outcomes.Any(o => o == GamePathDeleteOutcome.Deleted))
-                return GamePathDeleteOutcome.Deleted;
-
-            RommLogger.Log($"[Uninstall] No files found to delete for: {record.Title}");
-            return GamePathDeleteOutcome.AlreadyGone;
-        }
-
-        private static GamePathDeleteOutcome DeleteCandidate(string path)
-        {
-            var outcome = RommArchiveHelper.DeleteGamePath(path);
-            switch (outcome)
-            {
-                case GamePathDeleteOutcome.Deleted:
-                    RommLogger.Log($"[Uninstall] Deleted: {path}");
-                    break;
-                case GamePathDeleteOutcome.Failed:
-                    RommLogger.LogError($"[Uninstall] Failed to delete {path}: locked or access denied");
-                    break;
-                default:
-                    RommLogger.Log($"[Uninstall] Not found on disk: {path}");
-                    break;
-            }
-
-            return outcome;
-        }
-
-        private IGame FindGameByRommId(int rommId)
-        {
-            var dataManager = PluginHelper.DataManager;
-            var rommGames = dataManager.GetAllGames()
-                .Where(g => g.Platform != null && g.Platform.StartsWith(RommConstants.PlatformPrefix))
-                .ToList();
-
-            foreach (var game in rommGames)
-            {
-                var value = game.GetAllCustomFields()
-                    .FirstOrDefault(f => f.Name == GameCustomFields.GameId)?.Value;
-                if (int.TryParse(value, out var id) && id == rommId)
-                {
-                    return game;
-                }
-            }
-
-            return null;
-        }
-
-        private void ClearGameAdditionalApplications(IGame game, string installedPath)
-        {
-            if (string.IsNullOrEmpty(installedPath)) return;
-
-            var jsonPath = Path.Combine(installedPath, RommConstants.LaunchboxConfigFile);
-            if (!File.Exists(jsonPath)) return;
-
-            var config = JsonConvert.DeserializeObject<LaunchBoxFolderGameConfig>(File.ReadAllText(jsonPath));
-            if (config == null) return;
-
-            var jsonPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            if (config.AdditionalApplications != null)
-                foreach (var app in config.AdditionalApplications)
-                    if (!string.IsNullOrEmpty(app.Path))
-                        jsonPaths.Add(ResolveAdditionalAppPath(installedPath, app.Path, false));
-
-            if (config.PreLoaders != null)
-                foreach (var loader in config.PreLoaders)
-                    if (!string.IsNullOrEmpty(loader.Path))
-                        jsonPaths.Add(ResolveAdditionalAppPath(installedPath, loader.Path, loader.FromLaunchBoxRoot ?? false));
-
-            if (config.PosLoaders != null)
-                foreach (var loader in config.PosLoaders)
-                    if (!string.IsNullOrEmpty(loader.Path))
-                        jsonPaths.Add(ResolveAdditionalAppPath(installedPath, loader.Path, loader.FromLaunchBoxRoot ?? false));
-
-            // _DLCs entries are created from a folder scan, not from listed paths.
-            // Match by path prefix so cleanup works even after the folder is gone.
-            // No name guard here: older entries ship without the platform prefix.
-            string dlcRoot = null;
-            if (config.HasDLC == true)
-                dlcRoot = Path.GetFullPath(Path.Combine(installedPath, "_DLCs"))
-                    + Path.DirectorySeparatorChar;
-
-            var apps = game.GetAllAdditionalApplications().ToList();
-            foreach (var app in apps)
-            {
-                if (string.IsNullOrEmpty(app.ApplicationPath)) continue;
-
-                if (jsonPaths.Contains(app.ApplicationPath)
-                    && app.Name?.StartsWith(RommConstants.PlatformPrefix) == true)
-                {
-                    game.TryRemoveAdditionalApplication(app);
-                }
-                else if (dlcRoot != null && app.ApplicationPath.StartsWith(dlcRoot, StringComparison.OrdinalIgnoreCase))
-                {
-                    game.TryRemoveAdditionalApplication(app);
-                }
-            }
-        }
-
-        private string ResolveAdditionalAppPath(string baseFolder, string path, bool fromLaunchBoxRoot)
-        {
-            if (string.IsNullOrWhiteSpace(path)) return path;
-            if (fromLaunchBoxRoot) return path;
-            return Path.GetFullPath(Path.Combine(baseFolder, path));
         }
 
         private void DgvGames_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)

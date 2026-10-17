@@ -51,18 +51,6 @@ namespace RommPlugin.Core.Services
             get { lock (_lock) return _items.ToList(); }
         }
 
-        /// <inheritdoc/>
-        public int ActiveCount
-        {
-            get { lock (_lock) return _items.Count(i => i.Status == DownloadStatus.Downloading); }
-        }
-
-        /// <inheritdoc/>
-        public int PendingCount
-        {
-            get { lock (_lock) return _items.Count(i => i.Status == DownloadStatus.Pending); }
-        }
-
         /// <summary>
         /// Initializes a new instance of the <see cref="DownloadQueueService"/> class.
         /// </summary>
@@ -505,21 +493,6 @@ namespace RommPlugin.Core.Services
                     ItemStateChanged?.Invoke(item);
                     SaveState();
                 }
-            }
-        }
-
-        /// <inheritdoc/>
-        public void InstallAllPending()
-        {
-            List<DownloadItem> toInstall;
-            lock (_lock)
-            {
-                toInstall = _items.Where(i => i.Status == DownloadStatus.WaitingInstall).ToList();
-            }
-
-            foreach (var item in toInstall)
-            {
-                InstallPending(item.GameId);
             }
         }
 

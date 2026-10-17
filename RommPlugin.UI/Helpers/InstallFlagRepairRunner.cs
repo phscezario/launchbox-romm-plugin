@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using RommPlugin.Core.Constants;
+using RommPlugin.Core.Decisions;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Services;
@@ -74,6 +75,15 @@ namespace RommPlugin.UI.Helpers
                     }
                     else if (decision.RequeueDownload)
                     {
+                        if (decision.ClearRecord)
+                        {
+                            // Ghost record: the files are gone. Drop it so the Game
+                            // Manager stops showing the game as installed; the
+                            // re-queue below rebuilds the state from scratch.
+                            installedService.MarkUninstalled(record.RommGameId);
+                            RommLogger.Log($"[Repair] Game {record.RommGameId} '{record.Title}': stale install record cleared");
+                        }
+
                         if (string.IsNullOrWhiteSpace(record.FileName) || string.IsNullOrWhiteSpace(record.RemotePath))
                         {
                             RommLogger.Log($"[Repair] Game {record.RommGameId} '{record.Title}': files missing and record has no location info, skipped");

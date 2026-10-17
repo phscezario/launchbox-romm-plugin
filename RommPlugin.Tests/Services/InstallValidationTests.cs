@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Threading;
+using RommPlugin.Core.Decisions;
+using RommPlugin.Core.Helpers;
 using RommPlugin.Core.Services;
 using Xunit;
 
@@ -157,6 +160,31 @@ namespace RommPlugin.Tests.Services
             // Double release must never throw.
             var exception = Record.Exception(() => InstallProcessLock.Exit());
             Assert.Null(exception);
+        }
+
+        [Fact]
+        public void InstallProcessLock_SecondThreadIsRefusedWhileHeld()
+        {
+            // Documents the single-flight contract the install service now
+            // relies on: while one run holds the lock, another is refused.
+            Assert.True(InstallProcessLock.TryEnter());
+            try
+            {
+                var enteredElsewhere = true;
+                var thread = new Thread(() =>
+                {
+                    enteredElsewhere = InstallProcessLock.TryEnter();
+                    if (enteredElsewhere) InstallProcessLock.Exit();
+                });
+                thread.Start();
+                thread.Join();
+
+                Assert.False(enteredElsewhere);
+            }
+            finally
+            {
+                InstallProcessLock.Exit();
+            }
         }
     }
 }

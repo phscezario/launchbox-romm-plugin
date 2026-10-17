@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace RommPlugin.Core.Services
+namespace RommPlugin.Core.Decisions
 {
     /// <summary>
     /// Pure decision logic for folder-type detection. The RomM sync stamps

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using Newtonsoft.Json;
 using RommPlugin.Core.Constants;
+using RommPlugin.Core.Decisions;
 using RommPlugin.Core.Helpers;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Services;
@@ -30,6 +31,26 @@ namespace RommPlugin.Services
     {
         /// <inheritdoc/>
         public async Task ProcessInstallUninstallEvents(bool showEmptyMessage = true)
+        {
+            // Cross-process single-flight lives here rather than in the caller:
+            // the Game Manager closing path, the startup path and a second
+            // LaunchBox instance all funnel through this method, and two
+            // overlapping runs delete each other's extract folder (which showed
+            // up as "installed" rows whose files were gone).
+            if (!InstallProcessLock.TryEnter())
+                return;
+
+            try
+            {
+                await ProcessPendingInstallUninstallAsync(showEmptyMessage);
+            }
+            finally
+            {
+                InstallProcessLock.Exit();
+            }
+        }
+
+        private async Task ProcessPendingInstallUninstallAsync(bool showEmptyMessage)
         {
             await ProgressRunner.RunAsync(
                 LocaleManager.Get("progress.processing"),
@@ -103,6 +124,7 @@ namespace RommPlugin.Services
                         string attemptZipPath = null;
                         string attemptExtractDir = null;
                         bool attemptExtractExisted = false;
+                        bool attemptPublishedExtractDir = false;
                         IGame game = null;
 
                         try
@@ -208,7 +230,10 @@ namespace RommPlugin.Services
                                     continue;
                                 }
 
-                                UnzipAndDelete(zipPath, extractDir);
+                                UnzipAndDelete(zipPath, extractDir, attemptExtractExisted);
+                                // Only set once the staging→destination move
+                                // succeeded: from here on the folder is ours.
+                                attemptPublishedExtractDir = true;
 
                                     var jsonPath = Path.Combine(extractDir, RommConstants.LaunchboxConfigFile);
 
@@ -282,7 +307,7 @@ namespace RommPlugin.Services
                                     item.GameName,
                                     null,
                                     attemptExtractDir,
-                                    !attemptExtractExisted,
+                                    InstallFailureCleanup.ShouldDeleteExtractDir(attemptExtractExisted, attemptPublishedExtractDir),
                                     item.PartFilePath,
                                     attemptZipPath,
                                     true);
@@ -298,7 +323,7 @@ namespace RommPlugin.Services
                                     item.GameName,
                                     null,
                                     attemptExtractDir,
-                                    !attemptExtractExisted,
+                                    InstallFailureCleanup.ShouldDeleteExtractDir(attemptExtractExisted, attemptPublishedExtractDir),
                                     // Keep the .part so the retry resumes instead of
                                     // restarting large downloads from zero. Only corrupt
                                     // archives (above) drop it for a clean redownload.
@@ -333,7 +358,7 @@ namespace RommPlugin.Services
 
                     if (showEmptyMessage)
                     {
-                        using (var form = new ConfirmForm("RomM finish all pending install"))
+                        using (var form = new ConfirmForm(LocaleManager.Get("progress.finished")))
                         {
                             form.ShowDialog();
                         }
@@ -496,7 +521,7 @@ namespace RommPlugin.Services
 
 
 
-        private void UnzipAndDelete(string zipPath, string extractDir)
+        private void UnzipAndDelete(string zipPath, string extractDir, bool destinationExistedAtStart)
         {
             var rootFolder = Path.GetFileNameWithoutExtension(zipPath);
 
@@ -567,6 +592,13 @@ namespace RommPlugin.Services
 
                 if (Directory.Exists(extractDir))
                 {
+                    // A folder that was not there when this attempt started
+                    // appeared during the (long) extraction: another run created
+                    // it. Never delete it — that is exactly what produced ghost
+                    // installs. Fail this attempt and leave the folder alone.
+                    if (!destinationExistedAtStart)
+                        throw new IOException($"Destination '{extractDir}' appeared during extraction; leaving it untouched to avoid destroying another install.");
+
                     if (!RommArchiveHelper.DeleteDirectoryRobust(extractDir))
                         throw new IOException($"Could not clear existing folder '{extractDir}' (locked?). Close other programs and retry.");
                 }
