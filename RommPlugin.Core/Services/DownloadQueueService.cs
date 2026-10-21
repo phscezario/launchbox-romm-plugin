@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using RommPlugin.Core.Constants;
+using RommPlugin.Core.Decisions;
 using RommPlugin.Core.Helpers;
 using RommPlugin.Core.Logging;
 using System.Net.Http;
@@ -28,6 +29,10 @@ namespace RommPlugin.Core.Services
         private readonly string _stateFilePath;
         private readonly string _romsPath;
         private readonly object _lock = new object();
+        private readonly HashSet<int> _removedIds = new HashSet<int>();
+
+        /// <summary>Serializes the read-merge-write sequence of <see cref="SaveState"/>.</summary>
+        private readonly object _saveLock = new object();
         private CancellationTokenSource _cts;
 
         /// <summary>
@@ -119,6 +124,7 @@ namespace RommPlugin.Core.Services
                     FilePath = localFile,
                     PartFilePath = localFile + ".part",
                     Status = DownloadStatus.Pending,
+                    StatusUpdatedAt = DateTime.UtcNow,
                     AddedAt = DateTime.UtcNow,
                     Cts = new CancellationTokenSource()
                 };
@@ -133,30 +139,67 @@ namespace RommPlugin.Core.Services
         /// <inheritdoc/>
         public void StartNext()
         {
-            List<DownloadItem> toStart;
+            var toStart = new List<DownloadItem>();
+
             lock (_lock)
             {
-                toStart = _items
-                    .Where(i => i.Status == DownloadStatus.Pending)
-                    .Take(_semaphore.CurrentCount)
-                    .ToList();
+                // Reserve each slot synchronously: two concurrent passes must
+                // never hand the same Pending item to two workers, which ends in
+                // a FileShare.None clash on the .part file (looks like "one at a
+                // time" and a random Failed row).
+                while (_semaphore.Wait(0))
+                {
+                    var item = _items.FirstOrDefault(i => i.Status == DownloadStatus.Pending);
+                    if (item == null)
+                    {
+                        _semaphore.Release();
+                        break;
+                    }
+
+                    item.Status = DownloadStatus.Downloading;
+                    toStart.Add(item);
+                }
             }
 
             foreach (var item in toStart)
             {
-                StartDownload(item);
+                try
+                {
+                    StartDownload(item);
+                }
+                catch (Exception ex)
+                {
+                    // A reserved slot must never be stranded: without this the
+                    // queue would stop starting downloads for the rest of the
+                    // session. Task.Run failing is the only realistic trigger.
+                    RommLogger.LogError($"[Download] Game {item.GameId} could not be started: {ex.Message}");
+                    item.Status = DownloadStatus.Failed;
+                    item.Error = ex.Message;
+                    try { _semaphore.Release(); } catch { }
+                    ItemStateChanged?.Invoke(item);
+                    SaveState();
+                }
             }
         }
 
         private void StartDownload(DownloadItem item)
         {
+            // The concurrency slot was already reserved by StartNext; this task
+            // owns it until it finishes and releases it exactly once.
             Task.Run(async () =>
             {
-                await _semaphore.WaitAsync(_cts.Token);
                 try
                 {
-                    item.Status = DownloadStatus.Downloading;
-                    ItemStateChanged?.Invoke(item);
+                    // The start notification lives inside the task, not in
+                    // StartNext: a throwing subscriber must not stop the
+                    // download from starting while its slot is already
+                    // reserved, which would leak the slot and wedge the queue.
+                    try { ItemStateChanged?.Invoke(item); }
+                    catch (Exception notifyEx)
+                    {
+                        RommLogger.LogError($"[Download] State listener failed for game {item.GameId}: {notifyEx.Message}");
+                    }
+
                     await DownloadWithResumeAsync(item, item.Cts.Token);
                 }
                 catch (OperationCanceledException)
@@ -166,7 +209,14 @@ namespace RommPlugin.Core.Services
                     bool userCancel = false;
                     try { userCancel = item.Cts?.IsCancellationRequested == true; } catch { }
 
-                    if (!userCancel)
+                    if (item.PreservePartFile)
+                    {
+                        // The row was dropped from the queue while queued or in
+                        // flight: leave the .part untouched so a later re-queue
+                        // resumes instead of restarting from zero.
+                        RommLogger.Log($"[Download] Game {item.GameId} '{item.GameName}': row dropped, keeping partial file for resume");
+                    }
+                    else if (!userCancel)
                     {
                         item.Status = DownloadStatus.Failed;
                         item.Error = "Download stalled (no data received)";
@@ -177,6 +227,8 @@ namespace RommPlugin.Core.Services
                         try { if (File.Exists(item.PartFilePath)) File.Delete(item.PartFilePath); }
                         catch { }
                     }
+
+                    SaveState();
                 }
                 catch (Exception ex)
                 {
@@ -186,6 +238,7 @@ namespace RommPlugin.Core.Services
                     item.Status = DownloadStatus.Failed;
                     item.Error = ex.Message;
                     ItemStateChanged?.Invoke(item);
+                    SaveState();
                 }
                 finally
                 {
@@ -234,8 +287,11 @@ namespace RommPlugin.Core.Services
                         existingBytes = 0;
                     }
 
-                    totalBytes = existingBytes +
-                        (response.Content.Headers.ContentLength ?? 0);
+                    // Prefer the server's own total (Content-Range) — RomM may
+                    // stream without Content-Length, which used to leave
+                    // TotalBytes at 0 and the progress bar dead at 0%.
+                    totalBytes = response.Content.Headers.ContentRange?.Length
+                        ?? (existingBytes + (response.Content.Headers.ContentLength ?? 0));
 
                     item.TotalBytes = totalBytes;
                     item.BytesReceived = existingBytes;
@@ -250,6 +306,7 @@ namespace RommPlugin.Core.Services
                         var buffer = new byte[RommConstants.HttpBufferSize];
                         int bytesRead;
                         var lastProgressUpdate = DateTime.UtcNow;
+                        var lastStateSave = DateTime.UtcNow;
 
                         // Sliding stall timeout: a hung connection aborts even though
                         // the client has no overall timeout (large ROMs need it).
@@ -268,6 +325,15 @@ namespace RommPlugin.Core.Services
                                 UpdateProgress(item);
                                 ProgressChanged?.Invoke(item);
                                 lastProgressUpdate = now;
+
+                                // Persist periodically so download-state.json
+                                // tracks the real byte count instead of freezing
+                                // at the value from the last status change.
+                                if ((now - lastStateSave).TotalSeconds >= 5)
+                                {
+                                    SaveState();
+                                    lastStateSave = now;
+                                }
                             }
                         }
                     }
@@ -282,6 +348,7 @@ namespace RommPlugin.Core.Services
             }
 
             var finalPath = item.FilePath;
+            var isZipContent = false;
             try
             {
                 using (var fs = File.OpenRead(item.PartFilePath))
@@ -289,8 +356,8 @@ namespace RommPlugin.Core.Services
                     var header = new byte[4];
                     if (fs.Read(header, 0, 4) == 4)
                     {
-                        var isZipContent = header[0] == 0x50 && header[1] == 0x4B &&
-                                           header[2] == 0x03 && header[3] == 0x04;
+                        isZipContent = header[0] == 0x50 && header[1] == 0x4B &&
+                                       header[2] == 0x03 && header[3] == 0x04;
                         var hasZipExtension = finalPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
 
                         if (isZipContent && !hasZipExtension)
@@ -313,8 +380,30 @@ namespace RommPlugin.Core.Services
 
             File.Move(item.PartFilePath, finalPath);
             item.FilePath = finalPath;
+
+            // Integrity gate: a truncated/corrupt archive must never reach the
+            // install pass as "Installing". Opening the central directory here
+            // is cheap even for a multi-gigabyte ROM and catches the failure now
+            // instead of minutes into an extraction. Failing with the corrupt
+            // marker routes the item into the existing delete + re-download flow
+            // (bounded by MaxCorruptArchiveRedownloads).
+            if (!DownloadArchiveDecider.IsReleasable(finalPath, isZipContent))
+            {
+                RommLogger.LogError($"[Download] Game {item.GameId} '{item.GameName}': downloaded archive is unreadable (corrupt/truncated) at '{finalPath}'");
+                item.Status = DownloadStatus.Failed;
+                item.Error = RommConstants.CorruptArchiveMarker;
+                item.CompletedAt = DateTime.UtcNow;
+                item.StatusUpdatedAt = DateTime.UtcNow;
+                item.SpeedBytesPerSecond = 0;
+                item.EstimatedTimeRemaining = TimeSpan.Zero;
+                SaveState();
+                ItemStateChanged?.Invoke(item);
+                return;
+            }
+
             item.Status = DownloadStatus.WaitingInstall;
             item.CompletedAt = DateTime.UtcNow;
+            item.StatusUpdatedAt = DateTime.UtcNow;
             item.SpeedBytesPerSecond = 0;
             item.EstimatedTimeRemaining = TimeSpan.Zero;
             SaveState();
@@ -386,12 +475,20 @@ namespace RommPlugin.Core.Services
                 var item = _items.FirstOrDefault(i => i.GameId == gameId);
                 if (item == null) return;
 
+                // Only discard the partial file of a dead item. A queued or
+                // in-flight transfer keeps its .part (and is told to preserve it)
+                // so dropping the row never destroys a resumable download.
+                item.PreservePartFile = item.Status == DownloadStatus.Pending
+                    || item.Status == DownloadStatus.Downloading;
+
                 try { item.Cts?.Cancel(); } catch { }
                 _items.Remove(item);
+                _removedIds.Add(gameId);
                 removed = item;
             }
 
             if (removed != null
+                && !removed.PreservePartFile
                 && !string.IsNullOrEmpty(removed.PartFilePath)
                 && File.Exists(removed.PartFilePath))
             {
@@ -430,6 +527,8 @@ namespace RommPlugin.Core.Services
 
                 foreach (var item in toRemove)
                 {
+                    _removedIds.Add(item.GameId);
+
                     if (!string.IsNullOrEmpty(item.PartFilePath) && File.Exists(item.PartFilePath))
                     {
                         try { File.Delete(item.PartFilePath); } catch { }
@@ -457,6 +556,10 @@ namespace RommPlugin.Core.Services
                 {
                     item.Status = DownloadStatus.Installed;
                     item.CompletedAt = DateTime.UtcNow;
+                    item.StatusUpdatedAt = DateTime.UtcNow;
+                    // A row that succeeded must not keep the error of a previous
+                    // attempt in the file (the UI showed a stale message).
+                    item.Error = null;
                     ItemStateChanged?.Invoke(item);
                 }
             }
@@ -472,7 +575,11 @@ namespace RommPlugin.Core.Services
                 if (item != null)
                 {
                     item.Status = DownloadStatus.Failed;
+                    item.StatusUpdatedAt = DateTime.UtcNow;
                     item.Error = error;
+                    // A failure is not a completion: leaving the old timestamp
+                    // made the row look settled in the UI.
+                    item.CompletedAt = null;
                     ItemStateChanged?.Invoke(item);
                 }
             }
@@ -482,6 +589,7 @@ namespace RommPlugin.Core.Services
         /// <inheritdoc/>
         public void RetryInstall(int gameId)
         {
+            DownloadItem retried = null;
             lock (_lock)
             {
                 var item = _items.FirstOrDefault(i => i.GameId == gameId && (i.Status == DownloadStatus.Failed || i.Status == DownloadStatus.Cancelled));
@@ -490,10 +598,21 @@ namespace RommPlugin.Core.Services
                     item.Status = DownloadStatus.WaitingInstall;
                     item.Error = null;
                     item.RetryCount = 0;
-                    ItemStateChanged?.Invoke(item);
-                    SaveState();
+                    // A user Retry must beat a Failed verdict already on disk;
+                    // without this stamp the merge (and the UI reconcile) would
+                    // revert it a couple of seconds later.
+                    item.StatusUpdatedAt = DateTime.UtcNow;
+                    retried = item;
                 }
             }
+
+            if (retried == null) return;
+
+            // Persist before announcing: the install pass this event triggers
+            // reads the shared file, and with the save still pending it found
+            // nothing and only retried a delay later.
+            SaveState();
+            ItemStateChanged?.Invoke(retried);
         }
 
         /// <inheritdoc/>
@@ -505,10 +624,16 @@ namespace RommPlugin.Core.Services
                 if (item != null)
                 {
                     // Keep any existing .part: resume continues where it stopped.
-                    // A corrupt archive is handled by deleting FilePath first.
+                    // Re-derive the counters from that file instead of trusting
+                    // stale values from the previous attempt.
                     item.Status = DownloadStatus.Pending;
                     item.Error = null;
                     item.RetryCount = 0;
+                    item.StatusUpdatedAt = DateTime.UtcNow;
+                    item.BytesReceived = PartLength(item);
+                    item.TotalBytes = 0;
+                    item.SpeedBytesPerSecond = 0;
+                    item.EstimatedTimeRemaining = TimeSpan.Zero;
                     item.Cts?.Dispose();
                     item.Cts = new CancellationTokenSource();
                     ItemStateChanged?.Invoke(item);
@@ -516,6 +641,25 @@ namespace RommPlugin.Core.Services
             }
             SaveState();
             StartNext();
+        }
+
+        /// <summary>
+        /// Byte count already on disk for an item's partial file. This is the
+        /// only trustworthy progress value while the queue is not transferring
+        /// (the in-memory counters may be stale or from another attempt).
+        /// </summary>
+        private static long PartLength(DownloadItem item)
+        {
+            try
+            {
+                return !string.IsNullOrEmpty(item.PartFilePath) && File.Exists(item.PartFilePath)
+                    ? new FileInfo(item.PartFilePath).Length
+                    : 0;
+            }
+            catch
+            {
+                return 0;
+            }
         }
 
         private void CheckAllCompleted()
@@ -536,24 +680,93 @@ namespace RommPlugin.Core.Services
         /// <inheritdoc/>
         public void SaveState()
         {
+            // Serialized: the 5 s auto-save and a UI action (Retry, Remove, ...)
+            // used to interleave read -> merge -> write. The later write then
+            // persisted a snapshot read before the earlier one, dropping the row
+            // it had just added or re-asserting a status it had settled.
+            lock (_saveLock)
+            {
+                SaveStateCore();
+            }
+        }
+
+        private void SaveStateCore()
+        {
             try
             {
-                DownloadState state;
+                List<DownloadItem> local;
+                List<int> removed;
                 lock (_lock)
                 {
-                    state = new DownloadState
-                    {
-                        Items = _items.ToList(),
-                        LastUpdated = DateTime.UtcNow
-                    };
+                    local = _items.ToList();
+                    removed = _removedIds.ToList();
                 }
+
+                // The state file is shared with every LaunchBox instance. Merge
+                // instead of overwriting: an install verdict (Installed/Failed)
+                // written by the other instance, or a download it started, must
+                // not be erased by this process's snapshot.
+                var onDisk = ReadStateItems();
+                if (onDisk == null)
+                {
+                    // Unreadable right now (another writer replacing it). Keep the
+                    // local state in memory and retry on the next save: writing a
+                    // memory-only snapshot here would drop the other instance's
+                    // rows and could resurrect or erase verdicts.
+                    RommLogger.LogError("Download state file unreadable; skipping this save to preserve the rows written by the other instance.");
+                    return;
+                }
+
+                var merged = DownloadStateMerger.MergeForQueueSave(local, onDisk, removed);
+
+                var state = new DownloadState
+                {
+                    Items = merged,
+                    LastUpdated = DateTime.UtcNow
+                };
 
                 var json = JsonConvert.SerializeObject(state, Formatting.Indented);
                 SafeFileWriter.WriteAllText(_stateFilePath, json);
+
+                lock (_lock)
+                {
+                    // Only the removals this snapshot carried: a Remove that ran
+                    // while the file was being written must still be saved.
+                    foreach (var id in removed)
+                    {
+                        _removedIds.Remove(id);
+                    }
+                }
             }
             catch (Exception ex)
             {
                 RommLogger.LogError($"Failed to save download state: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Reads the current items from the shared state file. A missing file
+        /// counts as empty; an unreadable one returns <c>null</c> so the caller
+        /// can skip the round instead of writing a memory-only state that erases
+        /// every row the other instance owns.
+        /// </summary>
+        private List<DownloadItem> ReadStateItems()
+        {
+            try
+            {
+                if (!File.Exists(_stateFilePath)) return new List<DownloadItem>();
+
+                var json = File.ReadAllText(_stateFilePath);
+                var state = JsonConvert.DeserializeObject<DownloadState>(json);
+                if (state == null) return null;
+
+                // "Items": null is a valid, empty queue (not an unreadable one):
+                // returning null here made SaveState skip forever.
+                return state.Items ?? new List<DownloadItem>();
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -573,11 +786,36 @@ namespace RommPlugin.Core.Services
 
                 lock (_lock)
                 {
+                    // A download running in this process must survive a reload:
+                    // clearing it orphans the live worker, and re-adding the same
+                    // id as Pending starts a second worker on the same .part
+                    // (FileShare.None -> instant Failed). Closing and reopening
+                    // the manager during a download used to do exactly that.
+                    var active = _items
+                        .Where(i => i.Status == DownloadStatus.Downloading && i.Cts != null)
+                        .ToList();
+                    var activeIds = new HashSet<int>(active.Select(i => i.GameId));
+
                     _items.Clear();
+                    // _removedIds is kept on purpose: a removal that has not been
+                    // persisted yet must not be resurrected by this reload.
                     var seen = new Dictionary<int, DownloadItem>();
+
+                    foreach (var live in active)
+                    {
+                        // Only indexed here: the loop below adds every entry of
+                        // `seen` to `_items` exactly once.
+                        seen[live.GameId] = live;
+                    }
 
                     foreach (var item in state.Items)
                     {
+                        if (item == null) continue;
+                        if (activeIds.Contains(item.GameId)) continue;
+                        // A removal whose save has not landed yet must not be
+                        // resurrected by this reload.
+                        if (_removedIds.Contains(item.GameId)) continue;
+
                         if (item.Status == DownloadStatus.Completed ||
                             item.Status == DownloadStatus.Installed ||
                             item.Status == DownloadStatus.Cancelled)
@@ -589,6 +827,19 @@ namespace RommPlugin.Core.Services
                             item.Status == DownloadStatus.Pending)
                         {
                             item.Status = DownloadStatus.Pending;
+                            // Cts is [JsonIgnore]: a row restored from the file has
+                            // no token, and StartNext dereferences item.Cts.Token.
+                            // Without this the resumed download dies with an NRE and
+                            // the row shows a random Failed.
+                            if (item.Cts == null)
+                                item.Cts = new CancellationTokenSource();
+                            // Nothing is transferring yet: re-derive the counters
+                            // from the .part on disk so a restart shows the real
+                            // resume position instead of a frozen 0/0.
+                            item.BytesReceived = PartLength(item);
+                            item.TotalBytes = 0;
+                            item.SpeedBytesPerSecond = 0;
+                            item.EstimatedTimeRemaining = TimeSpan.Zero;
                         }
 
                         if (seen.TryGetValue(item.GameId, out var existing))

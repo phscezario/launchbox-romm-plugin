@@ -25,10 +25,18 @@ namespace RommPlugin.Core.Services
         GameFieldSnapshot FindByRommId(int rommGameId);
 
         /// <summary>
-        /// Clears additional applications plus ApplicationPath/Installed flags
-        /// for an uninstall. Mirrors the Game Manager behavior.
+        /// Removes the additional applications the plugin created for a game
+        /// (DLC and loader entries). These are recorded in a config file inside
+        /// the installed folder, so this must run while that folder still
+        /// exists, i.e. before the files are deleted.
         /// </summary>
-        void ClearForUninstall(int rommGameId, string installedPath);
+        void ClearAdditionalApplications(int rommGameId, string installedPath);
+
+        /// <summary>
+        /// Detaches the LaunchBox entry (ApplicationPath/Installed) for an
+        /// uninstall. Runs only after the files are gone.
+        /// </summary>
+        void DetachForUninstall(int rommGameId);
 
         /// <summary>
         /// Writes back a true folder flag when disk evidence overrode a stale

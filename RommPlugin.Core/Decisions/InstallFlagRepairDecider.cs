@@ -17,15 +17,8 @@ namespace RommPlugin.Core.Decisions
         /// <summary>Whether the game files are gone and a re-download must be queued.</summary>
         public bool RequeueDownload { get; set; }
 
-        /// <summary>
-        /// Whether the installed-games record is stale (files gone) and must be
-        /// dropped so the Game Manager stops reporting the game as installed.
-        /// Without this the record survives forever and re-queues on every start.
-        /// </summary>
-        public bool ClearRecord { get; set; }
-
         /// <summary>Whether any action is required at all.</summary>
-        public bool NeedsAction => RepairFields || RequeueDownload || ClearRecord;
+        public bool NeedsAction => RepairFields || RequeueDownload;
     }
 
     /// <summary>
@@ -53,10 +46,11 @@ namespace RommPlugin.Core.Decisions
 
             if (!InstalledPathExists(record.InstalledPath))
             {
-                // Files are gone: this record is a ghost. Drop it as well as
-                // re-queueing, otherwise the row keeps showing as installed.
+                // Files are gone: re-queue the download. The record is left in
+                // place on purpose — the uninstall flow (and only it) owns
+                // dropping records, so automatic repair can never make a game
+                // vanish from the Game Manager while a transfer is in progress.
                 decision.RequeueDownload = true;
-                decision.ClearRecord = true;
                 return decision;
             }
 

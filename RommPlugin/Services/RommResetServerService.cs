@@ -50,6 +50,8 @@ namespace RommPlugin.Services
 
                     foreach (var rommPlatform in rommPlatforms)
                     {
+                        progress.CancellationToken.ThrowIfCancellationRequested();
+
                         var rommGames = await _api.GetAllGamesByPlatformAsync(rommPlatform.Id);
 
                         if (rommGames == null)
@@ -66,6 +68,7 @@ namespace RommPlugin.Services
 
                         foreach (var rommGame in rommGames)
                         {
+                            progress.CancellationToken.ThrowIfCancellationRequested();
                             progress.SetStatus($"Platform: {platformsCompleted} of {platformsTotal} | Games for this platform: {completedGames} of {totalGames}");
 
                             await _api.RemoveGameMetadataById(rommGame.Id);

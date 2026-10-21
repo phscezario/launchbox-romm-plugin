@@ -36,7 +36,9 @@ namespace RommPlugin.Services
                     }
 
                     var sync = new RommProcessInstallUninstallService();
-                    form.SetApplyPendingHandler(() => sync.ProcessInstallUninstallEvents(false));
+                    form.SetApplyPendingHandler(
+                        () => sync.ProcessInstallUninstallEvents(false),
+                        () => sync.LastRunWasCancelled);
                     form.FormClosed += (s, e) => { _form = null; };
                     _form = form;
                     _form.Show();

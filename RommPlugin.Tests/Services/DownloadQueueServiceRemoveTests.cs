@@ -58,16 +58,39 @@ namespace RommPlugin.Tests.Services
         }
 
         [Fact]
-        public void Remove_DeletesPartFile()
+        public void Remove_DeletesPartFile_ForDeadItem()
         {
             _service.Enqueue(3, "Game", "game.zip", "PS3");
+            WaitForStatus(3, DownloadStatus.Failed);
             var part = _service.Items.First(i => i.GameId == 3).PartFilePath;
             Directory.CreateDirectory(Path.GetDirectoryName(part));
             File.WriteAllText(part, "partial");
 
             _service.Remove(3);
 
+            // A dead row has nothing worth resuming.
             Assert.False(File.Exists(part));
+        }
+
+        [Fact]
+        public void Remove_KeepsPartFile_ForActiveItem()
+        {
+            _service.Enqueue(4, "Game", "game.zip", "PS3");
+            WaitForStatus(4, DownloadStatus.Failed);
+            var item = _service.Items.First(i => i.GameId == 4);
+            var part = item.PartFilePath;
+            Directory.CreateDirectory(Path.GetDirectoryName(part));
+            File.WriteAllText(part, "partial");
+
+            // Simulate a queued/in-flight transfer. The background task has
+            // already settled, so nothing overwrites this status before Remove.
+            item.Status = DownloadStatus.Downloading;
+
+            _service.Remove(4);
+
+            // Dropping the row must never destroy a resumable large download.
+            Assert.True(File.Exists(part));
+            Assert.Empty(_service.Items.Where(i => i.GameId == 4));
         }
 
         [Fact]
@@ -110,6 +133,108 @@ namespace RommPlugin.Tests.Services
                 Assert.NotNull(item);
                 Assert.Equal(DownloadStatus.Failed, item.Status);
             }
+        }
+
+        [Fact]
+        public void SaveState_DoesNotReplaceAnUnreadableFile()
+        {
+            // skip instead of writing a memory-only snapshot that erases every
+            // row the other LaunchBox instance owns.
+            File.WriteAllText(_stateFile, "{ not json");
+
+            _service.SaveState();
+
+            Assert.Equal("{ not json", File.ReadAllText(_stateFile));
+        }
+
+        [Fact]
+        public void LoadState_KeepsADownloadRunningInThisProcess()
+        {
+            _service.Enqueue(20, "Game", "game.zip", "PS3");
+            WaitForStatus(20, DownloadStatus.Failed);
+
+            // Simulate a live transfer: the background task already settled, so
+            // nothing overwrites this status before LoadState.
+            var live = _service.Items.First(i => i.GameId == 20);
+            live.Status = DownloadStatus.Downloading;
+
+            // The file still lists it as queued (older save / other instance).
+            // Re-adding it as Pending would start a second worker on the same
+            // .part, which fails instantly and shows the row as Failed.
+            File.WriteAllText(
+                _stateFile,
+                "{\"Items\":[{\"GameId\":20,\"GameName\":\"Game\",\"FsName\":\"game.zip\",\"FsPath\":\"PS3\",\"Status\":0}]}");
+
+            _service.LoadState();
+
+            var reloaded = Assert.Single(_service.Items.Where(i => i.GameId == 20));
+            Assert.Equal(DownloadStatus.Downloading, reloaded.Status);
+        }
+
+        [Fact]
+        public void LoadState_DoesNotResurrectAnItemWhoseSaveWasSkipped()
+        {
+            _service.Enqueue(30, "Game", "game.zip", "PS3");
+            WaitForStatus(30, DownloadStatus.Failed);
+
+            // Make the shared file unreadable so Remove cannot persist: the
+            // removal stays in memory, which is what happens on a transient IO
+            // failure while another instance replaces the file.
+            File.WriteAllText(_stateFile, "{ not json");
+            _service.Remove(30);
+
+            // The file becomes readable again with the removed row still in it.
+            File.WriteAllText(
+                _stateFile,
+                "{\"Items\":[{\"GameId\":30,\"GameName\":\"Game\",\"FsName\":\"game.zip\",\"FsPath\":\"PS3\",\"Status\":4}]}");
+
+            _service.LoadState();
+
+            Assert.Empty(_service.Items.Where(i => i.GameId == 30));
+        }
+
+        [Fact]
+        public void LoadState_GivesARestoredPendingItemAToken()
+        {
+            // Cts is [JsonIgnore]: without one, StartNext dereferences a null
+            // token and the resumed download fails as a random error.
+            File.WriteAllText(
+                _stateFile,
+                "{\"Items\":[{\"GameId\":40,\"GameName\":\"Game\",\"FsName\":\"game.zip\",\"FsPath\":\"PS3\",\"Status\":0}]}");
+
+            _service.LoadState();
+
+            var item = Assert.Single(_service.Items.Where(i => i.GameId == 40));
+            Assert.NotNull(item.Cts);
+        }
+
+        [Fact]
+        public void InstallPending_ClearsAPreviousError()
+        {
+            _service.Enqueue(50, "Game", "game.zip", "PS3");
+            var item = _service.Items.First(i => i.GameId == 50);
+            item.Status = DownloadStatus.WaitingInstall;
+            item.Error = "old failure";
+
+            _service.InstallPending(50);
+
+            Assert.Equal(DownloadStatus.Installed, item.Status);
+            Assert.Null(item.Error);
+        }
+
+        [Fact]
+        public void MarkInstallFailed_ClearsAPreviousCompletion()
+        {
+            _service.Enqueue(51, "Game", "game.zip", "PS3");
+            var item = _service.Items.First(i => i.GameId == 51);
+            item.Status = DownloadStatus.WaitingInstall;
+            item.CompletedAt = new DateTime(2026, 10, 20, 8, 0, 0, DateTimeKind.Utc);
+
+            _service.MarkInstallFailed(51, "boom");
+
+            Assert.Equal(DownloadStatus.Failed, item.Status);
+            Assert.Null(item.CompletedAt);
+            Assert.Equal("boom", item.Error);
         }
 
         private DownloadQueueService CreateService()

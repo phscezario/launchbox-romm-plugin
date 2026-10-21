@@ -40,12 +40,19 @@ namespace RommPlugin.Services
             };
         }
 
-        public void ClearForUninstall(int rommGameId, string installedPath)
+        public void ClearAdditionalApplications(int rommGameId, string installedPath)
         {
             var game = FindGame(rommGameId);
             if (game == null) return;
 
             RommPlugin.Helpers.RommGameHelpers.ClearGameAdditionalApplications(game, installedPath);
+        }
+
+        public void DetachForUninstall(int rommGameId)
+        {
+            var game = FindGame(rommGameId);
+            if (game == null) return;
+
             game.ApplicationPath = null;
             game.Installed = false;
         }

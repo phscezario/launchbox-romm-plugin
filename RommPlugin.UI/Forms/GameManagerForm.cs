@@ -35,9 +35,29 @@ namespace RommPlugin.UI.Forms
         private readonly Timer _uiTimer;
         private readonly Mutex _mutex;
         private bool _formClosing;
-        private bool _isProcessing;
+        private int _isProcessing;
+
+        /// <summary>
+        /// Games already logged as "record not visible yet" by the reconcile, to
+        /// avoid one line every two seconds while LaunchBox refreshes its data.
+        /// </summary>
+        private readonly HashSet<int> _reconcileWaitingLogged = new HashSet<int>();
         private bool _isUninstalling;
+        private int _installRetryCount;
+        private int _reconcileTick;
         private Func<Task> _onApplyPending;
+        private Func<bool> _lastApplyWasCancelled;
+
+        /// <summary>
+        /// Consecutive install passes that changed nothing while items were still
+        /// waiting to install. Those passes were skipped (the single-flight lock
+        /// was held by a run that had not finished) or read a stale state file, so
+        /// the trigger must be retried instead of dropped.
+        /// </summary>
+        private const int MaxInstallRetries = 3;
+
+        /// <summary>Delay before retrying a skipped install pass.</summary>
+        private static readonly TimeSpan InstallRetryDelay = TimeSpan.FromSeconds(10);
 
         /// <summary>
         /// Gets a value indicating whether the form initialized successfully.
@@ -105,9 +125,14 @@ namespace RommPlugin.UI.Forms
         /// Sets the handler to be invoked when pending downloads are ready for installation.
         /// </summary>
         /// <param name="handler">The asynchronous handler to execute when applying pending items.</param>
-        public void SetApplyPendingHandler(Func<Task> handler)
+        /// <param name="lastRunWasCancelled">
+        /// Optional probe for whether the last install run was cancelled by the
+        /// user, so a cancel does not immediately reopen the progress window.
+        /// </param>
+        public void SetApplyPendingHandler(Func<Task> handler, Func<bool> lastRunWasCancelled = null)
         {
             _onApplyPending = handler;
+            _lastApplyWasCancelled = lastRunWasCancelled;
         }
 
         private void OnFormLoad(object sender, EventArgs e)
@@ -122,7 +147,7 @@ namespace RommPlugin.UI.Forms
             ProcessPendingUninstalls();
             _queueWatcher.Start();
 
-            if (_onApplyPending != null && _queueService.Items.Any(i => i.Status == DownloadStatus.WaitingInstall))
+            if (_onApplyPending != null && HasWaitingInstallInStateFile())
             {
                 var _ = AutoInstallAsync();
             }
@@ -186,7 +211,7 @@ namespace RommPlugin.UI.Forms
                 i.Status == DownloadStatus.Downloading ||
                 i.Status == DownloadStatus.Pending ||
                 i.Status == DownloadStatus.WaitingInstall ||
-                _isProcessing || _isUninstalling);
+                Volatile.Read(ref _isProcessing) != 0 || _isUninstalling);
 
             if (hasActive)
             {
@@ -204,9 +229,20 @@ namespace RommPlugin.UI.Forms
             _formClosing = true;
             _uiTimer.Stop();
             _queueWatcher.Stop();
+
+            // The queue is a DI singleton that outlives this form. Leaving these
+            // subscribed kept every closed form alive and let the handlers run on
+            // the download thread after the handle was gone (InvokeRequired is
+            // false then, so they touched the grid directly and could fail the
+            // download that raised the event).
+            _queueService.ProgressChanged -= OnProgressChanged;
+            _queueService.AllDownloadsCompleted -= OnAllDownloadsCompleted;
+
             _queueService.SaveState();
             _installedService.RemoveUninstalled();
             _queueWatcher?.Dispose();
+            _uiTimer.Elapsed -= OnUiTimerElapsed;
+            _uiTimer.Dispose();
             try { _mutex?.ReleaseMutex(); }
             catch (Exception ex)
             {
@@ -217,9 +253,17 @@ namespace RommPlugin.UI.Forms
 
         private void OnQueueActionDetected(QueueAction action)
         {
+            if (IsDisposed || Disposing || _formClosing || !IsHandleCreated) return;
+
             if (InvokeRequired)
             {
-                BeginInvoke(new Action<QueueAction>(OnQueueActionDetected), action);
+                try
+                {
+                    BeginInvoke(new Action<QueueAction>(OnQueueActionDetected), action);
+                }
+                catch (Exception)
+                {
+                }
                 return;
             }
 
@@ -241,14 +285,34 @@ namespace RommPlugin.UI.Forms
             {
                 if (item != null && item.Status == DownloadStatus.WaitingInstall && _onApplyPending != null)
                 {
-                    Task.Run(() => _onApplyPending());
+                    // Route through the same path as every other trigger: calling
+                    // the install service directly here skipped InstallPending and
+                    // the installed-games registration, so a game that finished
+                    // downloading while the manager was closing got extracted but
+                    // stayed "Installing" forever with no record.
+                    //
+                    // A cancel is a user decision here too: do not reopen the
+                    // window the user just closed.
+                    if (_lastApplyWasCancelled != null && _lastApplyWasCancelled())
+                        return;
+
+                    var _ = AutoInstallAsync();
                 }
                 return;
             }
 
             if (InvokeRequired)
             {
-                BeginInvoke(new Action<DownloadItem>(OnItemStateChanged), item);
+                if (IsDisposed || !IsHandleCreated) return;
+
+                try
+                {
+                    BeginInvoke(new Action<DownloadItem>(OnItemStateChanged), item);
+                }
+                catch (Exception)
+                {
+                    // Handle destroyed while closing.
+                }
                 return;
             }
 
@@ -256,16 +320,21 @@ namespace RommPlugin.UI.Forms
 
             if (item != null && item.Status == DownloadStatus.WaitingInstall && _onApplyPending != null)
             {
+                // Fresh external trigger: restart the bounded retry series, or a
+                // few no-progress runs earlier in the session would disable
+                // retries for good.
+                _installRetryCount = 0;
                 var _ = AutoInstallAsync();
             }
         }
 
         private async Task AutoInstallAsync()
         {
-            if (_isProcessing) return;
-            // Cross-process single-flight now lives in the install service
-            // (ProcessInstallUninstallEvents), so every caller is covered.
-            _isProcessing = true;
+            // Interlocked: a download finishing on its worker thread and the UI
+            // can enter together. Two passes would open two progress windows and
+            // one would sit waiting on the install lock for nothing.
+            if (Interlocked.CompareExchange(ref _isProcessing, 1, 0) != 0) return;
+            var changed = false;
             try
             {
                 var stateBefore = GetDownloadStateMap();
@@ -280,7 +349,6 @@ namespace RommPlugin.UI.Forms
                 var failedIds = outcome.FailedIds;
 
                 var settings = RommPluginStorage.Load();
-                var changed = false;
 
                 foreach (var id in processedIds)
                 {
@@ -365,13 +433,86 @@ namespace RommPlugin.UI.Forms
             }
             finally
             {
-                _isProcessing = false;
-                if (!_formClosing && !IsDisposed && _onApplyPending != null &&
-                    _queueService.Items.Any(i => i.Status == DownloadStatus.WaitingInstall))
+                Interlocked.Exchange(ref _isProcessing, 0);
+
+                if (!_formClosing && !IsDisposed && _onApplyPending != null)
                 {
-                    var _ = AutoInstallAsync();
+                    // The shared state file is the only process-agnostic view of
+                    // pending work: another LaunchBox instance may have settled
+                    // items this process downloaded, and new downloads may have
+                    // completed while this pass was extracting. Reading memory
+                    // here is what left games stuck on "Installing" with the
+                    // archive intact on disk.
+                    var stillWaiting = HasWaitingInstallInStateFile();
+
+                    // A cancel is a user decision: do not reopen the window.
+                    var runCancelled = _lastApplyWasCancelled != null && _lastApplyWasCancelled();
+
+                    if (changed)
+                    {
+                        // Something moved: chain immediately. Each pass takes at
+                        // least one item out of WaitingInstall, so this drains
+                        // the backlog and terminates.
+                        _installRetryCount = 0;
+                        if (stillWaiting && !runCancelled)
+                        {
+                            RommLogger.Log("[GameManager] Pending installs remain in the shared state file; draining");
+                            var _ = AutoInstallAsync();
+                        }
+                    }
+                    else if (stillWaiting && !runCancelled && _installRetryCount < MaxInstallRetries)
+                    {
+                        // Nothing moved while items are still waiting to install:
+                        // the pass could not read the state file or the service
+                        // refused to run. Retry after a pause instead of dropping
+                        // the trigger. Re-entering on "still WaitingInstall"
+                        // alone must never happen without the delay, or this
+                        // recursed until the stack overflowed.
+                        _installRetryCount++;
+                        RommLogger.Log($"[GameManager] Install pass made no progress with pending items; retry {_installRetryCount}/{MaxInstallRetries}");
+                        RetryInstallPassLater();
+                    }
                 }
             }
+        }
+
+        /// <summary>
+        /// Retries a skipped install pass once, after a pause. Bounded by
+        /// <see cref="MaxInstallRetries"/> so a permanently stalled status does
+        /// not spin; the next external trigger (a new download finishing, or the
+        /// manager being reopened) starts a fresh series.
+        /// </summary>
+        private async void RetryInstallPassLater()
+        {
+            try
+            {
+                await Task.Delay(InstallRetryDelay);
+            }
+            catch
+            {
+                return;
+            }
+
+            if (IsDisposed || _formClosing || _onApplyPending == null) return;
+
+            // The user cancelled the last run: do not reopen the window it just
+            // closed, even on the scheduled retry.
+            if (_lastApplyWasCancelled != null && _lastApplyWasCancelled()) return;
+
+            if (!HasWaitingInstallInStateFile()) return;
+
+            var _ = AutoInstallAsync();
+        }
+
+        /// <summary>
+        /// True when the shared state file still lists items waiting to install.
+        /// Used instead of the in-memory queue so a trigger is never dropped
+        /// because another instance owned the item.
+        /// </summary>
+        private bool HasWaitingInstallInStateFile()
+        {
+            return GetDownloadStateMap().Values
+                .Any(i => i.Status == DownloadStatus.WaitingInstall);
         }
 
         private Dictionary<int, DownloadItem> GetDownloadStateMap()
@@ -379,20 +520,33 @@ namespace RommPlugin.UI.Forms
             var statePath = RommPaths.DownloadStateFile;
             var map = new Dictionary<int, DownloadItem>();
 
-            if (!File.Exists(statePath)) return map;
-
-            try
+            // A transient empty parse must be retried like a thrown read: the
+            // callers treat an empty map as "nothing pending", which is the
+            // dropped-trigger bug this whole path exists to avoid.
+            for (var attempt = 0; attempt < 3; attempt++)
             {
-                var json = File.ReadAllText(statePath);
-                var state = JsonConvert.DeserializeObject<DownloadState>(json);
-                foreach (var item in state?.Items ?? new List<DownloadItem>())
+                try
                 {
-                    if (item != null)
-                        map[item.GameId] = item;
+                    if (!File.Exists(statePath)) return map;
+
+                    var json = File.ReadAllText(statePath);
+                    var state = JsonConvert.DeserializeObject<DownloadState>(json);
+                    if (state == null) throw new InvalidDataException("download-state.json parsed as null");
+
+                    foreach (var item in state.Items ?? new List<DownloadItem>())
+                    {
+                        if (item != null)
+                            map[item.GameId] = item;
+                    }
+
+                    return map;
                 }
-            }
-            catch
-            {
+                catch
+                {
+                    map.Clear();
+                    if (attempt == 2) return map;
+                    Thread.Sleep(50);
+                }
             }
 
             return map;
@@ -410,7 +564,7 @@ namespace RommPlugin.UI.Forms
                 var state = JsonConvert.DeserializeObject<DownloadState>(json);
                 return new HashSet<int>(
                     (state?.Items ?? new List<DownloadItem>())
-                    .Where(i => i.Status == DownloadStatus.WaitingUninstall)
+                    .Where(i => i != null && i.Status == DownloadStatus.WaitingUninstall)
                     .Select(i => i.GameId));
             }
             catch
@@ -421,9 +575,18 @@ namespace RommPlugin.UI.Forms
 
         private void OnProgressChanged(DownloadItem item)
         {
+            if (IsDisposed || Disposing || _formClosing || !IsHandleCreated) return;
+
             if (InvokeRequired)
             {
-                BeginInvoke(new Action<DownloadItem>(OnProgressChanged), item);
+                try
+                {
+                    BeginInvoke(new Action<DownloadItem>(OnProgressChanged), item);
+                }
+                catch (Exception)
+                {
+                    // Handle destroyed between the check and the post.
+                }
                 return;
             }
 
@@ -433,9 +596,17 @@ namespace RommPlugin.UI.Forms
 
         private void OnAllDownloadsCompleted()
         {
+            if (IsDisposed || Disposing || _formClosing || !IsHandleCreated) return;
+
             if (InvokeRequired)
             {
-                BeginInvoke(new Action(OnAllDownloadsCompleted));
+                try
+                {
+                    BeginInvoke(new Action(OnAllDownloadsCompleted));
+                }
+                catch (Exception)
+                {
+                }
                 return;
             }
 
@@ -444,13 +615,98 @@ namespace RommPlugin.UI.Forms
 
         private void OnUiTimerElapsed(object sender, ElapsedEventArgs e)
         {
+            if (IsDisposed || Disposing || _formClosing || !IsHandleCreated) return;
+
             if (InvokeRequired)
             {
-                BeginInvoke(new Action(UpdateSummary));
+                try
+                {
+                    BeginInvoke(new Action(() => OnUiTimerElapsed(sender, e)));
+                }
+                catch (Exception)
+                {
+                    // Handle destroyed between the check and the post (closing):
+                    // nothing to update, and an escaped exception here would take
+                    // the process down.
+                }
                 return;
             }
 
             UpdateSummary();
+
+            // Cheap periodic reconcile (~2 s): the shared state file is the only
+            // cross-process view of installs another instance finished.
+            if (++_reconcileTick < 2) return;
+            _reconcileTick = 0;
+            ReconcileFromStateFile();
+        }
+
+        /// <summary>
+        /// Applies verdicts another LaunchBox instance already wrote to the
+        /// shared state file, so a row that shows "Installing" here becomes
+        /// Installed/Failed with its installed-games record in place.
+        /// </summary>
+        private void ReconcileFromStateFile()
+        {
+            if (_formClosing || IsDisposed || Volatile.Read(ref _isProcessing) != 0) return;
+
+            try
+            {
+                var map = GetDownloadStateMap();
+                if (map.Count == 0) return;
+
+                var actions = InstallStateReconciler.Decide(_queueService.Items, map);
+                if (actions.Count == 0) return;
+
+                var settings = RommPluginStorage.Load();
+
+                foreach (var action in actions)
+                {
+                    if (action.TargetStatus == DownloadStatus.Installed)
+                    {
+                        // Register first: marking the row Installed without a
+                        // record leaves a queue-only row that LoadState drops on
+                        // the next open, with no Retry button.
+                        RegisterInstalledGame(action.GameId, settings);
+
+                        if (_installedService.IsInstalled(action.GameId))
+                        {
+                            _queueService.InstallPending(action.GameId);
+                            RommLogger.Log($"[GameManager] Reconciled game {action.GameId} as Installed (settled by another LaunchBox instance)");
+                        }
+                        else if (_gateway.FindByRommId(action.GameId) == null)
+                        {
+                            // The other instance's record is not visible to this
+                            // one yet (LaunchBox data refresh). Writing Failed now
+                            // would outrank the Installed verdict on disk forever,
+                            // and the next Retry would fail with "ROM file not
+                            // found". Leave it waiting: the 2 s tick retries.
+                            if (_reconcileWaitingLogged.Add(action.GameId))
+                            {
+                                RommLogger.Log($"[GameManager] Reconciled game {action.GameId}: installed record not visible yet, will retry");
+                            }
+                        }
+                        else
+                        {
+                            _queueService.MarkInstallFailed(action.GameId, "Install completed but the LaunchBox record could not be created");
+                            RommLogger.LogError($"[GameManager] Reconciled game {action.GameId}: installed record missing, kept as Failed");
+                        }
+                    }
+                    else
+                    {
+                        _queueService.MarkInstallFailed(action.GameId, action.Error ?? "Install failed (check log)");
+                        RommLogger.Log($"[GameManager] Reconciled game {action.GameId} as Failed (settled by another LaunchBox instance)");
+                    }
+                }
+
+                RefreshList();
+            }
+            catch (Exception ex)
+            {
+                // Runs from a dispatched timer tick: an exception here would be
+                // unhandled and kill LaunchBox.
+                RommLogger.LogException(ex);
+            }
         }
 
         private void RefreshList()
@@ -885,10 +1141,13 @@ namespace RommPlugin.UI.Forms
         }
 
         /// <summary>
-        /// Returns the active record for an uninstall, adopting a valid install
-        /// found on disk when no record exists (e.g. registration was skipped).
-        /// Returns null when there is nothing installed to delete — callers must
-        /// not log success in that case.
+        /// Returns a record suitable for an uninstall. An active record is used
+        /// as-is; otherwise a VALID install found on disk is resolved into a
+        /// transient record. Nothing is persisted here: only the uninstall flow
+        /// writes records, so a cancelled or failed uninstall can never leave a
+        /// ghost "installed" entry behind (which used to appear before the user
+        /// even confirmed). Returns null when there is nothing installed to
+        /// delete — callers must not log success in that case.
         /// </summary>
         private InstalledGameRecord AdoptRecordIfMissing(int gameId)
         {
@@ -896,13 +1155,34 @@ namespace RommPlugin.UI.Forms
             if (record != null && !record.UninstalledAt.HasValue)
                 return record;
 
-            RegisterInstalledGame(gameId, RommPluginStorage.Load());
+            var settings = RommPluginStorage.Load();
+            if (settings == null) return null;
 
-            record = _installedService.GetByGameId(gameId);
-            if (record != null && !record.UninstalledAt.HasValue)
-                return record;
+            var snapshot = _gateway.FindByRommId(gameId);
+            if (snapshot == null) return null;
 
-            return null;
+            var isFolderGame = InstallValidation.IsFolderGameEffective(
+                snapshot.FolderFlagValue == bool.TrueString, settings.RomsPath, snapshot.RemotePath, snapshot.FileName);
+            var installedPath = InstallValidation.ResolveInstalledPath(
+                settings.RomsPath, snapshot.RemotePath, snapshot.FileName, isFolderGame);
+
+            bool valid = isFolderGame
+                ? InstallValidation.IsFolderInstallValid(installedPath)
+                : InstallValidation.IsFileInstallValid(installedPath);
+            if (!valid)
+                return null;
+
+            return new InstalledGameRecord
+            {
+                RommGameId = gameId,
+                Title = snapshot.Title,
+                Platform = snapshot.Platform,
+                Category = snapshot.Genre,
+                RemotePath = snapshot.RemotePath,
+                FileName = snapshot.FileName,
+                InstalledPath = installedPath,
+                InstalledAt = DateTime.UtcNow
+            };
         }
 
         private void BtnUninstallAll_Click(object sender, EventArgs e)
@@ -995,13 +1275,19 @@ namespace RommPlugin.UI.Forms
 
             try
             {
-                var json = File.ReadAllText(statePath);
-                var state = JsonConvert.DeserializeObject<DownloadState>(json);
+                var state = ReadDownloadStateFile(statePath);
                 var pendingItems = state?.Items?
-                    .Where(i => i.Status == DownloadStatus.WaitingUninstall)
+                    .Where(i => i != null && i.Status == DownloadStatus.WaitingUninstall)
                     .ToList();
 
                 if (pendingItems == null || pendingItems.Count == 0) return;
+
+                // Only the rows this run settles are written at the end, applied
+                // to a fresh read: deleting files takes seconds, and rewriting the
+                // initial snapshot would roll back a verdict (or a row) the install
+                // path committed meanwhile.
+                var settled = new Dictionary<int, DownloadItem>();
+                var removed = new HashSet<int>();
 
                 foreach (var item in pendingItems)
                 {
@@ -1009,8 +1295,10 @@ namespace RommPlugin.UI.Forms
                     if (record == null)
                     {
                         RommLogger.Log($"[Uninstall] Nothing installed to delete for GameId={item.GameId}, dropping request");
-                        item.Status = DownloadStatus.Completed;
-                        item.CompletedAt = DateTime.UtcNow;
+                        // Drop it through the queue too: its 5 s autosave would
+                        // otherwise rewrite the WaitingUninstall row and the
+                        // request would be processed again on the next open.
+                        _queueService.Remove(item.GameId);
                         continue;
                     }
 
@@ -1021,23 +1309,42 @@ namespace RommPlugin.UI.Forms
                         continue;
                     }
 
-                    item.Status = DownloadStatus.Completed;
-                    item.CompletedAt = DateTime.UtcNow;
+                    MarkUninstallSettled(item, settled);
                     // Drop from the persisted queue as well, or the save below
                     // would resurrect the row on next load.
-                    state.Items?.Remove(item);
+                    removed.Add(item.GameId);
                 }
 
-                var updatedJson = JsonConvert.SerializeObject(state, Formatting.Indented);
-                var tempPath = Path.Combine(Path.GetDirectoryName(statePath), $"download-state.{Guid.NewGuid():N}.tmp");
-                try
+                if (settled.Count == 0)
                 {
-                    File.WriteAllText(tempPath, updatedJson);
-                    File.Copy(tempPath, statePath, true);
+                    _gateway.Save();
+                    return;
                 }
-                finally
+
+                var fresh = ReadDownloadStateFile(statePath);
+                if (fresh?.Items == null)
                 {
-                    try { File.Delete(tempPath); } catch { }
+                    RommLogger.LogError("[Uninstall] download-state.json is unreadable; leaving the file untouched (rows stay settled in memory)");
+                }
+                else
+                {
+                    fresh.Items.RemoveAll(i => i != null && removed.Contains(i.GameId));
+
+                    foreach (var item in fresh.Items)
+                    {
+                        if (item == null) continue;
+                        if (!settled.TryGetValue(item.GameId, out var updated)) continue;
+
+                        // A newer change (queue/other instance) wins over this
+                        // snapshot's verdict.
+                        if (item.StatusUpdatedAt > updated.StatusUpdatedAt) continue;
+
+                        item.Status = updated.Status;
+                        item.CompletedAt = updated.CompletedAt;
+                        item.StatusUpdatedAt = updated.StatusUpdatedAt;
+                    }
+
+                    SafeFileWriter.WriteAllText(statePath, JsonConvert.SerializeObject(fresh, Formatting.Indented));
                 }
 
                 _gateway.Save();
@@ -1045,6 +1352,29 @@ namespace RommPlugin.UI.Forms
             catch (Exception ex)
             {
                 RommLogger.LogException(ex);
+            }
+        }
+
+        private static void MarkUninstallSettled(DownloadItem item, IDictionary<int, DownloadItem> settled)
+        {
+            item.Status = DownloadStatus.Completed;
+            item.CompletedAt = DateTime.UtcNow;
+            item.StatusUpdatedAt = DateTime.UtcNow;
+            settled[item.GameId] = item;
+        }
+
+        private static DownloadState ReadDownloadStateFile(string statePath)
+        {
+            try
+            {
+                if (!File.Exists(statePath)) return null;
+
+                var json = File.ReadAllText(statePath);
+                return JsonConvert.DeserializeObject<DownloadState>(json);
+            }
+            catch
+            {
+                return null;
             }
         }
 

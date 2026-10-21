@@ -149,8 +149,9 @@ namespace RommPlugin.Tests.Services
         public void InstallProcessLock_AcquireReleaseReacquire()
         {
             // Cross-thread/cross-process exclusion is enforced by the OS named
-            // mutex (verified against a live probe); here we only assert the
-            // acquire/release lifecycle this wrapper controls.
+            // semaphore (verified against a live probe); here we only assert the
+            // acquire/release lifecycle this wrapper controls. A semaphore (not
+            // a mutex) is used precisely because release is not thread-affine.
             Assert.True(InstallProcessLock.TryEnter());
             InstallProcessLock.Exit();
 
@@ -185,6 +186,127 @@ namespace RommPlugin.Tests.Services
             {
                 InstallProcessLock.Exit();
             }
+        }
+        [Fact]
+        public void InstallProcessLock_WaitsForTheRunningPassInsteadOfSkipping()
+        {
+            // A trigger that arrives while another pass is extracting must
+            // survive: the running pass snapshotted the state file before this
+            // item appeared, so dropping the trigger left it on "Installing".
+            Assert.True(InstallProcessLock.TryEnter());
+
+            var acquired = false;
+            var waited = TimeSpan.Zero;
+
+            try
+            {
+                var thread = new Thread(() =>
+                {
+                    var started = System.Diagnostics.Stopwatch.StartNew();
+                    acquired = InstallProcessLock.TryEnter(TimeSpan.FromSeconds(5));
+                    waited = started.Elapsed;
+                    if (acquired) InstallProcessLock.Exit();
+                });
+                thread.Start();
+
+                Thread.Sleep(300);
+                InstallProcessLock.Exit();
+                thread.Join();
+            }
+            finally
+            {
+                InstallProcessLock.Exit();
+            }
+
+            Assert.True(acquired);
+            Assert.True(
+                waited >= TimeSpan.FromMilliseconds(250),
+                "the waiting caller must not acquire before the holder releases");
+        }
+
+        [Fact]
+        public void InstallProcessLock_GivesUpAfterTheTimeout()
+        {
+            Assert.True(InstallProcessLock.TryEnter());
+            try
+            {
+                var acquired = true;
+                var thread = new Thread(() => acquired = InstallProcessLock.TryEnter(TimeSpan.FromMilliseconds(300)));
+                thread.Start();
+                thread.Join();
+
+                Assert.False(acquired);
+            }
+            finally
+            {
+                InstallProcessLock.Exit();
+            }
+        }
+
+        [Fact]
+        public void InstallProcessLock_TakesOverFromADeadOwner()
+        {
+            // A semaphore is not abandoned when its owner dies, so the wrapper
+            // records the owning pid and reclaims the lock once that process is
+            // gone. Without this a crashed LaunchBox instance would lock every
+            // later install out for the lifetime of the survivor.
+            Assert.True(InstallProcessLock.TryEnter());
+            try
+            {
+                var ownerFile = Path.Combine(RommPlugin.Core.Storage.RommPaths.PluginFolder, "install-processing.owner");
+                File.WriteAllText(ownerFile, UnusedProcessId().ToString());
+
+                var enteredElsewhere = false;
+                var thread = new Thread(() => enteredElsewhere = InstallProcessLock.TryEnter());
+                thread.Start();
+                thread.Join();
+
+                Assert.True(enteredElsewhere);
+                InstallProcessLock.Exit();
+            }
+            finally
+            {
+                InstallProcessLock.Exit();
+            }
+        }
+
+        [Fact]
+        public void InstallProcessLock_ExitWithoutOwnershipDoesNotInflateTheSemaphore()
+        {
+            // A fail-open acquisition returns true without taking the semaphore.
+            // Releasing it there raised the count and let a third process into
+            // the extraction while the real owner was still running.
+            InstallProcessLock.Exit();
+
+            Assert.True(InstallProcessLock.TryEnter());
+            try
+            {
+                Assert.False(InstallProcessLock.TryEnter());
+            }
+            finally
+            {
+                InstallProcessLock.Exit();
+            }
+        }
+
+        private static int UnusedProcessId()
+        {
+            // Windows process ids are always multiples of 4, so an odd value in a
+            // plausible range is reliably unused and GetProcessById throws
+            // ArgumentException for it — exactly what the dead-owner check relies on.
+            for (var pid = 60001; pid < 65535; pid += 2)
+            {
+                try
+                {
+                    using (System.Diagnostics.Process.GetProcessById(pid)) { }
+                }
+                catch (ArgumentException)
+                {
+                    return pid;
+                }
+            }
+
+            throw new InvalidOperationException("No unused process id found");
         }
     }
 }

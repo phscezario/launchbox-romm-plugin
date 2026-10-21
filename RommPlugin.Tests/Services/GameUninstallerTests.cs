@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Moq;
 using RommPlugin.Core.Helpers;
 using RommPlugin.Core.Models;
@@ -34,7 +35,8 @@ namespace RommPlugin.Tests.Services
             var outcome = _uninstaller.Uninstall(record, "R");
 
             Assert.Equal(GamePathDeleteOutcome.Deleted, outcome);
-            _gateway.Verify(g => g.ClearForUninstall(7, "C:\\g"), Times.Once);
+            _gateway.Verify(g => g.ClearAdditionalApplications(7, "C:\\g"), Times.Once);
+            _gateway.Verify(g => g.DetachForUninstall(7), Times.Once);
             _installed.Verify(s => s.MarkUninstalled(7), Times.Once);
             _queue.Verify(q => q.Remove(7), Times.Once);
             _deleter.Verify(d => d.CleanAfterUninstall(record, "R"), Times.Once);
@@ -49,13 +51,15 @@ namespace RommPlugin.Tests.Services
             var outcome = _uninstaller.Uninstall(record, "R");
 
             Assert.Equal(GamePathDeleteOutcome.AlreadyGone, outcome);
+            _gateway.Verify(g => g.ClearAdditionalApplications(7, "C:\\g"), Times.Once);
+            _gateway.Verify(g => g.DetachForUninstall(7), Times.Once);
             _installed.Verify(s => s.MarkUninstalled(7), Times.Once);
             _queue.Verify(q => q.Remove(7), Times.Once);
             _deleter.Verify(d => d.CleanAfterUninstall(record, "R"), Times.Once);
         }
 
         [Fact]
-        public void Failed_ClearsLaunchBox_ButLeavesRecordAndQueueUntouched()
+        public void Failed_TouchesNothing_SoTheUserCanRetry()
         {
             var record = Record();
             _deleter.Setup(d => d.DeleteRecordPaths(record, "R")).Returns(GamePathDeleteOutcome.Failed);
@@ -63,18 +67,46 @@ namespace RommPlugin.Tests.Services
             var outcome = _uninstaller.Uninstall(record, "R");
 
             Assert.Equal(GamePathDeleteOutcome.Failed, outcome);
-            // The LaunchBox entry is detached first, exactly like the Game Manager.
-            _gateway.Verify(g => g.ClearForUninstall(7, "C:\\g"), Times.Once);
+            // Additional applications are cleared before the delete (they are
+            // only identifiable while the folder config still exists), but a
+            // failed delete must not detach the LaunchBox entry nor drop the
+            // record/queue item: the game would be half-removed (files on disk,
+            // nothing left in the UI to retry from).
+            _gateway.Verify(g => g.ClearAdditionalApplications(7, "C:\\g"), Times.Once);
+            _gateway.Verify(g => g.DetachForUninstall(It.IsAny<int>()), Times.Never);
             _installed.Verify(s => s.MarkUninstalled(It.IsAny<int>()), Times.Never);
             _queue.Verify(q => q.Remove(It.IsAny<int>()), Times.Never);
             _deleter.Verify(d => d.CleanAfterUninstall(It.IsAny<InstalledGameRecord>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
+        public void ClearsAdditionalApplications_BeforeDeleting_AndDetachesOnlyAfter()
+        {
+            // The additional-application list lives in a config file inside the
+            // installed folder, so it can only be read before the delete; the
+            // LaunchBox entry itself must only be detached afterwards.
+            var record = Record();
+            var order = new List<string>();
+
+            _gateway.Setup(g => g.ClearAdditionalApplications(7, "C:\\g"))
+                .Callback(() => order.Add("clear-apps"));
+            _deleter.Setup(d => d.DeleteRecordPaths(record, "R"))
+                .Callback(() => order.Add("delete"))
+                .Returns(GamePathDeleteOutcome.Deleted);
+            _gateway.Setup(g => g.DetachForUninstall(7))
+                .Callback(() => order.Add("detach"));
+
+            _uninstaller.Uninstall(record, "R");
+
+            Assert.Equal(new[] { "clear-apps", "delete", "detach" }, order);
+        }
+
+        [Fact]
         public void NullRecord_IsAlreadyGone_AndTouchesNothing()
         {
             Assert.Equal(GamePathDeleteOutcome.AlreadyGone, _uninstaller.Uninstall(null, "R"));
-            _gateway.Verify(g => g.ClearForUninstall(It.IsAny<int>(), It.IsAny<string>()), Times.Never);
+            _gateway.Verify(g => g.ClearAdditionalApplications(It.IsAny<int>(), It.IsAny<string>()), Times.Never);
+            _gateway.Verify(g => g.DetachForUninstall(It.IsAny<int>()), Times.Never);
         }
     }
 }

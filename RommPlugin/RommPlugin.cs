@@ -4,6 +4,7 @@ using System.Linq;
 using RommPlugin.ApiClient;
 using RommPlugin.Core;
 using RommPlugin.Core.Locale;
+using RommPlugin.Core.Helpers;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Models.Statics;
@@ -56,7 +57,11 @@ namespace RommPlugin
                     services.AddSingleton<IDownloadQueueService>(sp =>
                     {
                         var s = RommPluginStorage.Load();
-                        var svc = new DownloadQueueService(RommPaths.DownloadStateFile, s.RomsPath ?? "", s.RommBaseUrl ?? "http://localhost");
+                        var svc = new DownloadQueueService(
+                            RommPaths.DownloadStateFile,
+                            s.RomsPath ?? "",
+                            s.RommBaseUrl ?? "http://localhost",
+                            RommPlugin.Core.Constants.RommConstants.MaxConcurrentDownloads);
                         svc.SetAuthentication(s.RommBaseUrl, s.ClientApiToken, s.Username, s.Password);
                         return svc;
                     });
@@ -87,6 +92,16 @@ namespace RommPlugin
                 {
                 }
 
+                // LaunchBox relaunches itself with "-recovery" after an unclean
+                // shutdown. That instance shares the plugin's state files with
+                // the primary one, so all mutating startup work (updates, auto
+                // sync, pending installs) is left to the primary instance.
+                if (LaunchBoxInstance.IsRecoveryInstance())
+                {
+                    RommLogger.Log("[RommPlugin] LaunchBox recovery instance: read-only (no update, sync or install work)");
+                    return;
+                }
+
                 SessionSuppressStorage.Delete();
 
                 if (GitHubUpdateService.HasPendingUpdate())
@@ -111,8 +126,9 @@ namespace RommPlugin
                             var stateJson = File.ReadAllText(stateFilePath);
                             var state = Newtonsoft.Json.JsonConvert.DeserializeObject<RommPlugin.Core.Models.DownloadState>(stateJson);
                             var hasPending = state?.Items?.Any(
-                                i => i.Status == RommPlugin.Core.Models.DownloadStatus.WaitingInstall ||
-                                     i.Status == RommPlugin.Core.Models.DownloadStatus.WaitingUninstall) == true;
+                                i => i != null &&
+                                    (i.Status == RommPlugin.Core.Models.DownloadStatus.WaitingInstall ||
+                                     i.Status == RommPlugin.Core.Models.DownloadStatus.WaitingUninstall)) == true;
 
                             if (hasPending)
                             {

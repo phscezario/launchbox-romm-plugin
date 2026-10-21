@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using RommPlugin.Core.Interfaces;
 using RommPlugin.Core.Locale;
+using RommPlugin.Core.Logging;
 using RommPlugin.UI.Forms;
 using RommPlugin.UI.Reporters;
 
@@ -30,44 +31,72 @@ namespace RommPlugin.UI.Helpers
 
             var uiThread = new Thread(() =>
             {
-                using (var form = new ProgressForm())
+                try
                 {
-                    var reporter = new ProgressFormReporter(form, cts.Token);
-
-                    form.FormClosing += (_, __) =>
+                    using (var form = new ProgressForm())
                     {
-                        cts.Cancel();
-                    };
+                        var reporter = new ProgressFormReporter(form, cts.Token);
+                        var workCompleted = false;
 
-                    form.Load += async (_, __) =>
-                    {
-                        try
+                        form.FormClosing += (_, e) =>
                         {
-                            form.SetTitle(title);
-                            form.SetIndeterminate(true);
-
-                            await work(reporter);
-                        }
-                        catch (OperationCanceledException)
-                        {
-                        }
-                        catch (Exception ex)
-                        {
-                            using (var form = new ConfirmForm(
-                                ex.ToString(),
-                                null))
+                            // Veto the user's close and ask the work to stop; the
+                            // Load handler's finally closes the form for real once
+                            // the work returns. Letting the form close immediately
+                            // tears down this message loop before the continuation
+                            // runs, so the task below is never completed and the
+                            // caller's "sync already running" guard stays latched
+                            // forever (it can only be reset by a run that returns).
+                            if (!workCompleted)
                             {
-                                form.ShowDialog();
+                                e.Cancel = true;
+                                cts.Cancel();
                             }
-                        }
-                        finally
-                        {
-                            try { if (!form.IsDisposed) form.Close(); } catch { }
-                            tcs.TrySetResult(null);
-                        }
-                    };
+                        };
 
-                    Application.Run(form);
+                        form.Load += async (_, __) =>
+                        {
+                            try
+                            {
+                                form.SetTitle(title);
+                                form.SetIndeterminate(true);
+
+                                await work(reporter);
+                            }
+                            catch (OperationCanceledException)
+                            {
+                            }
+                            catch (Exception ex)
+                            {
+                                using (var errorForm = new ConfirmForm(
+                                    ex.ToString(),
+                                    null))
+                                {
+                                    errorForm.ShowDialog();
+                                }
+                            }
+                            finally
+                            {
+                                workCompleted = true;
+                                try { if (!form.IsDisposed) form.Close(); } catch { }
+                                tcs.TrySetResult(null);
+                            }
+                        };
+
+                        Application.Run(form);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // A throwing form (constructor, paint, FormClosing) must not
+                    // leave the caller awaiting forever: AutoInstallAsync would
+                    // keep its "already processing" guard latched and stop
+                    // installing until LaunchBox restarted.
+                    RommLogger.LogError($"[Progress] Unhandled error on the progress thread: {ex}");
+                }
+                finally
+                {
+                    tcs.TrySetResult(null);
                 }
             });
 
