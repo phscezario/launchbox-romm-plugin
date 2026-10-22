@@ -36,14 +36,21 @@ namespace RommPlugin.Tests.Services
         }
 
         [Fact]
-        public void Remove_DropsPendingItem_AndPersists()
+        public void Remove_DropsTheRow_AndKeepsTheOtherRows()
         {
-            _service.Enqueue(1, "Game", "game.zip", "PS3");
+            _service.Enqueue(1, "Drop", "drop.zip", "PS3");
+            _service.Enqueue(2, "Keep", "keep.zip", "PS3");
+            WaitForStatus(2, DownloadStatus.Failed);
+
             _service.Remove(1);
 
             Assert.Empty(_service.Items.Where(i => i.GameId == 1));
+
+            // The row must leave the shared file, and the save must not wipe the
+            // rows it does not own.
             var saved = File.ReadAllText(_stateFile);
-            Assert.DoesNotContain("\"GameId\": 1", saved);
+            Assert.DoesNotContain("\"GameId\": 1,", saved);
+            Assert.Contains("\"GameId\": 2", saved);
         }
 
         [Fact]

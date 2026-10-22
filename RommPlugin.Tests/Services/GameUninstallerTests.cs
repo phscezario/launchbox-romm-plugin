@@ -107,6 +107,14 @@ namespace RommPlugin.Tests.Services
             Assert.Equal(GamePathDeleteOutcome.AlreadyGone, _uninstaller.Uninstall(null, "R"));
             _gateway.Verify(g => g.ClearAdditionalApplications(It.IsAny<int>(), It.IsAny<string>()), Times.Never);
             _gateway.Verify(g => g.DetachForUninstall(It.IsAny<int>()), Times.Never);
+
+            // Without these the test passed even if the null branch queued a
+            // removal, marked the game uninstalled or deleted files.
+            _queue.Verify(q => q.Remove(It.IsAny<int>()), Times.Never);
+            _installed.Verify(s => s.MarkUninstalled(It.IsAny<int>()), Times.Never);
+            _deleter.Verify(
+                d => d.DeleteRecordPaths(It.IsAny<InstalledGameRecord>(), It.IsAny<string>()),
+                Times.Never);
         }
     }
 }

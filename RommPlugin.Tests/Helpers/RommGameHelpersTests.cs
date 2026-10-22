@@ -280,7 +280,9 @@ namespace RommPlugin.Tests.Helpers
             {
                 RommGameHelpers.EnsureDirectoryExists(filePath);
 
-                Assert.True(Directory.Exists(tempDir));
+                // Asserting only tempDir passed even when the sub folder the file
+                // actually needs was never created.
+                Assert.True(Directory.Exists(Path.Combine(tempDir, "sub")));
             }
             finally
             {
