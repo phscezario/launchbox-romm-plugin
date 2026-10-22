@@ -37,10 +37,23 @@ namespace RommPlugin.Core.Helpers
 
                 if (!File.Exists(targetPath))
                 {
-                    // A move inside the same directory is atomic: a concurrent
-                    // reader never sees the brand-new file half written.
-                    File.Move(tempPath, targetPath);
-                    return;
+                    try
+                    {
+                        // A move inside the same directory is atomic: a concurrent
+                        // reader never sees the brand-new file half written.
+                        File.Move(tempPath, targetPath);
+                        return;
+                    }
+                    catch (IOException)
+                    {
+                        // Another writer created the file between the check and
+                        // the move. Fall through and replace its content: two
+                        // LaunchBox instances share these files, and abandoning
+                        // the write here silently dropped it.
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                    }
                 }
 
                 try

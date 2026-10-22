@@ -302,7 +302,10 @@ namespace RommPlugin.Tests.Helpers
         {
             var result = RommGameHelpers.ResolvePath("/base", "relative/path/file.exe", fromLaunchBoxRoot: false);
 
-            Assert.Contains("relative", result);
+            // Asserting Contains("relative") also passed when the input was
+            // returned untouched, which is the case under test.
+            var expected = Path.GetFullPath(Path.Combine("/base", "relative/path/file.exe"));
+            Assert.Equal(expected, result);
         }
 
         [Fact]

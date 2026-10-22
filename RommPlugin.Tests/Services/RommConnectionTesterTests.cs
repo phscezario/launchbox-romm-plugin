@@ -57,7 +57,9 @@ namespace RommPlugin.Tests.Services
             var result = await tester.TestAsync(
                 "http://localhost", "invalid-token", "", "");
 
-            Assert.False(result.Success);
+            // Asserting only Success == false let a 401 fall through to the generic
+            // server_error branch and the test still passed.
+            Assert.Contains("Authentication failed", result.Message);
         }
 
         [Fact]
@@ -70,7 +72,7 @@ namespace RommPlugin.Tests.Services
             var result = await tester.TestAsync(
                 "http://localhost", "invalid-token", "", "");
 
-            Assert.False(result.Success);
+            Assert.Contains("Authentication failed", result.Message);
         }
 
         [Fact]

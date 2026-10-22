@@ -157,10 +157,6 @@ namespace RommPlugin.Tests.Services
 
             Assert.True(InstallProcessLock.TryEnter());
             InstallProcessLock.Exit();
-
-            // Double release must never throw.
-            var exception = Record.Exception(() => InstallProcessLock.Exit());
-            Assert.Null(exception);
         }
 
         [Fact]

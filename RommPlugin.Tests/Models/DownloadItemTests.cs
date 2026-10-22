@@ -150,18 +150,20 @@ namespace RommPlugin.Tests.Models
         }
 
         [Theory]
-        [InlineData(DownloadStatus.Pending, "dm.status.pending")]
-        [InlineData(DownloadStatus.Downloading, "dm.status.downloading")]
-        [InlineData(DownloadStatus.Paused, "dm.status.paused")]
-        [InlineData(DownloadStatus.Completed, "dm.status.completed")]
-        [InlineData(DownloadStatus.Failed, "dm.status.failed")]
-        [InlineData(DownloadStatus.WaitingInstall, "gm.status.installing")]
-        [InlineData(DownloadStatus.WaitingUninstall, "gm.status.pending_uninstall")]
-        [InlineData(DownloadStatus.Installed, "gm.status.installed")]
-        public void StatusText_ReturnsLocalizedText(DownloadStatus status, string expectedKey)
+        [InlineData(DownloadStatus.Pending, "Pending")]
+        [InlineData(DownloadStatus.Downloading, "Downloading")]
+        [InlineData(DownloadStatus.Paused, "Paused")]
+        [InlineData(DownloadStatus.Completed, "Completed")]
+        [InlineData(DownloadStatus.Failed, "Failed")]
+        [InlineData(DownloadStatus.WaitingInstall, "Installing")]
+        [InlineData(DownloadStatus.WaitingUninstall, "Uninstalling")]
+        [InlineData(DownloadStatus.Installed, "Installed")]
+        public void StatusText_ReturnsLocalizedText(DownloadStatus status, string expected)
         {
+            // Literals, not LocaleManager.Get: comparing the property against the
+            // same lookup made the test pass even when the locales were missing
+            // (both sides fell back to "[key]").
             var item = new DownloadItem { Status = status };
-            var expected = LocaleManager.Get(expectedKey);
             Assert.Equal(expected, item.StatusText);
         }
     }

@@ -281,6 +281,33 @@ namespace RommPlugin.Core.Helpers
                 if (!_semaphore.WaitOne(0))
                     return false;
 
+                // Re-read after winning: a process that acquired the token
+                // normally (between our Release and this wait) records its pid
+                // right after taking it. If that happened, it owns the token now
+                // and we must give it back, or two instances would extract the
+                // same game into the same folder.
+                var claimedBy = 0;
+                try
+                {
+                    int.TryParse(File.ReadAllText(OwnerFile).Trim(), out claimedBy);
+                }
+                catch (Exception)
+                {
+                    // Sidecar vanished or is unreadable: nobody recorded a claim,
+                    // so ours stands.
+                }
+
+                if (claimedBy != 0
+                    && claimedBy != pid
+                    && claimedBy != Process.GetCurrentProcess().Id)
+                {
+                    try { _semaphore.Release(); }
+                    catch (SemaphoreFullException) { }
+
+                    RommLogger.Log($"[RommPlugin] Install processing lock was taken by process {claimedBy} while reclaiming {pid}; backing off");
+                    return false;
+                }
+
                 // Recorded while the claim is still held: a second claimant can
                 // only start after this returns true.
                 MarkOwned();

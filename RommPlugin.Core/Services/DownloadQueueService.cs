@@ -92,6 +92,13 @@ namespace RommPlugin.Core.Services
             DownloadItem item = null;
             lock (_lock)
             {
+                // A game that was removed and is being queued again must not be
+                // skipped by LoadState: the removal marker is only cleared after a
+                // successful save of the removal itself, so a save that skipped
+                // (unreadable file) left it behind and the fresh row vanished on
+                // the next open.
+                _removedIds.Remove(gameId);
+
                 _items.RemoveAll(i => i.GameId == gameId &&
                     (i.Status == DownloadStatus.Failed ||
                      i.Status == DownloadStatus.Installed));
@@ -473,18 +480,27 @@ namespace RommPlugin.Core.Services
             lock (_lock)
             {
                 var item = _items.FirstOrDefault(i => i.GameId == gameId);
-                if (item == null) return;
+                if (item == null)
+                {
+                    // The row may exist only in the shared file (written by
+                    // another instance, or by this one before a reload). Register
+                    // the removal so the save below drops it: returning here left
+                    // the row on disk and every open reprocessed the same request.
+                    _removedIds.Add(gameId);
+                }
+                else
+                {
+                    // Only discard the partial file of a dead item. A queued or
+                    // in-flight transfer keeps its .part (and is told to preserve
+                    // it) so dropping the row never destroys a resumable download.
+                    item.PreservePartFile = item.Status == DownloadStatus.Pending
+                        || item.Status == DownloadStatus.Downloading;
 
-                // Only discard the partial file of a dead item. A queued or
-                // in-flight transfer keeps its .part (and is told to preserve it)
-                // so dropping the row never destroys a resumable download.
-                item.PreservePartFile = item.Status == DownloadStatus.Pending
-                    || item.Status == DownloadStatus.Downloading;
-
-                try { item.Cts?.Cancel(); } catch { }
-                _items.Remove(item);
-                _removedIds.Add(gameId);
-                removed = item;
+                    try { item.Cts?.Cancel(); } catch { }
+                    _items.Remove(item);
+                    _removedIds.Add(gameId);
+                    removed = item;
+                }
             }
 
             if (removed != null

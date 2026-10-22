@@ -38,10 +38,20 @@ namespace RommPlugin.UI.Forms
         private int _isProcessing;
 
         /// <summary>
-        /// Games already logged as "record not visible yet" by the reconcile, to
-        /// avoid one line every two seconds while LaunchBox refreshes its data.
+        /// How many 2 s reconcile ticks a game whose install record is not visible
+        /// in this instance yet is retried (~20 s).
         /// </summary>
-        private readonly HashSet<int> _reconcileWaitingLogged = new HashSet<int>();
+        private const int MaxReconcileWaits = 10;
+
+        /// <summary>Ticks already spent per game on the "record not visible" path.</summary>
+        private readonly Dictionary<int, int> _reconcileWaits = new Dictionary<int, int>();
+
+        /// <summary>
+        /// Games whose record never showed up: stop the expensive retry until the
+        /// manager is reopened instead of rescanning the LaunchBox database and
+        /// rebuilding the grid every two seconds forever.
+        /// </summary>
+        private readonly HashSet<int> _reconcileDeferred = new HashSet<int>();
         private bool _isUninstalling;
         private int _installRetryCount;
         private int _reconcileTick;
@@ -660,8 +670,18 @@ namespace RommPlugin.UI.Forms
 
                 var settings = RommPluginStorage.Load();
 
+                var changed = false;
+
                 foreach (var action in actions)
                 {
+                    if (action.TargetStatus == DownloadStatus.Installed && _reconcileDeferred.Contains(action.GameId))
+                    {
+                        // The record never became visible: retrying costs a full
+                        // LaunchBox database scan per tick, so wait for the next
+                        // open instead.
+                        continue;
+                    }
+
                     if (action.TargetStatus == DownloadStatus.Installed)
                     {
                         // Register first: marking the row Installed without a
@@ -672,6 +692,9 @@ namespace RommPlugin.UI.Forms
                         if (_installedService.IsInstalled(action.GameId))
                         {
                             _queueService.InstallPending(action.GameId);
+                            _reconcileWaits.Remove(action.GameId);
+                            _reconcileDeferred.Remove(action.GameId);
+                            changed = true;
                             RommLogger.Log($"[GameManager] Reconciled game {action.GameId} as Installed (settled by another LaunchBox instance)");
                         }
                         else if (_gateway.FindByRommId(action.GameId) == null)
@@ -680,26 +703,51 @@ namespace RommPlugin.UI.Forms
                             // one yet (LaunchBox data refresh). Writing Failed now
                             // would outrank the Installed verdict on disk forever,
                             // and the next Retry would fail with "ROM file not
-                            // found". Leave it waiting: the 2 s tick retries.
-                            if (_reconcileWaitingLogged.Add(action.GameId))
+                            // found". Leave it waiting, but only for a bounded
+                            // time: the retry rescans the whole database.
+                            int waits;
+                            _reconcileWaits.TryGetValue(action.GameId, out waits);
+                            waits++;
+
+                            if (waits == 1)
                             {
                                 RommLogger.Log($"[GameManager] Reconciled game {action.GameId}: installed record not visible yet, will retry");
+                            }
+
+                            if (waits >= MaxReconcileWaits)
+                            {
+                                _reconcileWaits.Remove(action.GameId);
+                                _reconcileDeferred.Add(action.GameId);
+                                RommLogger.Log($"[GameManager] Reconciled game {action.GameId}: record still not visible after {MaxReconcileWaits} attempts, keeping the row as Installing until the manager reopens");
+                            }
+                            else
+                            {
+                                _reconcileWaits[action.GameId] = waits;
                             }
                         }
                         else
                         {
                             _queueService.MarkInstallFailed(action.GameId, "Install completed but the LaunchBox record could not be created");
+                            _reconcileWaits.Remove(action.GameId);
+                            _reconcileDeferred.Remove(action.GameId);
+                            changed = true;
                             RommLogger.LogError($"[GameManager] Reconciled game {action.GameId}: installed record missing, kept as Failed");
                         }
                     }
                     else
                     {
                         _queueService.MarkInstallFailed(action.GameId, action.Error ?? "Install failed (check log)");
+                        changed = true;
                         RommLogger.Log($"[GameManager] Reconciled game {action.GameId} as Failed (settled by another LaunchBox instance)");
                     }
                 }
 
-                RefreshList();
+                // Nothing settled (every action was deferred): skip the full grid
+                // rebuild this tick would otherwise trigger.
+                if (changed)
+                {
+                    RefreshList();
+                }
             }
             catch (Exception ex)
             {
@@ -1330,20 +1378,9 @@ namespace RommPlugin.UI.Forms
                 {
                     fresh.Items.RemoveAll(i => i != null && removed.Contains(i.GameId));
 
-                    foreach (var item in fresh.Items)
-                    {
-                        if (item == null) continue;
-                        if (!settled.TryGetValue(item.GameId, out var updated)) continue;
-
-                        // A newer change (queue/other instance) wins over this
-                        // snapshot's verdict.
-                        if (item.StatusUpdatedAt > updated.StatusUpdatedAt) continue;
-
-                        item.Status = updated.Status;
-                        item.CompletedAt = updated.CompletedAt;
-                        item.StatusUpdatedAt = updated.StatusUpdatedAt;
-                    }
-
+                    // Only the rows settled here are dropped; nothing else is
+                    // rewritten, so a verdict the install path committed while the
+                    // files were being deleted is preserved.
                     SafeFileWriter.WriteAllText(statePath, JsonConvert.SerializeObject(fresh, Formatting.Indented));
                 }
 
