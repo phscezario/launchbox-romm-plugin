@@ -1562,10 +1562,6 @@ namespace RommPlugin.CLI
     /// </summary>
     public class SyncRequest
     {
-        /// <summary>Mapping of platform names to their parent category names.</summary>
-        [JsonProperty("PlatformCategoryMap")]
-        public Dictionary<string, string> PlatformCategoryMap { get; set; } = new Dictionary<string, string>();
-
         /// <summary>All RomM category names that exist on the server.</summary>
         [JsonProperty("AllCategories")]
         public List<string> AllCategories { get; set; } = new List<string>();

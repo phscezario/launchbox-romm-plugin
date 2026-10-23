@@ -173,7 +173,8 @@ namespace RommPlugin.Helpers
 
         /// <summary>
         /// Removes additional applications from a game that were previously created by the plugin
-        /// and are referenced in the LaunchBox folder configuration file.
+        /// and are referenced in the LaunchBox folder configuration file, plus the
+        /// _DLCs entries created from the HasDLC scan (which are not listed in the file).
         /// </summary>
         /// <param name="game">The LaunchBox game instance.</param>
         /// <param name="installedPath">The installed game folder path.</param>
@@ -204,11 +205,25 @@ namespace RommPlugin.Helpers
                     if (!string.IsNullOrEmpty(loader.Path))
                         jsonPaths.Add(ResolvePath(installedPath, loader.Path, loader.FromLaunchBoxRoot ?? false));
 
+            // _DLCs entries are created from a folder scan, not from listed paths.
+            // Match by path prefix so cleanup works even after the folder is gone.
+            // No name guard here: older entries ship without the platform prefix.
+            string dlcRoot = null;
+            if (config.HasDLC == true)
+                dlcRoot = Path.GetFullPath(Path.Combine(installedPath, "_DLCs"))
+                    + Path.DirectorySeparatorChar;
+
             var apps = game.GetAllAdditionalApplications().ToList();
             foreach (var app in apps)
             {
-                if (!string.IsNullOrEmpty(app.ApplicationPath) && jsonPaths.Contains(app.ApplicationPath)
+                if (string.IsNullOrEmpty(app.ApplicationPath)) continue;
+
+                if (jsonPaths.Contains(app.ApplicationPath)
                     && app.Name?.StartsWith(RommConstants.PlatformPrefix) == true)
+                {
+                    game.TryRemoveAdditionalApplication(app);
+                }
+                else if (dlcRoot != null && app.ApplicationPath.StartsWith(dlcRoot, StringComparison.OrdinalIgnoreCase))
                 {
                     game.TryRemoveAdditionalApplication(app);
                 }

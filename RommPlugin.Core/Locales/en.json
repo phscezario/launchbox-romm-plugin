@@ -30,6 +30,7 @@
     "dm.retry": "Retry",
     "dm.cancel": "Cancel",
     "dm.cancel_all": "Cancel All",
+    "dm.cancelled": "Cancelled: {0}",
     "dm.clear": "Clear",
     "dm.col_name": "Name",
     "dm.col_category": "Category",
@@ -172,6 +173,8 @@
 
     "uninstall.files_not_found": "Installation files for {0} were not found on disk.\nRemove from LaunchBox anyway?",
     "uninstall.files_not_found_batch": "Installation files were not found for {0} game(s):\n{1}\n\nRemove all from LaunchBox?",
+    "uninstall.files_delete_failed_batch": "Could not delete files for {0} game(s) (locked or access denied):\n{1}\n\nThey were kept as installed. Close other programs and try again.",
+    "uninstall.nothing_to_uninstall": "Nothing installed for the selection.",
     "uninstall.already_queued": "This game is already queued for uninstall.",
     "sync.update_metadata_admin_required": "Admin privileges are required to push metadata to the server.",
 

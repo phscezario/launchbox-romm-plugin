@@ -280,7 +280,9 @@ namespace RommPlugin.Tests.Helpers
             {
                 RommGameHelpers.EnsureDirectoryExists(filePath);
 
-                Assert.True(Directory.Exists(tempDir));
+                // Asserting only tempDir passed even when the sub folder the file
+                // actually needs was never created.
+                Assert.True(Directory.Exists(Path.Combine(tempDir, "sub")));
             }
             finally
             {
@@ -302,7 +304,10 @@ namespace RommPlugin.Tests.Helpers
         {
             var result = RommGameHelpers.ResolvePath("/base", "relative/path/file.exe", fromLaunchBoxRoot: false);
 
-            Assert.Contains("relative", result);
+            // Asserting Contains("relative") also passed when the input was
+            // returned untouched, which is the case under test.
+            var expected = Path.GetFullPath(Path.Combine("/base", "relative/path/file.exe"));
+            Assert.Equal(expected, result);
         }
 
         [Fact]
@@ -311,6 +316,87 @@ namespace RommPlugin.Tests.Helpers
             var result = RommGameHelpers.ResolvePath("/base", null, fromLaunchBoxRoot: false);
 
             Assert.Null(result);
+        }
+
+        private static Mock<IAdditionalApplication> MockApp(string name, string applicationPath)
+        {
+            var app = new Mock<IAdditionalApplication>();
+            app.SetupProperty(a => a.Name, name);
+            app.SetupProperty(a => a.ApplicationPath, applicationPath);
+            return app;
+        }
+
+        private static string CreateFolderGameWithJson(string json)
+        {
+            var root = Path.Combine(Path.GetTempPath(), "dlcuninstall_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            File.WriteAllText(Path.Combine(root, "_launchbox.json"), json);
+            return root;
+        }
+
+        [Fact]
+        public void ClearGameAdditionalApplications_RemovesDlcEntries_WhenHasDlc()
+        {
+            var root = CreateFolderGameWithJson("{\"DefaultFileName\": \"\", \"HasDLC\": true, \"AdditionalApplications\": []}");
+            try
+            {
+                var dlcApp = MockApp("DLC 1", Path.Combine(root, "_DLCs", "a.pkg"));
+                var otherApp = MockApp("RomM | Other", Path.Combine(root, "other.exe"));
+                var game = new Mock<IGame>();
+                game.Setup(g => g.GetAllAdditionalApplications()).Returns(new[] { dlcApp.Object, otherApp.Object });
+
+                RommGameHelpers.ClearGameAdditionalApplications(game.Object, root);
+
+                game.Verify(g => g.TryRemoveAdditionalApplication(dlcApp.Object), Times.Once);
+                game.Verify(g => g.TryRemoveAdditionalApplication(otherApp.Object), Times.Never);
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                    Directory.Delete(root, true);
+            }
+        }
+
+        [Fact]
+        public void ClearGameAdditionalApplications_KeepsDlcEntries_WhenHasDlcFalse()
+        {
+            var root = CreateFolderGameWithJson("{\"DefaultFileName\": \"\", \"HasDLC\": false, \"AdditionalApplications\": []}");
+            try
+            {
+                var dlcApp = MockApp("DLC 1", Path.Combine(root, "_DLCs", "a.pkg"));
+                var game = new Mock<IGame>();
+                game.Setup(g => g.GetAllAdditionalApplications()).Returns(new[] { dlcApp.Object });
+
+                RommGameHelpers.ClearGameAdditionalApplications(game.Object, root);
+
+                game.Verify(g => g.TryRemoveAdditionalApplication(dlcApp.Object), Times.Never);
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                    Directory.Delete(root, true);
+            }
+        }
+
+        [Fact]
+        public void ClearGameAdditionalApplications_RemovesJsonListedEntries()
+        {
+            var root = CreateFolderGameWithJson("{\"DefaultFileName\": \"\", \"HasDLC\": false, \"AdditionalApplications\": [{\"Name\": \"Tool\", \"Path\": \"tool.exe\"}]}");
+            try
+            {
+                var toolApp = MockApp("RomM | Tool", Path.Combine(root, "tool.exe"));
+                var game = new Mock<IGame>();
+                game.Setup(g => g.GetAllAdditionalApplications()).Returns(new[] { toolApp.Object });
+
+                RommGameHelpers.ClearGameAdditionalApplications(game.Object, root);
+
+                game.Verify(g => g.TryRemoveAdditionalApplication(toolApp.Object), Times.Once);
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                    Directory.Delete(root, true);
+            }
         }
     }
 }

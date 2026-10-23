@@ -62,6 +62,21 @@ namespace RommPlugin.Core.Models
         }
 
         /// <summary>
+        /// Name used for alphabetical ordering, mirroring exactly what the grid
+        /// shows: the queue name on queue-detail rows, the installed title
+        /// otherwise.
+        /// </summary>
+        public string SortName
+        {
+            get
+            {
+                if (ShowsQueueDetails)
+                    return QueueItem?.GameName ?? Installed?.Title ?? string.Empty;
+                return Installed?.Title ?? QueueItem?.GameName ?? string.Empty;
+            }
+        }
+
+        /// <summary>
         /// Merges queue items and installed records into exactly one row per game id.
         /// Queue order is preserved first, then installed-only games in their own order.
         /// </summary>

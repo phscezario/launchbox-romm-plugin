@@ -18,9 +18,10 @@ namespace RommPlugin.Core.Models
         public bool? HasDLC { get; set; } = null;
 
         /// <summary>
-        /// Gets or sets whether _DLCs entries must launch through the game's
-        /// emulator instead of running the file directly. Parsed and documented
-        /// here; honored by emulator wrapper tooling, not by the sync itself.
+        /// Gets or sets whether _DLCs and game-content entries launch through
+        /// the game's emulator (UseEmulator) instead of running files directly.
+        /// The emulator (or its wrapper) owns DLC installation — e.g. PS3 .pkg
+        /// files, which RPCS3 refuses to install in --no-gui mode.
         /// </summary>
         public bool? DlcUseEmulator { get; set; } = null;
 

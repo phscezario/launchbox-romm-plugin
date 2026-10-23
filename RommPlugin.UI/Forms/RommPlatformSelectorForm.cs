@@ -30,7 +30,9 @@ namespace RommPlugin.UI.Forms
             ApplyLocale();
             ActiveControl = btnCancel;
 
-            Platforms = platforms;
+            Platforms = platforms
+                .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
 
             checkedListBoxPlatforms.BeginUpdate();
 

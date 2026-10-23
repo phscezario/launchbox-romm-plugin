@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using RommPlugin.Core.Decisions;
 using RommPlugin.Core.Models;
 using RommPlugin.Core.Services;
 using Xunit;

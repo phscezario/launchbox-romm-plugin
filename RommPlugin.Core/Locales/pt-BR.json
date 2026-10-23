@@ -30,6 +30,7 @@
     "dm.retry": "Tentar Novamente",
     "dm.cancel": "Cancelar",
     "dm.cancel_all": "Cancelar Tudo",
+    "dm.cancelled": "Cancelados: {0}",
     "dm.clear": "Limpar",
     "dm.col_name": "Nome",
     "dm.col_category": "Categoria",
@@ -172,6 +173,8 @@
 
     "uninstall.files_not_found": "Arquivos de instalação de {0} não foram encontrados no disco.\nRemover do LaunchBox mesmo assim?",
     "uninstall.files_not_found_batch": "Arquivos de instalação não encontrados para {0} jogo(s):\n{1}\n\nRemover todos do LaunchBox?",
+    "uninstall.files_delete_failed_batch": "Não foi possível excluir os arquivos de {0} jogo(s) (em uso ou sem acesso):\n{1}\n\nEles foram mantidos como instalados. Feche outros programas e tente de novo.",
+    "uninstall.nothing_to_uninstall": "Nada instalado para a seleção.",
     "uninstall.already_queued": "Este jogo já está na fila de desinstalação.",
     "sync.update_metadata_admin_required": "Privilégios de admin são necessários para enviar metadados ao servidor.",
 

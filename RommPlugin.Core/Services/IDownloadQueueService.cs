@@ -32,16 +32,6 @@ namespace RommPlugin.Core.Services
         IReadOnlyList<DownloadItem> Items { get; }
 
         /// <summary>
-        /// Gets the number of items currently being downloaded.
-        /// </summary>
-        int ActiveCount { get; }
-
-        /// <summary>
-        /// Gets the number of items waiting to start downloading.
-        /// </summary>
-        int PendingCount { get; }
-
-        /// <summary>
         /// Configures the HTTP client used for download requests.
         /// </summary>
         /// <param name="baseUrl">The base URL of the RomM server.</param>
@@ -74,6 +64,14 @@ namespace RommPlugin.Core.Services
         void Cancel(int gameId);
 
         /// <summary>
+        /// Drops a game's queue item entirely (memory + persisted state), e.g. after
+        /// a successful uninstall left a dead Failed entry behind. Active transfers
+        /// are aborted. No-op when absent.
+        /// </summary>
+        /// <param name="gameId">The RomM game ID to drop.</param>
+        void Remove(int gameId);
+
+        /// <summary>
         /// Cancels all active and pending downloads in the queue.
         /// </summary>
         void CancelAll();
@@ -102,11 +100,6 @@ namespace RommPlugin.Core.Services
         /// </summary>
         /// <param name="gameId">The RomM game ID to retry installation for.</param>
         void RetryInstall(int gameId);
-
-        /// <summary>
-        /// Marks all items currently in the waiting-for-install state as installed.
-        /// </summary>
-        void InstallAllPending();
 
         /// <summary>
         /// Retries a failed download by resetting it to the pending state and re-queuing it.

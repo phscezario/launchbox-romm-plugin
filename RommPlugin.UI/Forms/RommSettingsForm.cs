@@ -11,7 +11,6 @@ using RommPlugin.Core.Services;
 using RommPlugin.Core.Storage;
 using RommPlugin.UI.Helpers;
 using RommPlugin.UI.Prompts;
-using RommPlugin.Core.Services;
 
 namespace RommPlugin.UI.Forms
 {

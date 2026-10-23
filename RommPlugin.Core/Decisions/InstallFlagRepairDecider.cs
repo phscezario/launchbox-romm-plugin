@@ -1,7 +1,7 @@
 using System.IO;
 using RommPlugin.Core.Models;
 
-namespace RommPlugin.Core.Services
+namespace RommPlugin.Core.Decisions
 {
     /// <summary>
     /// Decision of the installed-flags repair for a single record.
@@ -46,6 +46,10 @@ namespace RommPlugin.Core.Services
 
             if (!InstalledPathExists(record.InstalledPath))
             {
+                // Files are gone: re-queue the download. The record is left in
+                // place on purpose — the uninstall flow (and only it) owns
+                // dropping records, so automatic repair can never make a game
+                // vanish from the Game Manager while a transfer is in progress.
                 decision.RequeueDownload = true;
                 return decision;
             }

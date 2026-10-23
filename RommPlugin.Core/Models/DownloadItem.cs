@@ -87,6 +87,17 @@ namespace RommPlugin.Core.Models
         public DateTime? CompletedAt { get; set; }
 
         /// <summary>
+        /// Gets or sets when this process last changed <see cref="Status"/> with a
+        /// verdict that must win over a stale one on disk (install outcome, user
+        /// Retry, cancel). The state file is shared by every LaunchBox instance,
+        /// so the merge keeps the newest verdict instead of undoing a Retry (or a
+        /// re-download) with a stale Installed/Failed from disk. Entries written
+        /// before this field existed have no value and count as older than any
+        /// local change.
+        /// </summary>
+        public DateTime StatusUpdatedAt { get; set; }
+
+        /// <summary>
         /// Gets or sets the error message if the download failed.
         /// </summary>
         public string Error { get; set; }
@@ -102,10 +113,31 @@ namespace RommPlugin.Core.Models
         internal DateTime _lastUpdateTime;
 
         /// <summary>
+        /// Gets or sets a value indicating that the partial file must survive a
+        /// cancellation. Set when a row is dropped from the queue while its
+        /// transfer is still queued or in flight, so a later re-queue resumes
+        /// instead of restarting a multi-GB download from zero.
+        /// </summary>
+        [JsonIgnore]
+        public bool PreservePartFile { get; set; }
+
+        /// <summary>
         /// Gets or sets the per-item cancellation token source used to stop this download.
         /// </summary>
         [JsonIgnore]
         public CancellationTokenSource Cts { get; set; }
+
+        /// <summary>
+        /// Copies this item so a verdict written by another LaunchBox instance
+        /// can be persisted without mutating the in-memory row: the UI still has
+        /// to reconcile that row and register the installed game.
+        /// </summary>
+        internal DownloadItem ShallowClone()
+        {
+            var clone = (DownloadItem)MemberwiseClone();
+            clone.Cts = null;
+            return clone;
+        }
 
         /// <summary>
         /// Gets the download progress as a percentage (0-100).

@@ -8,6 +8,18 @@ using RommPlugin.Core.Logging;
 namespace RommPlugin.Core.Helpers
 {
     /// <summary>
+    /// Outcome of deleting an installed game path. Tells callers apart
+    /// "nothing there" (safe to complete) from "delete failed" (the game
+    /// must stay flagged as installed and the user must retry).
+    /// </summary>
+    public enum GamePathDeleteOutcome
+    {
+        Deleted,
+        AlreadyGone,
+        Failed,
+    }
+
+    /// <summary>
     /// Small filesystem helpers for archive handling: zip readability checks and
     /// best-effort deletions (tolerant to antivirus/Explorer file locks).
     /// </summary>
@@ -92,38 +104,200 @@ namespace RommPlugin.Core.Helpers
         }
 
         /// <summary>
-        /// Best-effort recursive directory deletion. Returns true when gone.
+        /// Best-effort recursive directory deletion: strips read-only flags that
+        /// break it and retries transient locks. Logs only the final failure.
+        /// Returns true when gone.
         /// </summary>
         public static bool DeleteDirectoryRobust(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
                 return true;
 
+            const int attempts = 3;
+            for (var i = 0; i < attempts; i++)
+            {
+                try
+                {
+                    if (!Directory.Exists(path))
+                        return true;
+                    Directory.Delete(path, true);
+                    return true;
+                }
+                catch (UnauthorizedAccessException) when (i < attempts - 1)
+                {
+                    // Often just read-only flags (Synology/extracted media):
+                    // strip and retry before giving up.
+                    try
+                    {
+                        StripReadOnly(path, true);
+                    }
+                    catch
+                    {
+                    }
+
+                    Thread.Sleep(400);
+                }
+                catch (IOException) when (i < attempts - 1)
+                {
+                    Thread.Sleep(400);
+                }
+                catch (Exception ex)
+                {
+                    RommLogger.LogError($"[Cleanup] Failed to delete directory '{path}': {ex.Message}");
+                    return false;
+                }
+            }
+
+            return !Directory.Exists(path);
+        }
+
+        /// <summary>
+        /// Deletes an installed file/folder: strips read-only attributes that
+        /// break recursive deletes and retries transient locks, distinguishing
+        /// "nothing there" from "delete failed" so uninstalls never complete
+        /// while files remain on disk.
+        /// </summary>
+        public static GamePathDeleteOutcome DeleteGamePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return GamePathDeleteOutcome.AlreadyGone;
+
+            bool isDir = Directory.Exists(path);
+            if (!isDir && !File.Exists(path))
+                return GamePathDeleteOutcome.AlreadyGone;
+
             try
             {
-                if (!Directory.Exists(path))
-                    return true;
-                Directory.Delete(path, true);
-                return true;
+                StripReadOnly(path, isDir);
             }
-            catch (Exception ex)
+            catch
             {
-                RommLogger.LogError($"[Cleanup] Failed to delete directory '{path}': {ex.Message}");
-                return false;
+            }
+
+            const int attempts = 3;
+            for (var i = 0; i < attempts; i++)
+            {
+                bool gone = isDir ? DeleteDirectoryRobust(path) : DeleteFileWithRetry(path, 1, 0);
+                if (gone)
+                    break;
+                Thread.Sleep(400);
+            }
+
+            if (!Directory.Exists(path) && !File.Exists(path))
+                return GamePathDeleteOutcome.Deleted;
+
+            return GamePathDeleteOutcome.Failed;
+        }
+
+        private static void StripReadOnly(string path, bool isDir)
+        {
+            if (isDir)
+            {
+                foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+                {
+                    try
+                    {
+                        var attributes = File.GetAttributes(file);
+                        if ((attributes & FileAttributes.ReadOnly) != 0)
+                            File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+            else
+            {
+                try
+                {
+                    var attributes = File.GetAttributes(path);
+                    if ((attributes & FileAttributes.ReadOnly) != 0)
+                        File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
+                }
+                catch
+                {
+                }
+            }
+
+            try
+            {
+                var own = File.GetAttributes(path);
+                if ((own & FileAttributes.ReadOnly) != 0)
+                    File.SetAttributes(path, own & ~FileAttributes.ReadOnly);
+            }
+            catch
+            {
             }
         }
 
         /// <summary>
-        /// Whether a directory name matches this plugin's temp staging pattern
-        /// ("_temp_" + 32 hex chars, as created by the flatten extraction).
+        /// Copies a file tolerating transient locks (antivirus/indexer grab new
+        /// files for seconds). Throws the last error after exhausting retries.
+        /// </summary>
+        public static void CopyFileRobust(string source, string dest)
+        {
+            const int attempts = 3;
+            for (var i = 0; ; i++)
+            {
+                try
+                {
+                    var dir = Path.GetDirectoryName(dest);
+                    if (!string.IsNullOrEmpty(dir))
+                        Directory.CreateDirectory(dir);
+                    StripReadOnly(dest, false);
+                    File.Copy(source, dest, true);
+                    return;
+                }
+                catch (IOException) when (i < attempts - 1)
+                {
+                    Thread.Sleep(500);
+                }
+                catch (UnauthorizedAccessException) when (i < attempts - 1)
+                {
+                    Thread.Sleep(500);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Fails fast with a clear message when a directory is not writable,
+        /// instead of dying gigabytes into an extraction.
+        /// </summary>
+        public static void EnsureWritableDirectory(string targetDir)
+        {
+            try
+            {
+                Directory.CreateDirectory(targetDir);
+                var probe = Path.Combine(targetDir, ".romm_write_test_" + Guid.NewGuid().ToString("N"));
+                File.WriteAllText(probe, "x");
+                File.Delete(probe);
+            }
+            catch (Exception ex)
+            {
+                throw new IOException($"Destination '{targetDir}' is not writable (locked or access denied): {ex.Message}", ex);
+            }
+        }
+        /// <summary>
+        /// Whether a directory name matches this plugin's temp staging pattern:
+        /// <c>_temp_</c> + 32 hex chars (flatten extraction) or
+        /// <c>&lt;name&gt;._tmp_</c> + 32 hex chars (folder extraction).
         /// Strict on purpose so user folders are never touched.
         /// </summary>
         public static bool IsTempStagingDirName(string name)
         {
-            if (string.IsNullOrEmpty(name) || !name.StartsWith("_temp_", StringComparison.Ordinal))
-                return false;
-            var suffix = name.Substring("_temp_".Length);
-            return suffix.Length == 32 && suffix.All(c =>
+            if (string.IsNullOrEmpty(name)) return false;
+            const string prefix = "_temp_";
+            const string infix = "._tmp_";
+            if (name.StartsWith(prefix, StringComparison.Ordinal))
+                return IsHex32(name.Substring(prefix.Length));
+            int i = name.LastIndexOf(infix, StringComparison.Ordinal);
+            if (i < 0) return false;
+            return IsHex32(name.Substring(i + infix.Length));
+        }
+
+        private static bool IsHex32(string value)
+        {
+            return value.Length == 32 && value.All(c =>
                 (c >= '0' && c <= '9') ||
                 (c >= 'a' && c <= 'f') ||
                 (c >= 'A' && c <= 'F'));

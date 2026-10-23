@@ -79,6 +79,11 @@ namespace RommPlugin.Tests.Models
             };
 
             var json = JsonConvert.SerializeObject(game);
+
+            // Round-tripping into the same type passed even without the
+            // [JsonProperty("user_screenshots")] name, which the RomM API needs.
+            Assert.Contains("\"user_screenshots\":", json);
+
             var deserialized = JsonConvert.DeserializeObject<RommGame>(json);
 
             Assert.NotNull(deserialized.UserScreenshots);

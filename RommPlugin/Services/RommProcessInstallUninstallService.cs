@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using Newtonsoft.Json;
 using RommPlugin.Core.Constants;
+using RommPlugin.Core.Decisions;
 using RommPlugin.Core.Helpers;
 using RommPlugin.Core.Logging;
 using RommPlugin.Core.Services;
@@ -28,9 +29,67 @@ namespace RommPlugin.Services
     /// </summary>
     public class RommProcessInstallUninstallService : IRommProcessInstallUninstallService
     {
+        /// <summary>
+        /// How long a trigger waits for a running cross-process pass before
+        /// giving up. The wait runs on a pool thread, so it can outlive a long
+        /// extraction without freezing the UI. A waiter that gives up is not
+        /// lost: the Game Manager retries while the state file still lists
+        /// pending installs, and the next pass re-reads that file.
+        /// </summary>
+        private static readonly TimeSpan InstallLockWait = TimeSpan.FromMinutes(10);
+
+        private bool _lastRunWasCancelled;
+
+        /// <inheritdoc/>
+        public bool LastRunWasCancelled
+        {
+            get { return _lastRunWasCancelled; }
+        }
+
         /// <inheritdoc/>
         public async Task ProcessInstallUninstallEvents(bool showEmptyMessage = true)
         {
+            _lastRunWasCancelled = false;
+
+            // LaunchBox spawns a "-recovery" instance after an unclean shutdown.
+            // Both instances load the plugin and share the same state files, so
+            // mutating work is left to the primary instance only.
+            if (LaunchBoxInstance.IsRecoveryInstance())
+            {
+                RommLogger.Log("[Install] LaunchBox recovery instance: install processing left to the primary instance");
+                return;
+            }
+
+            // Cross-process single-flight lives here rather than in the caller:
+            // the Game Manager closing path, the startup path and a second
+            // LaunchBox instance all funnel through this method, and two
+            // overlapping runs delete each other's extract folder (which showed
+            // up as "installed" rows whose files were gone).
+            //
+            // Wait instead of skipping: the running pass snapshotted the state
+            // file before this trigger's item appeared, so dropping it left the
+            // game on "Installing" with the archive intact. The wait runs on a
+            // pool thread: this method is called from the Game Manager's UI
+            // thread, and blocking it here froze LaunchBox for the whole wait.
+            var acquired = await Task.Run(() => InstallProcessLock.TryEnter(InstallLockWait));
+
+            if (!acquired)
+                return;
+
+            try
+            {
+                _lastRunWasCancelled = await ProcessPendingInstallUninstallAsync(showEmptyMessage);
+            }
+            finally
+            {
+                InstallProcessLock.Exit();
+            }
+        }
+
+        private async Task<bool> ProcessPendingInstallUninstallAsync(bool showEmptyMessage)
+        {
+            var cancelled = false;
+
             await ProgressRunner.RunAsync(
                 LocaleManager.Get("progress.processing"),
                 async progress =>
@@ -61,7 +120,7 @@ namespace RommPlugin.Services
                     }
 
                     var waitingItems = state?.Items?
-                        .Where(i => i.Status == DownloadStatus.WaitingInstall)
+                        .Where(i => i != null && i.Status == DownloadStatus.WaitingInstall)
                         .ToList();
 
                     if (waitingItems == null || waitingItems.Count == 0)
@@ -95,20 +154,40 @@ namespace RommPlugin.Services
 
                     var totalItems = waitingItems.Count;
                     var completedItems = 0;
+                    // Items whose status this batch may overwrite on save. Any
+                    // pending item still WaitingInstall at the end was not
+                    // touched (cancelled batch) and must not be rewritten.
+                    var pendingIds = new HashSet<int>(waitingItems.Select(i => i.GameId));
 
                     foreach (var item in waitingItems)
                     {
+                        // The user may close the progress window between items:
+                        // stop cleanly instead of holding the close vetoed for
+                        // the whole remaining batch, and fall through to the
+                        // state save below so the items already processed are
+                        // persisted. Throwing here would skip that save and
+                        // replay them as WaitingInstall with their archive
+                        // already consumed (a permanent failure). Unprocessed
+                        // items stay WaitingInstall and are picked up next run.
+                        if (progress.CancellationToken.IsCancellationRequested)
+                        {
+                            cancelled = true;
+                            break;
+                        }
+
                         progress.SetStatus($"Processing: {completedItems} of {totalItems}");
 
                         string attemptZipPath = null;
                         string attemptExtractDir = null;
                         bool attemptExtractExisted = false;
+                        bool attemptPublishedExtractDir = false;
+                        IGame game = null;
 
                         try
                         {
-                            if (!gamesById.TryGetValue(item.GameId, out var game))
+                            if (!gamesById.TryGetValue(item.GameId, out game))
                             {
-                                item.Status = DownloadStatus.Failed;
+                                SetStatus(item, DownloadStatus.Failed);
                                 item.Error = "Game not found in LaunchBox";
                                 completedItems++;
                                 continue;
@@ -122,7 +201,7 @@ namespace RommPlugin.Services
                             if (string.IsNullOrWhiteSpace(remotePath) || string.IsNullOrWhiteSpace(fileName))
                             {
                                 RommLogger.LogError($"[RommPlugin] Game {game.Title} (ID: {item.GameId}) is missing RemotePath or FileName custom fields, skipping");
-                                item.Status = DownloadStatus.Failed;
+                                SetStatus(item, DownloadStatus.Failed);
                                 item.Error = "Missing custom fields";
                                 completedItems++;
                                 continue;
@@ -178,7 +257,7 @@ namespace RommPlugin.Services
                             if (!File.Exists(zipPath) && !isFolderGame)
                             {
                                 RommLogger.LogError($"[Install] Game {item.GameId} '{item.GameName}': ROM file not found at '{zipPath}', marking as failed");
-                                item.Status = DownloadStatus.Failed;
+                                SetStatus(item, DownloadStatus.Failed);
                                 item.Error = "ROM file not found";
                                 completedItems++;
                                 continue;
@@ -195,9 +274,49 @@ namespace RommPlugin.Services
 
                             if (isFolderGame)
                             {
-                                UnzipAndDelete(zipPath, extractDir);
+                                // The archive must be a real file: when only the folder
+                                // exists (incomplete download), opening it as a zip
+                                // throws access-denied noise. Fail fast instead.
+                                if (!File.Exists(zipPath))
+                                {
+                                    // Unless the folder is already a finished install:
+                                    // an earlier pass may have extracted it and never
+                                    // got its status committed (a refused trigger, or a
+                                    // state file clobbered before the write landed).
+                                    // Failing here told the user to delete the very
+                                    // folder that is installed, which is why the game
+                                    // stayed stuck on "Installing" forever.
+                                    if (InstallValidation.IsFolderInstallValid(extractDir))
+                                    {
+                                        RommLogger.Log($"[Install] Game {item.GameId} '{item.GameName}': archive already consumed, folder is complete at '{extractDir}'; completing the install");
 
-                                    var jsonPath = Path.Combine(extractDir, RommConstants.LaunchboxConfigFile);
+                                        var completeJsonPath = Path.Combine(extractDir, RommConstants.LaunchboxConfigFile);
+                                        if (File.Exists(completeJsonPath))
+                                        {
+                                            ConfigureLaunchBoxGame(game, extractDir, completeJsonPath);
+                                        }
+
+                                        localFile = extractDir;
+                                        game.Installed = true;
+                                        SetStatus(item, DownloadStatus.Installed);
+                                        item.CompletedAt = DateTime.UtcNow;
+                                        completedItems++;
+                                        continue;
+                                    }
+
+                                    RommLogger.LogError($"[Install] Game {item.GameId} '{item.GameName}': archive not found at '{zipPath}' (incomplete download?). Delete the game folder, requeue the download and retry.");
+                                    SetStatus(item, DownloadStatus.Failed);
+                                    item.Error = "Archive missing - delete folder and requeue download";
+                                    completedItems++;
+                                    continue;
+                                }
+
+                                UnzipAndDelete(zipPath, extractDir);
+                                // Only set once the staging→destination move
+                                // succeeded: from here on the folder is ours.
+                                attemptPublishedExtractDir = true;
+
+                                var jsonPath = Path.Combine(extractDir, RommConstants.LaunchboxConfigFile);
 
                                 if (File.Exists(jsonPath))
                                 {
@@ -214,7 +333,7 @@ namespace RommPlugin.Services
                                 {
                                     localFile = extractDir;
 
-                                var jsonPath = Path.Combine(extractDir, RommConstants.LaunchboxConfigFile);
+                                    var jsonPath = Path.Combine(extractDir, RommConstants.LaunchboxConfigFile);
                                     if (File.Exists(jsonPath))
                                     {
                                         ConfigureLaunchBoxGame(game, extractDir, jsonPath);
@@ -248,13 +367,18 @@ namespace RommPlugin.Services
 
                             game.Installed = isFolderGame ? Directory.Exists(localFile) : File.Exists(localFile);
 
-                            item.Status = DownloadStatus.Installed;
+                            SetStatus(item, DownloadStatus.Installed);
                             item.CompletedAt = DateTime.UtcNow;
                             completedItems++;
                         }
                         catch (Exception ex)
                         {
                             var context = $"[Install] Game {item.GameId} '{item.GameName}' zip='{attemptZipPath ?? "(unknown)"}'";
+                            // Deliberately NOT clearing game.Installed here. A
+                            // failed attempt says nothing about what is already
+                            // on disk: flagging it as uninstalled is how a valid
+                            // install used to vanish. The installed-games record
+                            // (and its repair pass) owns that flag.
                             if (ex is InvalidDataException)
                             {
                                 RommLogger.LogError($"{context} archive is unreadable (corrupt/truncated): {ex.Message}");
@@ -264,11 +388,11 @@ namespace RommPlugin.Services
                                     item.GameName,
                                     null,
                                     attemptExtractDir,
-                                    !attemptExtractExisted,
+                                    InstallFailureCleanup.ShouldDeleteExtractDir(attemptExtractExisted, attemptPublishedExtractDir),
                                     item.PartFilePath,
                                     attemptZipPath,
                                     true);
-                                item.Status = DownloadStatus.Failed;
+                                SetStatus(item, DownloadStatus.Failed);
                                 item.Error = RommConstants.CorruptArchiveMarker;
                             }
                             else
@@ -280,45 +404,125 @@ namespace RommPlugin.Services
                                     item.GameName,
                                     null,
                                     attemptExtractDir,
-                                    !attemptExtractExisted,
-                                    item.PartFilePath,
+                                    InstallFailureCleanup.ShouldDeleteExtractDir(attemptExtractExisted, attemptPublishedExtractDir),
+                                    // Keep the .part so the retry resumes instead of
+                                    // restarting large downloads from zero. Only corrupt
+                                    // archives (above) drop it for a clean redownload.
+                                    null,
                                     attemptZipPath,
                                     false);
-                                item.Status = DownloadStatus.Failed;
+                                SetStatus(item, DownloadStatus.Failed);
                                 item.Error = ex.Message;
                             }
                         }
                     }
 
-                    var tempPath = Path.Combine(Path.GetDirectoryName(stateFilePath), $"download-state.{Guid.NewGuid():N}.tmp");
-                    try
+                    // The user may cancel while the last item is finishing; the
+                    // loop-top check misses it and the caller would reopen the
+                    // progress window it just closed.
+                    cancelled = cancelled || progress.CancellationToken.IsCancellationRequested;
+
+                    // Save only what this batch settled, merged into a fresh
+                    // snapshot: the download queue may have added or progressed
+                    // items while the extraction ran, and writing this batch's
+                    // stale snapshot would roll them back (or erase a verdict
+                    // another instance already committed).
+                    var touched = new Dictionary<int, DownloadItem>();
+                    foreach (var item in state.Items ?? new List<DownloadItem>())
                     {
-                        var json = JsonConvert.SerializeObject(state, Formatting.Indented);
-                        File.WriteAllText(tempPath, json);
-                        File.Copy(tempPath, stateFilePath, true);
+                        if (item == null || !pendingIds.Contains(item.GameId)) continue;
+                        if (item.Status == DownloadStatus.WaitingInstall) continue;
+
+                        touched[item.GameId] = item;
                     }
-                    catch (Exception ex)
+
+                    if (touched.Count > 0)
                     {
-                        RommLogger.LogError($"[RommPlugin] Failed to save download-state.json: {ex.Message}");
-                    }
-                    finally
-                    {
-                        try { File.Delete(tempPath); } catch { }
+                        try
+                        {
+                            var onDisk = ReadStateItems(stateFilePath);
+                            if (onDisk == null)
+                            {
+                                // Unreadable (not "empty": an empty list means the
+                                // user cleared the queue, which must be respected).
+                                // Fall back to this batch's own snapshot rather
+                                // than writing an empty queue that loses verdicts.
+                                onDisk = state.Items ?? new List<DownloadItem>();
+                            }
+
+                            var merged = DownloadStateMerger.MergeForInstallSave(touched, onDisk);
+                            var mergedState = new DownloadState
+                            {
+                                Items = merged,
+                                LastUpdated = DateTime.UtcNow
+                            };
+
+                            var json = JsonConvert.SerializeObject(mergedState, Formatting.Indented);
+                            SafeFileWriter.WriteAllText(stateFilePath, json);
+                        }
+                        catch (Exception ex)
+                        {
+                            RommLogger.LogError($"[RommPlugin] Failed to save download-state.json: {ex.Message}");
+                        }
                     }
 
                     dataManager.Save();
 
-                    RommLogger.Log("Pending installs processed successfully");
-
-                    if (showEmptyMessage)
+                    if (cancelled)
                     {
-                        using (var form = new ConfirmForm("RomM finish all pending install"))
+                        RommLogger.Log("[Install] Cancelled by the user; kept the status of the items processed so far");
+                    }
+                    else
+                    {
+                        RommLogger.Log("Pending installs processed successfully");
+
+                        if (showEmptyMessage)
                         {
-                            form.ShowDialog();
+                            using (var form = new ConfirmForm(LocaleManager.Get("progress.finished")))
+                            {
+                                form.ShowDialog();
+                            }
                         }
                     }
                 }
             );
+
+            return cancelled;
+        }
+
+        /// <summary>
+        /// Changes the item status and stamps it: the state file is shared, so
+        /// the stamp lets the other process tell this verdict apart from an
+        /// older one instead of reapplying a stale status.
+        /// </summary>
+        private static void SetStatus(DownloadItem item, DownloadStatus status)
+        {
+            item.Status = status;
+            item.StatusUpdatedAt = DateTime.UtcNow;
+        }
+
+        /// <summary>
+        /// Fresh read of the shared state file. Returns <c>null</c> when the
+        /// file exists but cannot be parsed, so callers can fall back instead of
+        /// writing an empty queue over it. A valid file with no items is an
+        /// empty list, not a failure: the user cleared the queue.
+        /// </summary>
+        private static List<DownloadItem> ReadStateItems(string stateFilePath)
+        {
+            try
+            {
+                if (!File.Exists(stateFilePath)) return new List<DownloadItem>();
+
+                var json = File.ReadAllText(stateFilePath);
+                var state = JsonConvert.DeserializeObject<DownloadState>(json);
+                if (state == null || state.Items == null) return null;
+
+                return state.Items;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private void ConfigureLaunchBoxGame(IGame game, string baseFolder, string jsonPath)
@@ -344,23 +548,53 @@ namespace RommPlugin.Services
                 game.ApplicationPath = Path.GetFullPath(baseFolder);
             }
 
+            var initialApps = game.GetAllAdditionalApplications().ToList();
+
             var existingPaths = new HashSet<string>(
-                game.GetAllAdditionalApplications()
+                initialApps
                     .Where(a => !string.IsNullOrEmpty(a.ApplicationPath))
                     .Select(a => a.ApplicationPath),
                 StringComparer.OrdinalIgnoreCase);
 
             if (config.AdditionalApplications != null)
             {
+                var route = DlcEntryRouting.Decide(config.DlcUseEmulator, game.EmulatorId);
+                var initialByPath = initialApps
+                    .Where(a => !string.IsNullOrEmpty(a.ApplicationPath))
+                    .GroupBy(a => a.ApplicationPath, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
                 foreach (var app in config.AdditionalApplications)
                 {
                     var resolvedPath = RommGameHelpers.ResolvePath(baseFolder, app.Path, false);
-                    if (existingPaths.Contains(resolvedPath)) continue;
+                    if (existingPaths.Contains(resolvedPath))
+                    {
+                        // Align pre-existing entries THAT THIS PLUGIN created
+                        // (name carries the platform prefix) to the routed form.
+                        // Entries added by the user or another tool are never
+                        // touched, nor are pre/post loaders sharing a path.
+                        if (route.UseEmulator
+                            && initialByPath.TryGetValue(resolvedPath, out var current)
+                            && IsPluginOwnedEntry(current.Name)
+                            && current.AutoRunBefore != true
+                            && current.AutoRunAfter != true)
+                        {
+                            current.UseEmulator = true;
+                            current.EmulatorId = route.EmulatorId;
+                            current.WaitForExit = true;
+                        }
+                        continue;
+                    }
 
                     var add = game.AddNewAdditionalApplication();
                     add.Name = $"{RommConstants.PlatformPrefix}{app.Name}";
                     add.ApplicationPath = resolvedPath;
                     add.CommandLine = app.CommandLine;
+                    if (route.UseEmulator)
+                    {
+                        add.UseEmulator = true;
+                        add.EmulatorId = route.EmulatorId;
+                        add.WaitForExit = true;
+                    }
                     existingPaths.Add(resolvedPath);
                 }
             }
@@ -405,6 +639,7 @@ namespace RommPlugin.Services
                 if (Directory.Exists(dlcFolder))
                 {
                     var files = Directory.GetFiles(dlcFolder);
+                    var route = DlcEntryRouting.Decide(config.DlcUseEmulator, game.EmulatorId);
 
                     int index = 1;
                     foreach (var file in files)
@@ -414,8 +649,31 @@ namespace RommPlugin.Services
                         var add = game.AddNewAdditionalApplication();
                         add.Name = $"{RommConstants.PlatformPrefix}DLC {index}";
                         add.ApplicationPath = file;
+                        if (route.UseEmulator)
+                        {
+                            add.UseEmulator = true;
+                            add.EmulatorId = route.EmulatorId;
+                            add.WaitForExit = true;
+                        }
                         existingPaths.Add(file);
                         index++;
+                    }
+
+                    // Align pre-existing _DLCs entries created by this plugin
+                    // (name carries the platform prefix) to the routed form.
+                    if (route.UseEmulator)
+                    {
+                        string dlcRoot = Path.GetFullPath(dlcFolder) + Path.DirectorySeparatorChar;
+                        foreach (var current in initialApps)
+                        {
+                            if (string.IsNullOrEmpty(current.ApplicationPath)) continue;
+                            if (!current.ApplicationPath.StartsWith(dlcRoot, StringComparison.OrdinalIgnoreCase)) continue;
+                            if (!IsPluginOwnedEntry(current.Name)) continue;
+                            if (current.AutoRunBefore == true || current.AutoRunAfter == true) continue;
+                            current.UseEmulator = true;
+                            current.EmulatorId = route.EmulatorId;
+                            current.WaitForExit = true;
+                        }
                     }
                 }
             }
@@ -423,9 +681,26 @@ namespace RommPlugin.Services
 
 
 
+        /// <summary>
+        /// True when an additional application was created by this plugin, which
+        /// always prefixes its entries. Keeps DLC routing from mutating entries
+        /// the user (or another tool) added to the same game.
+        /// </summary>
+        private static bool IsPluginOwnedEntry(string name)
+        {
+            return !string.IsNullOrEmpty(name)
+                && name.StartsWith(RommConstants.PlatformPrefix, StringComparison.Ordinal);
+        }
+
         private void UnzipAndDelete(string zipPath, string extractDir)
         {
             var rootFolder = Path.GetFileNameWithoutExtension(zipPath);
+
+            // Fail fast when the destination is not writable instead of dying
+            // gigabytes into the extraction.
+            var parentDir = Path.GetDirectoryName(Path.GetFullPath(extractDir));
+            if (!string.IsNullOrEmpty(parentDir))
+                RommArchiveHelper.EnsureWritableDirectory(parentDir);
 
             // Extract into staging first so a mid-extraction failure never leaves
             // a partial folder behind; publish with an atomic move on success.
@@ -462,20 +737,46 @@ namespace RommPlugin.Services
 
                         Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
 
-                        entry.ExtractToFile(destinationPath, true);
+                        // Transient locks (antivirus/indexer grabbing new files)
+                        // must slow extraction down, not kill a multi-GB run.
+                        var entryAttempts = 0;
+                        while (true)
+                        {
+                            try
+                            {
+                                entry.ExtractToFile(destinationPath, true);
+                                break;
+                            }
+                            catch (IOException) when (entryAttempts < 2)
+                            {
+                                entryAttempts++;
+                                Thread.Sleep(500);
+                            }
+                            catch (UnauthorizedAccessException) when (entryAttempts < 2)
+                            {
+                                entryAttempts++;
+                                Thread.Sleep(500);
+                            }
+                        }
                     }
                 }
 
                 if (Directory.Exists(extractDir))
                 {
-                    Directory.Delete(extractDir, true);
+                    // Replace the leftover folder from a previous (failed)
+                    // attempt. Safe now that install runs are single-flight
+                    // (InstallProcessLock): no other run can own this folder.
+                    if (!RommArchiveHelper.DeleteDirectoryRobust(extractDir))
+                        throw new IOException($"Could not clear existing folder '{extractDir}' (locked?). Close other programs and retry.");
                 }
 
                 Directory.Move(stagingDir, extractDir);
 
                 if (!RommArchiveHelper.DeleteFileWithRetry(zipPath))
                 {
-                    throw new IOException($"Could not delete source archive after extraction: {zipPath}");
+                    // Extraction already succeeded: a locked zip must not fail
+                    // the whole install. It can be removed manually later.
+                    RommLogger.LogError($"[Install] Extracted '{extractDir}' but could not delete source archive '{zipPath}' (locked?). Delete it manually when possible.");
                 }
             }
             catch
@@ -491,6 +792,10 @@ namespace RommPlugin.Services
             {
                 return;
             }
+
+            var parentDir = Path.GetDirectoryName(Path.GetFullPath(zipPath));
+            if (!string.IsNullOrEmpty(parentDir))
+                RommArchiveHelper.EnsureWritableDirectory(parentDir);
 
             var tempExtract = Path.Combine(
                 Path.GetDirectoryName(zipPath),
@@ -535,8 +840,7 @@ namespace RommPlugin.Services
                         }
 
                         var dest = Path.Combine(Path.GetDirectoryName(zipPath), rel);
-                        Directory.CreateDirectory(Path.GetDirectoryName(dest));
-                        File.Copy(file, dest, true);
+                        RommArchiveHelper.CopyFileRobust(file, dest);
                         copiedFiles.Add(dest);
                     }
 
@@ -552,7 +856,7 @@ namespace RommPlugin.Services
 
                     if (innerExt == ".zip")
                     {
-                        File.Copy(innerFile, zipPath, true);
+                        RommArchiveHelper.CopyFileRobust(innerFile, zipPath);
                     }
                     else
                     {
@@ -560,7 +864,7 @@ namespace RommPlugin.Services
                             Path.GetDirectoryName(zipPath),
                             Path.GetFileName(innerFile)
                         );
-                        File.Copy(innerFile, targetPath, true);
+                        RommArchiveHelper.CopyFileRobust(innerFile, targetPath);
                         copiedFiles.Add(targetPath);
                         if (!RommArchiveHelper.DeleteFileWithRetry(zipPath))
                         {

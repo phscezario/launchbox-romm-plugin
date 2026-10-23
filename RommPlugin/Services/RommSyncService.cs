@@ -80,6 +80,15 @@ namespace RommPlugin.Services
         /// <inheritdoc/>
         public async Task SyncAsync(bool headless = false)
         {
+            // LaunchBox spawns a "-recovery" instance after an unclean shutdown.
+            // Both instances share LaunchBox's data files; writes from the
+            // secondary instance would race the primary for the same records.
+            if (LaunchBoxInstance.IsRecoveryInstance())
+            {
+                RommLogger.Log("[Sync] LaunchBox recovery instance: sync left to the primary instance");
+                return;
+            }
+
             if (Interlocked.CompareExchange(ref _isRunning, 1, 0) != 0)
             {
                 if (!headless)
@@ -702,10 +711,14 @@ namespace RommPlugin.Services
                     {
                     var tasks = rommGamesOnly.Select(async game =>
                     {
-                        await semaphore.WaitAsync();
+                        await semaphore.WaitAsync(progress.CancellationToken);
 
                         try
                         {
+                            // Abort promptly when the user closes the progress
+                            // window instead of finishing the whole batch.
+                            progress.CancellationToken.ThrowIfCancellationRequested();
+
                             if (!RommGameHelpers.TryGetRommId(game, out int rommId) || rommId <= 0)
                             {
                                 RommLogger.Log($"Skipping game '{game.Title}': no valid RomM ID");
